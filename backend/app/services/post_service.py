@@ -16,17 +16,34 @@ import requests
 logger = logging.getLogger(__name__)
 
 def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
-    """Compress and upload custom base64 image data to public HTTPS CDN (catbox.moe) for Meta Instagram Graph API."""
+    """Upload custom base64 image or video data to public HTTPS CDN (catbox.moe) for Meta Facebook & Instagram Graph API."""
     try:
-        if not base64_str or not base64_str.startswith("data:image"):
+        if not base64_str:
             return None
-        import base64, io
-        from PIL import Image
+        if base64_str.startswith("http://") or base64_str.startswith("https://"):
+            return base64_str
 
-        encoded_data = base64_str.split(",", 1)[1] if "," in base64_str else base64_str
+        import base64, io
+
+        header, encoded_data = base64_str.split(",", 1) if "," in base64_str else ("data:image/jpeg;base64", base64_str)
+        mime_type = header.split(";")[0].split(":")[1] if ";" in header and ":" in header else "image/jpeg"
         raw_bytes = base64.b64decode(encoded_data)
 
-        # Optimize custom uploaded photo with PIL to standard 1080x1080 Instagram JPEG format
+        # 🎥 Video Upload Handling (MP4, MOV, WEBM, M4V)
+        if "video" in mime_type:
+            ext = mime_type.split("/")[1] if "/" in mime_type else "mp4"
+            if ext == "quicktime":
+                ext = "mov"
+            files = {"fileToUpload": (f"custom_post_video.{ext}", raw_bytes, mime_type)}
+            data = {"reqtype": "fileupload"}
+            res = requests.post("https://catbox.moe/user/api.php", data=data, files=files, timeout=60)
+            if res.status_code == 200 and res.text.startswith("https://files.catbox.moe/"):
+                public_url = res.text.strip()
+                logger.info(f"Custom video uploaded to public HTTPS CDN for Meta Reels/Videos: {public_url}")
+                return public_url
+
+        # 📸 Photo Upload Handling (Optimized with PIL)
+        from PIL import Image
         img = Image.open(io.BytesIO(raw_bytes))
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
@@ -36,17 +53,16 @@ def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
         img.save(buffer, format="JPEG", quality=85, optimize=True)
         img_bytes = buffer.getvalue()
 
-        # Post directly to catbox.moe free public CDN (returns direct https://files.catbox.moe/*.jpg URL)
         files = {"fileToUpload": ("custom_post_photo.jpg", img_bytes, "image/jpeg")}
         data = {"reqtype": "fileupload"}
         res = requests.post("https://catbox.moe/user/api.php", data=data, files=files, timeout=20)
 
         if res.status_code == 200 and res.text.startswith("https://files.catbox.moe/"):
             public_url = res.text.strip()
-            logger.info(f"Custom photo uploaded to public HTTPS CDN for Instagram: {public_url}")
+            logger.info(f"Custom photo uploaded to public HTTPS CDN for Meta: {public_url}")
             return public_url
     except Exception as e:
-        logger.error(f"Failed to upload base64 image to catbox CDN: {e}")
+        logger.error(f"Failed to upload base64 media to catbox CDN: {e}")
     return None
 
 class PostService:
@@ -162,17 +178,20 @@ class PostService:
         formatted_caption = f"{post.caption}\n\n{' '.join(post.hashtags or [])}\n\n{post.cta or ''}".strip()
         errors = []
 
+        is_video = bool(public_image_url and any(public_image_url.lower().endswith(ext) for ext in [".mp4", ".mov", ".webm", ".m4v"]))
+
         is_sandbox_fb = False
         is_sandbox_ig = False
 
-        # 1. Publish to Facebook
+        # 1. Publish to Facebook (Photos & Videos/Reels)
         if "facebook" in (post.platforms or ["facebook"]):
             try:
                 res = meta_service.publish_to_facebook_page(
                     page_id=fb_page_id,
                     access_token=access_token,
                     message=formatted_caption,
-                    image_url=post.image_url or public_image_url
+                    image_url=public_image_url or post.image_url,
+                    is_video=is_video
                 )
                 post.fb_post_id = res.get("id")
                 if res.get("status") == "published_sandbox":
@@ -180,7 +199,7 @@ class PostService:
             except Exception as e:
                 errors.append(f"FB Publish Error: {str(e)}")
 
-        # 2. Publish to Instagram (Custom Photo Only — AI model image fallbacks disabled)
+        # 2. Publish to Instagram (Photos & Videos/Reels)
         if "instagram" in (post.platforms or ["instagram"]):
             try:
                 ig_url = public_image_url
@@ -188,13 +207,14 @@ class PostService:
                     ig_url = upload_base64_to_public_https(ig_url) or ig_url
 
                 if not ig_url or ig_url.startswith("data:") or ig_url.startswith("blob:"):
-                    errors.append("IG Publish Error: A valid custom photo file or public Image URL is required for Instagram publishing.")
+                    errors.append("IG Publish Error: A valid photo/video file or public URL is required for Instagram publishing.")
                 else:
                     res = meta_service.publish_to_instagram_business(
                         ig_user_id=ig_user_id,
                         access_token=access_token,
                         caption=formatted_caption,
-                        image_url=ig_url
+                        image_url=ig_url,
+                        is_video=is_video
                     )
                     post.ig_container_id = res.get("container_id")
                     post.ig_media_id = res.get("id")
