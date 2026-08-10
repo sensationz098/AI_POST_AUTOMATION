@@ -37,6 +37,10 @@ out/
 build/
 dist/
 
+# Uploads & Build Cache
+backend/uploads/
+*.tsbuildinfo
+
 # OS / IDE
 .DS_Store
 Thumbs.db

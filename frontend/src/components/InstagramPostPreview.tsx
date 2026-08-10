@@ -19,8 +19,16 @@ export const InstagramPostPreview: React.FC<Props> = ({
   cta,
   imageUrl,
 }) => {
-  const username = brand?.name ? brand.name.toLowerCase().replace(/\s+/g, '_') : 'apex_innovations';
-  const logoUrl = brand?.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80';
+  const metaAcc = brand?.meta_account;
+  const username = metaAcc?.instagram_username
+    ? metaAcc.instagram_username
+    : (brand?.name ? brand.name.toLowerCase().replace(/\s+/g, '_') : 'apex_innovations');
+    
+  const logoUrl =
+    (metaAcc as any)?.logo_url ||
+    (metaAcc?.facebook_page_id ? `https://graph.facebook.com/v19.0/${metaAcc.facebook_page_id}/picture?type=large` : null) ||
+    brand?.logo_url ||
+    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80';
 
   return (
     <div className="w-full max-w-sm bg-black text-white rounded-3xl border border-neutral-800 shadow-2xl overflow-hidden font-sans">

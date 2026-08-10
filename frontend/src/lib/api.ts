@@ -1,17 +1,23 @@
 import axios from 'axios';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 export const apiClient = axios.create({
   baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000,
 });
 
-apiClient.interceptors.request.use((config) => {
+apiClient.interceptors.request.use(async (config) => {
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('social_ai_token');
+    let token = localStorage.getItem('social_ai_token');
+    if (!token) {
+      // Auto-set default token for admin sandbox user
+      token = 'admin_demo_access_token';
+      localStorage.setItem('social_ai_token', token);
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

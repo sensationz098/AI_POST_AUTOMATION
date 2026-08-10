@@ -19,6 +19,7 @@ export interface BrandProfile {
   user_id: number;
   created_at: string;
   updated_at: string;
+  meta_account?: MetaAccount;
 }
 
 export type PostStatus = 'DRAFT' | 'APPROVED' | 'SCHEDULED' | 'PUBLISHED' | 'FAILED';

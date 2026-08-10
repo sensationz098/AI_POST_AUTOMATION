@@ -127,14 +127,15 @@ class AIService:
                 logger.error(f"DALL-E image generation error: {e}. Falling back to Pollinations.ai")
 
         # --- Option 2: Pollinations.ai (FREE — no key required) ---
-        # We return the URL directly; the browser fetches it (no server-side 403 issue)
         try:
             import urllib.parse
+            import random
             encoded = urllib.parse.quote(request.image_prompt[:500])
+            rand_seed = random.randint(10000, 999999)
             poll_url = (
                 f"https://image.pollinations.ai/prompt/{encoded}"
                 f"?width=1080&height=1080&model=flux&nologo=true&enhance=true"
-                f"&seed={abs(hash(request.image_prompt)) % 99999}"
+                f"&seed={rand_seed}"
             )
             return AIImageGenerateResponse(
                 image_url=poll_url,
@@ -144,7 +145,16 @@ class AIService:
             logger.error(f"Pollinations.ai URL build failed: {e}. Using Unsplash fallback.")
 
         # --- Option 3: Unsplash curated fallback ---
-        fallback_url = f"https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1080&q=80&sig={abs(hash(request.image_prompt)) % 1000}"
+        import random
+        photos = [
+          "photo-1618005182384-a83a8bd57fbe",
+          "photo-1551288049-bebda4e38f71",
+          "photo-1460925895917-afdab827c52f",
+          "photo-1519389950473-47ba0277781c",
+          "photo-1498050108023-c5249f4df085"
+        ]
+        chosen = random.choice(photos)
+        fallback_url = f"https://images.unsplash.com/{chosen}?auto=format&fit=crop&w=1080&q=80&sig={random.randint(1, 999999)}"
         return AIImageGenerateResponse(image_url=fallback_url, provider="Unsplash Visual Fallback")
 
 

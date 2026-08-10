@@ -19,8 +19,13 @@ export const FacebookPostPreview: React.FC<Props> = ({
   cta,
   imageUrl,
 }) => {
-  const brandName = brand?.name || 'Apex Innovations';
-  const logoUrl = brand?.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80';
+  const metaAcc = brand?.meta_account;
+  const brandName = metaAcc?.facebook_page_name || brand?.name || 'Apex Innovations';
+  const logoUrl =
+    (metaAcc as any)?.logo_url ||
+    (metaAcc?.facebook_page_id ? `https://graph.facebook.com/v19.0/${metaAcc.facebook_page_id}/picture?type=large` : null) ||
+    brand?.logo_url ||
+    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80';
 
   return (
     <div className="w-full max-w-lg bg-[#242526] text-[#E4E6EB] rounded-xl border border-[#3E4042] shadow-2xl overflow-hidden font-sans">

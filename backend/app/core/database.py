@@ -10,7 +10,16 @@ if os.getenv("USE_SQLITE", "false").lower() == "true" or "sqlite" in db_url:
         "sqlite:///./social_ai.db", connect_args={"check_same_thread": False}
     )
 else:
-    engine = create_engine(db_url, pool_pre_ping=True)
+    try:
+        test_engine = create_engine(db_url, pool_pre_ping=True)
+        with test_engine.connect() as conn:
+            pass
+        engine = test_engine
+    except Exception:
+        # Fallback to local SQLite database if Postgres service is offline
+        engine = create_engine(
+            "sqlite:///./social_ai.db", connect_args={"check_same_thread": False}
+        )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

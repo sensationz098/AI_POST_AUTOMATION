@@ -17,21 +17,37 @@ class MetaGraphService:
             return {"id": f"fb_mock_post_{abs(hash(message)) % 1000000}", "status": "published_sandbox"}
 
         try:
-            if image_url:
-                url = f"{self.BASE_URL}/{page_id}/photos"
+            url = f"{self.BASE_URL}/{page_id}/photos"
+            if image_url and image_url.startswith("data:image"):
+                import base64
+                header, encoded = image_url.split(",", 1)
+                mime_type = header.split(";")[0].split(":")[1] if ";" in header else "image/png"
+                ext = mime_type.split("/")[1] if "/" in mime_type else "png"
+                img_bytes = base64.b64decode(encoded)
+
+                files = {
+                    "source": (f"post_photo.{ext}", img_bytes, mime_type)
+                }
+                data = {
+                    "caption": message,
+                    "access_token": access_token
+                }
+                response = requests.post(url, data=data, files=files, timeout=30)
+            elif image_url:
                 payload = {
                     "url": image_url,
                     "caption": message,
                     "access_token": access_token
                 }
+                response = requests.post(url, data=payload, timeout=15)
             else:
-                url = f"{self.BASE_URL}/{page_id}/feed"
+                feed_url = f"{self.BASE_URL}/{page_id}/feed"
                 payload = {
                     "message": message,
                     "access_token": access_token
                 }
+                response = requests.post(feed_url, data=payload, timeout=15)
             
-            response = requests.post(url, data=payload, timeout=15)
             res_data = response.json()
             if response.status_code != 200:
                 error_msg = res_data.get("error", {}).get("message", "Facebook API Error")

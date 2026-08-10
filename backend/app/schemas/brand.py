@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
+from app.schemas.meta import MetaAccountResponse
 
 class BrandBase(BaseModel):
     name: str
@@ -28,6 +29,7 @@ class BrandResponse(BrandBase):
     user_id: int
     created_at: datetime
     updated_at: datetime
+    meta_account: Optional[MetaAccountResponse] = None
 
     class Config:
         from_attributes = True
