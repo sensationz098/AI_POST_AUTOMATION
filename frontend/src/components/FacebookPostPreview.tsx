@@ -67,16 +67,28 @@ export const FacebookPostPreview: React.FC<Props> = ({
         )}
       </div>
 
-      {/* Post Graphic / Image */}
+      {/* Post Graphic / Image / Video */}
       {imageUrl ? (
         <div className="relative aspect-video w-full bg-black overflow-hidden group">
-          <img
-            src={imageUrl}
-            alt="Facebook Visual"
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+          {(imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.endsWith('.webm') || imageUrl.startsWith('data:video/')) ? (
+            <video
+              src={imageUrl}
+              controls
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <img
+              src={imageUrl}
+              alt="Facebook Visual"
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          )}
           <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded text-[10px] font-medium text-white/90">
-            Facebook Post Preview
+            {(imageUrl?.endsWith('.mp4') || imageUrl?.endsWith('.mov') || imageUrl?.startsWith('data:video/')) ? 'Facebook Video Post 🎥' : 'Facebook Post Preview'}
           </div>
         </div>
       ) : (

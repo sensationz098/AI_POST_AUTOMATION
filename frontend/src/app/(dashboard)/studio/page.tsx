@@ -270,7 +270,7 @@ export default function AIStudioPage() {
     loadBrands();
   }, []);
 
-  // Local File Upload handler for Pre-Made Post Mode
+  // Local Photo Upload handler
   const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -279,6 +279,21 @@ export default function AIStudioPage() {
         if (reader.result) {
           setImageUrl(reader.result as string);
           setStatusNotification('Custom post photo uploaded successfully!');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Local Video Reel Upload handler
+  const handleVideoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result) {
+          setImageUrl(reader.result as string);
+          setStatusNotification(`🎥 Video Reel uploaded successfully! (${file.name})`);
         }
       };
       reader.readAsDataURL(file);
@@ -587,18 +602,25 @@ export default function AIStudioPage() {
                 </span>
               </div>
 
-              {/* Image Upload Box */}
-              <div className="space-y-2">
-                <label className="block text-xs font-medium text-slate-300">
-                  Post Photo / Graphic (Upload File or Enter Image URL)
-                </label>
+              {/* Photo & Video Media Upload Box */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-200">
+                    Post Media (Upload Photo or Video Reel)
+                  </label>
+                  {imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.startsWith('data:video/')) && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      🎥 Video Reel Attached
+                    </span>
+                  )}
+                </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* File Upload Button */}
-                  <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 hover:border-pink-500 rounded-xl bg-slate-900/60 cursor-pointer transition text-center group">
-                    <ImageIcon className="w-6 h-6 text-slate-400 group-hover:text-pink-400 mb-1" />
-                    <span className="text-xs font-semibold text-slate-200">Browse Image File</span>
-                    <span className="text-[10px] text-slate-500">PNG, JPG, WEBP</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Photo Upload Button */}
+                  <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-pink-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
+                    <ImageIcon className="w-5 h-5 text-slate-400 group-hover:text-pink-400 mb-1" />
+                    <span className="text-xs font-bold text-slate-200">Upload Photo</span>
+                    <span className="text-[9px] text-slate-400">PNG, JPG, WEBP</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -607,15 +629,28 @@ export default function AIStudioPage() {
                     />
                   </label>
 
-                  {/* Image URL Input */}
-                  <div className="flex flex-col justify-center space-y-1 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-                    <span className="text-[11px] font-semibold text-slate-400">Or Paste Direct Image URL:</span>
+                  {/* Video Reel Upload Button */}
+                  <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-purple-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
+                    <Play className="w-5 h-5 text-slate-400 group-hover:text-purple-400 mb-1" />
+                    <span className="text-xs font-bold text-slate-200">Upload Video Reel</span>
+                    <span className="text-[9px] text-slate-400">MP4, MOV, WEBM</span>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={handleVideoFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {/* Media URL Input */}
+                  <div className="flex flex-col justify-center space-y-1 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+                    <span className="text-[10px] font-bold text-slate-400">Or Paste Media URL:</span>
                     <input
                       type="url"
                       value={imageUrl}
                       onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://example.com/my-graphic.png"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-pink-500"
+                      placeholder="https://example.com/clip.mp4"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-[11px] text-white focus:outline-none focus:border-pink-500 font-mono"
                     />
                   </div>
                 </div>

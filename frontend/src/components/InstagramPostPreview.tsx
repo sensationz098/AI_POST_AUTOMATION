@@ -52,14 +52,26 @@ export const InstagramPostPreview: React.FC<Props> = ({
         </button>
       </div>
 
-      {/* IG Image Frame (1:1 Ratio) */}
+      {/* IG Media Frame (1:1 Ratio or Video Container) */}
       <div className="relative aspect-square w-full bg-neutral-950 overflow-hidden flex items-center justify-center">
         {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt="Instagram Post"
-            className="w-full h-full object-cover"
-          />
+          (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.endsWith('.webm') || imageUrl.startsWith('data:video/')) ? (
+            <video
+              src={imageUrl}
+              controls
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <img
+              src={imageUrl}
+              alt="Instagram Post"
+              className="w-full h-full object-cover"
+            />
+          )
         ) : (
           <div className="flex flex-col items-center space-y-2 p-6 text-center text-neutral-500">
             <div className="w-12 h-12 rounded-full bg-neutral-900 flex items-center justify-center text-pink-500">
@@ -69,7 +81,7 @@ export const InstagramPostPreview: React.FC<Props> = ({
           </div>
         )}
         <div className="absolute top-2.5 right-2.5 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-semibold text-white">
-          Instagram Feed
+          {(imageUrl?.endsWith('.mp4') || imageUrl?.endsWith('.mov') || imageUrl?.startsWith('data:video/')) ? 'Instagram Reel 🎥' : 'Instagram Feed'}
         </div>
       </div>
 
