@@ -494,30 +494,32 @@ export default function AIStudioPage() {
 
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-indigo-900/40 via-purple-900/30 to-slate-900 border border-indigo-500/20 p-6 rounded-2xl">
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <Sparkles className="w-5 h-5 text-indigo-400" />
-            <h1 className="text-xl font-bold text-white">Social Post Creator & Publisher</h1>
+    <div className="space-y-8 select-none">
+      {/* Top Banner Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-slate-900/80 border border-slate-800 p-6 md:p-8 rounded-3xl relative overflow-hidden shadow-xl">
+        <div className="space-y-2 relative z-10">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/20">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <h1 className="text-2xl font-extrabold text-white tracking-tight">Social Post Creator & Publisher</h1>
           </div>
-          <p className="text-xs text-slate-400">
-            Generate with AI or upload graphics for your brand persona:
+          <p className="text-xs md:text-sm text-slate-400 max-w-xl leading-relaxed">
+            Generate high-converting copy, viral hashtags, and visuals with AI—or upload your custom graphics for instant Meta publishing.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Brand Profile Selector Dropdown */}
-          <div className="flex items-center space-x-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl">
-            <span className="text-[11px] font-semibold text-slate-400">Active Brand:</span>
+        <div className="flex flex-wrap items-center gap-3 relative z-10 flex-shrink-0">
+          {/* Active Brand Profile Dropdown */}
+          <div className="flex items-center space-x-2.5 bg-slate-950/80 border border-slate-800 px-4 py-2 rounded-2xl shadow-inner">
+            <span className="text-xs font-semibold text-slate-400">Active Brand:</span>
             <select
               value={selectedBrand.id}
               onChange={(e) => {
                 const b = brands.find((x) => x.id === Number(e.target.value));
                 if (b) setSelectedBrand(b);
               }}
-              className="bg-transparent text-xs text-indigo-300 font-bold focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-indigo-300 font-extrabold focus:outline-none cursor-pointer"
             >
               {brands.length > 0 ? (
                 brands.map((b) => (
@@ -534,22 +536,22 @@ export default function AIStudioPage() {
           </div>
 
           {statusNotification && (
-            <div className="flex items-center space-x-2 bg-emerald-500/20 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-emerald-300 text-xs font-semibold animate-pulse">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{statusNotification}</span>
+            <div className="flex items-center space-x-2 bg-emerald-500/15 border border-emerald-500/35 px-4 py-2 rounded-2xl text-emerald-300 text-xs font-bold shadow-md animate-pulse">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <span className="truncate max-w-xs">{statusNotification}</span>
             </div>
           )}
         </div>
       </div>
 
       {/* Mode Selection Switcher */}
-      <div className="flex items-center space-x-3 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 w-fit">
+      <div className="flex items-center space-x-2 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800/80 w-fit shadow-md">
         <button
           onClick={() => setCreationMode('ai')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
             creationMode === 'ai'
-              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
           }`}
         >
           <Sparkles className="w-4 h-4" />
@@ -557,14 +559,14 @@ export default function AIStudioPage() {
         </button>
         <button
           onClick={() => setCreationMode('premade')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
             creationMode === 'premade'
-              ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-lg'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
           }`}
         >
           <ImageIcon className="w-4 h-4" />
-          <span>📤 Upload Pre-Made Post (Custom Image & Copy)</span>
+          <span>📤 Upload Custom Graphic & Copy</span>
         </button>
       </div>
 

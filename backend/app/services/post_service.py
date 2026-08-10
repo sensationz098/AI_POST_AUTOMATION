@@ -267,4 +267,18 @@ class PostService:
         db.commit()
         return self.execute_publish(db, post_id)
 
+    def check_and_publish_due_posts(self, db: Session) -> List[Post]:
+        """Find any scheduled posts whose scheduled time has passed and execute publishing."""
+        now = datetime.utcnow()
+        due_posts = post_repo.get_due_scheduled_posts(db, now)
+        published_posts = []
+        for post in due_posts:
+            try:
+                published = self.execute_publish(db, post.id)
+                published_posts.append(published)
+                logger.info(f"Auto-published scheduled post ID={post.id} (Scheduled at: {post.scheduled_at})")
+            except Exception as e:
+                logger.error(f"Auto-publish failed for scheduled post ID={post.id}: {e}")
+        return published_posts
+
 post_service = PostService()

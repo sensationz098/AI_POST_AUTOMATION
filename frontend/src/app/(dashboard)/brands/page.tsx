@@ -196,25 +196,27 @@ export default function BrandProfilesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center space-x-2">
-            <Layers className="w-5 h-5 text-purple-400" />
+    <div className="space-y-8 select-none">
+      {/* 2026 SaaS Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-6 md:p-8 rounded-3xl shadow-xl">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center space-x-2.5">
+            <div className="p-2 rounded-2xl bg-purple-600/20 text-purple-400 border border-purple-500/30">
+              <Layers className="w-5 h-5" />
+            </div>
             <span>Brand Voice & Profile Studio</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Profiles automatically sync connected Meta Accounts (Facebook Pages & Instagram Accounts) with AI generation persona templates.
+          <p className="text-xs md:text-sm text-slate-400 leading-relaxed max-w-xl">
+            Configure AI brand personas, tone of voice, target audience, and automatically sync connected Meta Accounts (Facebook Pages & Instagram Accounts).
           </p>
         </div>
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs transition shadow-lg shadow-indigo-500/20"
+          className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs shadow-lg shadow-indigo-500/25 transition focus-ring self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
-          <span>Add Brand Profile</span>
+          <span>+ Add Brand Profile</span>
         </button>
       </div>
 
@@ -237,17 +239,17 @@ export default function BrandProfilesPage() {
             const hasMeta = brand.meta_account && brand.meta_account.is_connected && brand.meta_account.facebook_page_id;
 
             return (
-              <div key={brand.id} className="glass-panel p-6 rounded-2xl space-y-4 border border-slate-800 hover:border-indigo-500/40 transition relative group">
+              <div key={brand.id} className="saas-card p-6 rounded-3xl space-y-5 border border-slate-800 hover:border-indigo-500/40 transition-all duration-200 relative group shadow-xl">
                 {/* Profile Top Row */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-3.5">
                     <img
                       src={brand.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
                       alt={brand.name}
-                      className="w-12 h-12 rounded-xl object-cover border border-indigo-500/40"
+                      className="w-14 h-14 rounded-2xl object-cover border border-indigo-500/40 shadow-md"
                     />
                     <div>
-                      <h3 className="text-base font-bold text-white flex items-center space-x-1.5">
+                      <h3 className="text-base font-bold text-white tracking-tight flex items-center space-x-1.5">
                         <span>{brand.name}</span>
                         {hasMeta && (
                           <span title="Verified Meta Account">
@@ -255,73 +257,73 @@ export default function BrandProfilesPage() {
                           </span>
                         )}
                       </h3>
-                      <span className="text-[11px] font-semibold text-indigo-400">{brand.industry || 'Social AI Profile'}</span>
+                      <span className="text-xs font-semibold text-indigo-400">{brand.industry || 'Social AI Profile'}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-2">
                     {hasMeta ? (
-                      <span className="px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-400 text-[10px] font-bold border border-blue-500/30 flex items-center space-x-1">
+                      <span className="px-3 py-1 rounded-full bg-blue-500/15 text-blue-300 text-[10px] font-bold border border-blue-500/30 flex items-center space-x-1 shadow-sm">
                         <Share2 className="w-3 h-3 text-blue-400" />
                         <span>Meta Connected</span>
                       </span>
                     ) : (
-                      <span className="px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 text-[10px] font-medium border border-slate-700">
+                      <span className="px-3 py-1 rounded-full bg-slate-950 text-slate-400 text-[10px] font-medium border border-slate-800">
                         Local Profile
                       </span>
                     )}
 
                     <button
                       onClick={() => handleDeleteBrand(brand.id)}
-                      className="p-1.5 rounded-lg bg-slate-900 hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition"
+                      className="p-2 rounded-xl bg-slate-950 hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition focus-ring"
                       title="Delete Brand"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
 
                 {/* META ACCOUNT CONNECTED BADGE CARD */}
                 {hasMeta ? (
-                  <div className="bg-gradient-to-r from-blue-950/40 to-slate-900/60 border border-blue-500/30 rounded-xl p-3.5 space-y-2">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-bold text-blue-300 uppercase tracking-wider text-[10px]">
+                  <div className="bg-gradient-to-r from-blue-950/40 to-slate-950/80 border border-blue-500/30 rounded-2xl p-4 space-y-3 shadow-inner">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-extrabold text-blue-300 uppercase tracking-wider text-[10px]">
                         Linked Meta Accounts
                       </span>
                       <a
                         href="/meta-connect"
-                        className="text-indigo-400 hover:text-indigo-300 text-[10px] font-semibold flex items-center space-x-1 transition"
+                        className="text-indigo-400 hover:text-indigo-300 text-xs font-semibold flex items-center space-x-1 transition"
                       >
                         <span>Manage Credentials</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                       {/* FB Page */}
-                      <div className="flex items-center space-x-2 bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                      <div className="flex items-center space-x-2.5 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
                         <Facebook className="w-4 h-4 text-blue-400 flex-shrink-0" />
                         <div className="min-w-0">
-                          <p className="font-medium text-white text-[11px] truncate">
+                          <p className="font-semibold text-white text-xs truncate">
                             {brand.meta_account?.facebook_page_name || 'Connected FB Page'}
                           </p>
-                          <p className="text-[9px] text-slate-400 font-mono">
+                          <p className="text-[10px] text-slate-400 font-mono">
                             ID: {brand.meta_account?.facebook_page_id}
                           </p>
                         </div>
                       </div>
 
                       {/* Instagram */}
-                      <div className="flex items-center space-x-2 bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                      <div className="flex items-center space-x-2.5 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
                         <Instagram className="w-4 h-4 text-pink-400 flex-shrink-0" />
                         <div className="min-w-0">
-                          <p className="font-medium text-white text-[11px] truncate">
+                          <p className="font-semibold text-white text-xs truncate">
                             {brand.meta_account?.instagram_username
                               ? `@${brand.meta_account.instagram_username}`
                               : '(no IG handle)'}
                           </p>
                           {brand.meta_account?.instagram_account_id && (
-                            <p className="text-[9px] text-slate-400 font-mono">
+                            <p className="text-[10px] text-slate-400 font-mono">
                               ID: {brand.meta_account.instagram_account_id}
                             </p>
                           )}
@@ -330,14 +332,14 @@ export default function BrandProfilesPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-slate-950/40 border border-dashed border-slate-800 rounded-xl p-3 flex items-center justify-between text-xs text-slate-400">
+                  <div className="bg-slate-950/60 border border-dashed border-slate-800 rounded-2xl p-4 flex items-center justify-between text-xs text-slate-400">
                     <div className="flex items-center space-x-2">
                       <Link2 className="w-4 h-4 text-slate-500" />
                       <span>No Meta Account linked to this brand profile yet.</span>
                     </div>
                     <a
                       href="/meta-connect"
-                      className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 font-semibold text-[11px] transition border border-indigo-500/30 flex items-center space-x-1"
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 font-bold text-xs transition border border-indigo-500/30 flex items-center space-x-1"
                     >
                       <span>+ Link Meta</span>
                     </a>
@@ -345,29 +347,29 @@ export default function BrandProfilesPage() {
                 )}
 
                 {/* Brand Voice Details */}
-                <div className="space-y-2.5 text-xs text-slate-300 bg-slate-950/40 p-4 rounded-xl border border-slate-900">
+                <div className="space-y-3 text-xs text-slate-300 bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
                   <div>
-                    <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-0.5">Tone of Voice</span>
-                    <p className="font-medium text-white">{brand.tone_of_voice}</p>
+                    <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1">Tone of Voice</span>
+                    <p className="font-semibold text-white">{brand.tone_of_voice}</p>
                   </div>
 
                   <div>
-                    <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-0.5">Target Audience</span>
+                    <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1">Target Audience</span>
                     <p className="font-medium text-slate-300">{brand.target_audience}</p>
                   </div>
 
                   <div>
-                    <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-0.5">CTA Style</span>
-                    <p className="font-medium text-purple-300">{brand.cta_style}</p>
+                    <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1">CTA Style</span>
+                    <p className="font-semibold text-purple-300">{brand.cta_style}</p>
                   </div>
 
                   <div>
-                    <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-1">Brand Colors</span>
+                    <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1.5">Brand Colors</span>
                     <div className="flex items-center space-x-2">
                       {brand.brand_colors?.map((color, idx) => (
-                        <div key={idx} className="flex items-center space-x-1 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg">
-                          <div className="w-3.5 h-3.5 rounded-full border border-slate-700" style={{ backgroundColor: color }} />
-                          <span className="font-mono text-[10px] text-slate-400">{color}</span>
+                        <div key={idx} className="flex items-center space-x-1.5 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-xl">
+                          <div className="w-3.5 h-3.5 rounded-full border border-slate-700 shadow-sm" style={{ backgroundColor: color }} />
+                          <span className="font-mono text-[10px] text-slate-300 font-semibold">{color}</span>
                         </div>
                       ))}
                     </div>

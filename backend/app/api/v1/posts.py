@@ -25,7 +25,8 @@ def get_brand_posts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Retrieve posts for a specific brand profile."""
+    """Retrieve posts for a specific brand profile (auto-triggering due scheduled posts publishing)."""
+    post_service.check_and_publish_due_posts(db)
     return post_service.get_brand_posts(db, brand_id, status)
 
 @router.get("/{post_id}", response_model=PostResponse)
