@@ -15,6 +15,23 @@ from app.api.v1.analytics import router as analytics_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.health import router as health_router
 
+from sqlalchemy import inspect, text
+
+def run_db_migrations():
+    """Ensure database schema is up-to-date with new model columns."""
+    try:
+        inspector = inspect(engine)
+        if "meta_accounts" in inspector.get_table_names():
+            columns = [c["name"] for c in inspector.get_columns("meta_accounts")]
+            if "logo_url" not in columns:
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE meta_accounts ADD COLUMN logo_url VARCHAR(500);"))
+                    conn.commit()
+    except Exception as e:
+        print(f"Migration notice: {e}")
+
+run_db_migrations()
+
 # Create database tables automatically if not already existing
 Base.metadata.create_all(bind=engine)
 
@@ -33,6 +50,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Static files route for uploaded post photos/graphics
+import os
+from fastapi.staticfiles import StaticFiles
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Include v1 API routes
 app.include_router(health_router, prefix=settings.API_V1_STR)

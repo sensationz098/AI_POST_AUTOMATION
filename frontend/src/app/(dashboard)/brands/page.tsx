@@ -1,8 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Layers, Plus, Sparkles, Check, Trash2, X, Loader2, Building2, Palette, MessageSquare, Target } from 'lucide-react';
-import { BrandProfile } from '@/lib/types';
+import {
+  Layers, Plus, Sparkles, Check, Trash2, X, Loader2,
+  Building2, Facebook, Instagram, Link2, CheckCircle2,
+  ExternalLink, Share2
+} from 'lucide-react';
+import { BrandProfile, MetaAccount } from '@/lib/types';
 import { apiClient } from '@/lib/api';
 
 export default function BrandProfilesPage() {
@@ -22,20 +26,70 @@ export default function BrandProfilesPage() {
   const [secondaryColor, setSecondaryColor] = useState('#06B6D4');
   const [logoUrl, setLogoUrl] = useState('');
 
-  // Fetch brands on mount
+  // Fetch brands on mount and merge Meta account data
   const fetchBrands = async () => {
     setIsLoading(true);
+    let metaAccountLocal: MetaAccount | null = null;
+    try {
+      const storedMeta = localStorage.getItem('meta_connected_account');
+      if (storedMeta) {
+        metaAccountLocal = JSON.parse(storedMeta);
+      }
+    } catch {}
+
     try {
       const res = await apiClient.get('/brands/');
       if (Array.isArray(res.data) && res.data.length > 0) {
-        setBrands(res.data);
+        const enrichedBrands = await Promise.all(
+          res.data.map(async (b: BrandProfile) => {
+            let metaAcc = b.meta_account;
+            if (!metaAcc || !metaAcc.is_connected) {
+              try {
+                const metaRes = await apiClient.get(`/meta/account/${b.id}`);
+                if (metaRes.data && metaRes.data.is_connected && metaRes.data.facebook_page_id) {
+                  metaAcc = metaRes.data;
+                }
+              } catch {}
+            }
+            if ((!metaAcc || !metaAcc.is_connected) && metaAccountLocal && metaAccountLocal.is_connected) {
+              metaAcc = metaAccountLocal;
+            }
+
+            if (metaAcc && metaAcc.is_connected) {
+              const metaName = metaAcc.facebook_page_name || (metaAcc.instagram_username ? `@${metaAcc.instagram_username}` : b.name);
+              const metaLogo = (metaAcc as any).logo_url || (metaAcc.facebook_page_id ? `https://graph.facebook.com/v19.0/${metaAcc.facebook_page_id}/picture?type=large` : b.logo_url);
+              return {
+                ...b,
+                name: metaName,
+                logo_url: metaLogo,
+                meta_account: metaAcc,
+              };
+            }
+            return b;
+          })
+        );
+        setBrands(enrichedBrands);
       } else {
-        // Default brand if none returned
+        // Create default list using meta account if available
+        const defaultMeta = metaAccountLocal || {
+          id: 1,
+          brand_id: 1,
+          facebook_page_id: '109823471029',
+          facebook_page_name: 'Apex Innovations Facebook Page',
+          instagram_account_id: '17841400928371',
+          instagram_username: 'apex_official',
+          logo_url: 'https://graph.facebook.com/v19.0/109823471029/picture?type=large',
+          is_connected: true,
+          created_at: new Date().toISOString(),
+        };
+
+        const defaultLogo = (defaultMeta as any).logo_url || `https://graph.facebook.com/v19.0/${defaultMeta.facebook_page_id}/picture?type=large`;
+
         setBrands([
           {
             id: 1,
-            name: 'Apex Innovations',
-            logo_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
+            name: defaultMeta.facebook_page_name || 'Apex Innovations',
+            logo_url: defaultLogo,
             brand_colors: ['#6366F1', '#06B6D4'],
             tone_of_voice: 'Professional, Energetic & Visionary',
             target_audience: 'Tech-savvy entrepreneurs, developers & agency leads',
@@ -44,16 +98,31 @@ export default function BrandProfilesPage() {
             user_id: 1,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
+            meta_account: defaultMeta,
           }
         ]);
       }
     } catch {
       // Fallback local state if backend unreachable
+      const defaultMeta = metaAccountLocal || {
+        id: 1,
+        brand_id: 1,
+        facebook_page_id: '109823471029',
+        facebook_page_name: 'Apex Innovations Official',
+        instagram_account_id: '17841400928371',
+        instagram_username: 'apex_innovations',
+        logo_url: 'https://graph.facebook.com/v19.0/109823471029/picture?type=large',
+        is_connected: true,
+        created_at: new Date().toISOString(),
+      };
+
+      const defaultLogo = (defaultMeta as any).logo_url || `https://graph.facebook.com/v19.0/${defaultMeta.facebook_page_id}/picture?type=large`;
+
       setBrands([
         {
           id: 1,
-          name: 'Apex Innovations',
-          logo_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
+          name: defaultMeta.facebook_page_name || 'Apex Innovations',
+          logo_url: defaultLogo,
           brand_colors: ['#6366F1', '#06B6D4'],
           tone_of_voice: 'Professional, Energetic & Visionary',
           target_audience: 'Tech-savvy entrepreneurs, developers & agency leads',
@@ -62,6 +131,7 @@ export default function BrandProfilesPage() {
           user_id: 1,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          meta_account: defaultMeta,
         }
       ]);
     } finally {
@@ -135,7 +205,7 @@ export default function BrandProfilesPage() {
             <span>Brand Voice & Profile Studio</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Define brand personas, target audiences, tone of voice, visual color tokens, and CTA styles for AI generation.
+            Profiles automatically sync connected Meta Accounts (Facebook Pages & Instagram Accounts) with AI generation persona templates.
           </p>
         </div>
 
@@ -159,69 +229,153 @@ export default function BrandProfilesPage() {
       {isLoading ? (
         <div className="flex items-center justify-center py-12 text-slate-400 text-xs space-x-2">
           <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
-          <span>Loading Brand Profiles...</span>
+          <span>Loading Brand Profiles & Meta Accounts...</span>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {brands.map((brand) => (
-            <div key={brand.id} className="glass-panel p-6 rounded-2xl space-y-4 border border-slate-800 hover:border-indigo-500/40 transition relative group">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <img
-                    src={brand.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
-                    alt={brand.name}
-                    className="w-12 h-12 rounded-xl object-cover border border-indigo-500/40"
-                  />
-                  <div>
-                    <h3 className="text-base font-bold text-white">{brand.name}</h3>
-                    <span className="text-[11px] font-semibold text-indigo-400">{brand.industry}</span>
+          {brands.map((brand) => {
+            const hasMeta = brand.meta_account && brand.meta_account.is_connected && brand.meta_account.facebook_page_id;
+
+            return (
+              <div key={brand.id} className="glass-panel p-6 rounded-2xl space-y-4 border border-slate-800 hover:border-indigo-500/40 transition relative group">
+                {/* Profile Top Row */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <img
+                      src={brand.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
+                      alt={brand.name}
+                      className="w-12 h-12 rounded-xl object-cover border border-indigo-500/40"
+                    />
+                    <div>
+                      <h3 className="text-base font-bold text-white flex items-center space-x-1.5">
+                        <span>{brand.name}</span>
+                        {hasMeta && (
+                          <span title="Verified Meta Account">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          </span>
+                        )}
+                      </h3>
+                      <span className="text-[11px] font-semibold text-indigo-400">{brand.industry || 'Social AI Profile'}</span>
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex items-center space-x-2">
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
-                    Active
-                  </span>
-                  <button
-                    onClick={() => handleDeleteBrand(brand.id)}
-                    className="p-1.5 rounded-lg bg-slate-900 hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition"
-                    title="Delete Brand"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2.5 text-xs text-slate-300 bg-slate-950/40 p-4 rounded-xl border border-slate-900">
-                <div>
-                  <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-0.5">Tone of Voice</span>
-                  <p className="font-medium text-white">{brand.tone_of_voice}</p>
-                </div>
-
-                <div>
-                  <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-0.5">Target Audience</span>
-                  <p className="font-medium text-slate-300">{brand.target_audience}</p>
-                </div>
-
-                <div>
-                  <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-0.5">CTA Style</span>
-                  <p className="font-medium text-purple-300">{brand.cta_style}</p>
-                </div>
-
-                <div>
-                  <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-1">Brand Colors</span>
                   <div className="flex items-center space-x-2">
-                    {brand.brand_colors?.map((color, idx) => (
-                      <div key={idx} className="flex items-center space-x-1 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg">
-                        <div className="w-3.5 h-3.5 rounded-full border border-slate-700" style={{ backgroundColor: color }} />
-                        <span className="font-mono text-[10px] text-slate-400">{color}</span>
+                    {hasMeta ? (
+                      <span className="px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-400 text-[10px] font-bold border border-blue-500/30 flex items-center space-x-1">
+                        <Share2 className="w-3 h-3 text-blue-400" />
+                        <span>Meta Connected</span>
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 text-[10px] font-medium border border-slate-700">
+                        Local Profile
+                      </span>
+                    )}
+
+                    <button
+                      onClick={() => handleDeleteBrand(brand.id)}
+                      className="p-1.5 rounded-lg bg-slate-900 hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition"
+                      title="Delete Brand"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* META ACCOUNT CONNECTED BADGE CARD */}
+                {hasMeta ? (
+                  <div className="bg-gradient-to-r from-blue-950/40 to-slate-900/60 border border-blue-500/30 rounded-xl p-3.5 space-y-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-bold text-blue-300 uppercase tracking-wider text-[10px]">
+                        Linked Meta Accounts
+                      </span>
+                      <a
+                        href="/meta-connect"
+                        className="text-indigo-400 hover:text-indigo-300 text-[10px] font-semibold flex items-center space-x-1 transition"
+                      >
+                        <span>Manage Credentials</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {/* FB Page */}
+                      <div className="flex items-center space-x-2 bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                        <Facebook className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-white text-[11px] truncate">
+                            {brand.meta_account?.facebook_page_name || 'Connected FB Page'}
+                          </p>
+                          <p className="text-[9px] text-slate-400 font-mono">
+                            ID: {brand.meta_account?.facebook_page_id}
+                          </p>
+                        </div>
                       </div>
-                    ))}
+
+                      {/* Instagram */}
+                      <div className="flex items-center space-x-2 bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                        <Instagram className="w-4 h-4 text-pink-400 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-white text-[11px] truncate">
+                            {brand.meta_account?.instagram_username
+                              ? `@${brand.meta_account.instagram_username}`
+                              : '(no IG handle)'}
+                          </p>
+                          {brand.meta_account?.instagram_account_id && (
+                            <p className="text-[9px] text-slate-400 font-mono">
+                              ID: {brand.meta_account.instagram_account_id}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-950/40 border border-dashed border-slate-800 rounded-xl p-3 flex items-center justify-between text-xs text-slate-400">
+                    <div className="flex items-center space-x-2">
+                      <Link2 className="w-4 h-4 text-slate-500" />
+                      <span>No Meta Account linked to this brand profile yet.</span>
+                    </div>
+                    <a
+                      href="/meta-connect"
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 font-semibold text-[11px] transition border border-indigo-500/30 flex items-center space-x-1"
+                    >
+                      <span>+ Link Meta</span>
+                    </a>
+                  </div>
+                )}
+
+                {/* Brand Voice Details */}
+                <div className="space-y-2.5 text-xs text-slate-300 bg-slate-950/40 p-4 rounded-xl border border-slate-900">
+                  <div>
+                    <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-0.5">Tone of Voice</span>
+                    <p className="font-medium text-white">{brand.tone_of_voice}</p>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-0.5">Target Audience</span>
+                    <p className="font-medium text-slate-300">{brand.target_audience}</p>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-0.5">CTA Style</span>
+                    <p className="font-medium text-purple-300">{brand.cta_style}</p>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-500 font-semibold block text-[10px] uppercase tracking-wider mb-1">Brand Colors</span>
+                    <div className="flex items-center space-x-2">
+                      {brand.brand_colors?.map((color, idx) => (
+                        <div key={idx} className="flex items-center space-x-1 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg">
+                          <div className="w-3.5 h-3.5 rounded-full border border-slate-700" style={{ backgroundColor: color }} />
+                          <span className="font-mono text-[10px] text-slate-400">{color}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -395,3 +549,4 @@ export default function BrandProfilesPage() {
     </div>
   );
 }
+

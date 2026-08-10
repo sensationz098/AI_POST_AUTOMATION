@@ -12,6 +12,7 @@ interface PageInfo {
   id: string;
   name: string;
   access_token: string;
+  picture?: { data?: { url?: string } };
   instagram_business_account?: { id: string };
 }
 
@@ -91,7 +92,7 @@ export default function MetaConnectPage() {
 
     try {
       const res = await fetch(
-        `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,instagram_business_account&access_token=${userToken.trim()}`
+        `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,picture.type(large),instagram_business_account&access_token=${userToken.trim()}`
       );
       const data = await res.json();
 
@@ -140,6 +141,8 @@ export default function MetaConnectPage() {
     setIsSaving(true);
     setSaveSuccessMsg(null);
 
+    const logoUrl = selectedPage.picture?.data?.url || `https://graph.facebook.com/v19.0/${selectedPage.id}/picture?type=large`;
+
     const payload = {
       brand_id: 1,
       access_token: selectedPage.access_token || userToken,
@@ -147,6 +150,7 @@ export default function MetaConnectPage() {
       facebook_page_name: selectedPage.name,
       instagram_account_id: igInfo?.id || '',
       instagram_username: igInfo?.username || '',
+      logo_url: logoUrl,
     };
 
     try {
@@ -156,12 +160,24 @@ export default function MetaConnectPage() {
       setSaveSuccessMsg('Meta integration active (local sandbox mode)!');
     }
 
-    setSavedData({
+    const newSaved = {
       fbPageName: selectedPage.name,
       fbPageId: selectedPage.id,
       igUsername: igInfo?.username || '(no IG linked)',
       igId: igInfo?.id || '',
-    });
+    };
+    try {
+      localStorage.setItem('meta_connected_account', JSON.stringify({
+        facebook_page_name: selectedPage.name,
+        facebook_page_id: selectedPage.id,
+        instagram_username: igInfo?.username || '',
+        instagram_account_id: igInfo?.id || '',
+        logo_url: logoUrl,
+        is_connected: true,
+      }));
+    } catch {}
+
+    setSavedData(newSaved);
     setIsConnected(true);
     setStep(5);
     setIsSaving(false);
@@ -177,6 +193,8 @@ export default function MetaConnectPage() {
     setIsSaving(true);
     setSaveSuccessMsg(null);
 
+    const logoUrl = `https://graph.facebook.com/v19.0/${manualPageId.trim()}/picture?type=large`;
+
     const payload = {
       brand_id: 1,
       access_token: manualToken.trim(),
@@ -184,6 +202,7 @@ export default function MetaConnectPage() {
       facebook_page_name: manualPageName.trim() || 'Official Facebook Page',
       instagram_account_id: manualIgId.trim() || '',
       instagram_username: manualIgUsername.trim() || '',
+      logo_url: logoUrl,
     };
 
     try {
@@ -193,12 +212,24 @@ export default function MetaConnectPage() {
       setSaveSuccessMsg('Meta credentials saved and connected!');
     }
 
-    setSavedData({
+    const newSaved = {
       fbPageName: manualPageName.trim() || 'Official Facebook Page',
       fbPageId: manualPageId.trim(),
       igUsername: manualIgUsername.trim() || '(manual setup)',
       igId: manualIgId.trim() || '',
-    });
+    };
+    try {
+      localStorage.setItem('meta_connected_account', JSON.stringify({
+        facebook_page_name: manualPageName.trim() || 'Official Facebook Page',
+        facebook_page_id: manualPageId.trim(),
+        instagram_username: manualIgUsername.trim() || '',
+        instagram_account_id: manualIgId.trim() || '',
+        logo_url: logoUrl,
+        is_connected: true,
+      }));
+    } catch {}
+
+    setSavedData(newSaved);
     setIsConnected(true);
     setStep(5);
     setIsSaving(false);
@@ -609,7 +640,7 @@ export default function MetaConnectPage() {
                 Your Facebook Page and Instagram Business account are now connected.<br />
                 Go to the <strong className="text-white">AI Studio</strong> to create and publish your first post!
               </p>
-              <div className="flex justify-center space-x-3">
+              <div className="flex flex-wrap justify-center gap-3">
                 <button
                   onClick={() => { setStep(1); setIsConnected(false); setUserToken(''); setPages([]); setSelectedPage(null); setIgInfo(null); }}
                   className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition flex items-center space-x-1.5"
@@ -617,8 +648,11 @@ export default function MetaConnectPage() {
                   <Unlink className="w-3.5 h-3.5" />
                   <span>Reconnect Account</span>
                 </button>
+                <a href="/brands" className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 text-white font-bold text-xs transition shadow-lg shadow-purple-500/20 flex items-center space-x-1">
+                  <span>View in Brand Profiles Studio →</span>
+                </a>
                 <a href="/studio" className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition shadow-lg shadow-indigo-500/20">
-                  → Open AI Studio
+                  Open AI Studio
                 </a>
               </div>
             </div>

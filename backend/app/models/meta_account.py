@@ -13,6 +13,7 @@ class MetaAccount(Base):
     facebook_page_name = Column(String(255), nullable=True)
     instagram_account_id = Column(String(255), nullable=True)
     instagram_username = Column(String(255), nullable=True)
+    logo_url = Column(String(500), nullable=True)
     is_connected = Column(Boolean, default=False)
     last_synced_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
