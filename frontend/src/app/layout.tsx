@@ -1,5 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
   title: 'SocialAI Pro - Facebook & Instagram AI Automation Platform',
@@ -12,9 +13,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-[#0B0F17] text-slate-100 min-h-screen antialiased">
-        {children}
+    <html lang="en" className="dark" data-theme="dark">
+      <body className="bg-[#090D16] text-slate-100 min-h-screen antialiased">
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

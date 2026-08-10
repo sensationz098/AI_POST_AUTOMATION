@@ -236,67 +236,69 @@ export default function MetaConnectPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-900/30 via-indigo-900/20 to-slate-900 border border-blue-500/20 p-6 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center">
-            <Share2 className="w-5 h-5 text-white" />
+    <div className="space-y-8 max-w-4xl select-none">
+      {/* 2026 SaaS Header Banner */}
+      <div className="bg-slate-900/80 border border-slate-800 p-6 md:p-8 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-xl">
+        <div className="flex items-center space-x-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 flex-shrink-0">
+            <Share2 className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-white">Connect Instagram & Facebook</h1>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Link your Meta credentials for direct publishing from AI Studio.
+            <h1 className="text-2xl font-extrabold text-white tracking-tight">Connect Meta Accounts</h1>
+            <p className="text-xs md:text-sm text-slate-400 mt-1">
+              Link your Facebook Page & Instagram Business credentials for direct automated publishing.
             </p>
           </div>
         </div>
 
-        {/* Mode Selector */}
-        <div className="flex items-center space-x-1 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800 self-start sm:self-auto">
+        {/* Mode Selector Switcher */}
+        <div className="flex items-center space-x-1.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 self-start sm:self-auto shadow-inner">
           <button
             onClick={() => { setConnectMode('auto'); setStep(1); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 ${connectMode === 'auto' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${connectMode === 'auto' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Auto Token Wizard</span>
           </button>
           <button
             onClick={() => setConnectMode('manual')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 ${connectMode === 'manual' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${connectMode === 'manual' ? 'bg-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
           >
             <Edit3 className="w-3.5 h-3.5" />
-            <span>Direct Credentials Entry</span>
+            <span>Direct Entry</span>
           </button>
         </div>
       </div>
 
       {/* Connected Status Banner */}
       {isConnected && savedData && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="glass-panel p-5 rounded-2xl space-y-2 border-l-4 border-blue-500">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="saas-card p-6 rounded-3xl space-y-3 border-l-4 border-l-blue-500 shadow-md">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Facebook className="w-5 h-5 text-blue-500" />
-                <span className="font-bold text-white text-sm">Facebook Page</span>
+              <div className="flex items-center space-x-2.5">
+                <Facebook className="w-5 h-5 text-blue-500 fill-current" />
+                <span className="font-extrabold text-white text-sm tracking-tight">Facebook Page</span>
               </div>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-bold border border-emerald-500/30">✓ Connected</span>
+              <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 shadow-sm">
+                ✓ Connected
+              </span>
             </div>
-            <p className="text-xs text-white font-medium">{savedData.fbPageName}</p>
-            <p className="text-[11px] text-slate-400 font-mono">ID: {savedData.fbPageId}</p>
+            <p className="text-sm text-white font-bold tracking-tight">{savedData.fbPageName}</p>
+            <p className="text-xs text-slate-400 font-mono">Page ID: {savedData.fbPageId}</p>
           </div>
 
-          <div className="glass-panel p-5 rounded-2xl space-y-2 border-l-4 border-pink-500">
+          <div className="saas-card p-6 rounded-3xl space-y-3 border-l-4 border-l-pink-500 shadow-md">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2.5">
                 <Instagram className="w-5 h-5 text-pink-500" />
-                <span className="font-bold text-white text-sm">Instagram Business</span>
+                <span className="font-extrabold text-white text-sm tracking-tight">Instagram Business</span>
               </div>
               {savedData.igId
-                ? <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-bold border border-emerald-500/30">✓ Connected</span>
-                : <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-[10px] font-bold border border-amber-500/30">⚠ No IG linked</span>}
+                ? <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 shadow-sm">✓ Connected</span>
+                : <span className="px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-bold border border-amber-500/30 shadow-sm">⚠ No IG linked</span>}
             </div>
-            <p className="text-xs text-white font-medium">@{savedData.igUsername}</p>
-            {savedData.igId && <p className="text-[11px] text-slate-400 font-mono">ID: {savedData.igId}</p>}
+            <p className="text-sm text-white font-bold tracking-tight">@{savedData.igUsername}</p>
+            {savedData.igId && <p className="text-xs text-slate-400 font-mono">Account ID: {savedData.igId}</p>}
           </div>
         </div>
       )}
