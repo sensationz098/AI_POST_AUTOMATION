@@ -16,7 +16,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
-    """Upload custom base64 image or video data to public HTTPS CDN (catbox.moe) for Meta Facebook & Instagram Graph API."""
+    """Upload custom base64 image or video data to public HTTPS CDN for Meta Facebook & Instagram Graph API."""
     try:
         if not base64_str:
             return None
@@ -34,13 +34,33 @@ def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
             ext = mime_type.split("/")[1] if "/" in mime_type else "mp4"
             if ext == "quicktime":
                 ext = "mov"
-            files = {"fileToUpload": (f"custom_post_video.{ext}", raw_bytes, mime_type)}
-            data = {"reqtype": "fileupload"}
-            res = requests.post("https://catbox.moe/user/api.php", data=data, files=files, timeout=60)
-            if res.status_code == 200 and res.text.startswith("https://files.catbox.moe/"):
-                public_url = res.text.strip()
-                logger.info(f"Custom video uploaded to public HTTPS CDN for Meta Reels/Videos: {public_url}")
-                return public_url
+            filename = f"custom_post_video.{ext}"
+
+            # Primary CDN: Catbox
+            try:
+                files = {"fileToUpload": (filename, raw_bytes, mime_type)}
+                data = {"reqtype": "fileupload"}
+                res = requests.post("https://catbox.moe/user/api.php", data=data, files=files, timeout=45)
+                if res.status_code == 200 and res.text.startswith("https://files.catbox.moe/"):
+                    public_url = res.text.strip()
+                    logger.info(f"Custom video uploaded to Catbox CDN for Meta Reels/Videos: {public_url}")
+                    return public_url
+            except Exception as e:
+                logger.warning(f"Catbox CDN video upload failed: {e}. Trying secondary CDN...")
+
+            # Fallback CDN: Tmpfiles
+            try:
+                files = {"file": (filename, raw_bytes, mime_type)}
+                res = requests.post("https://tmpfiles.org/api/v1/upload", files=files, timeout=45)
+                if res.status_code == 200:
+                    res_json = res.json()
+                    page_url = res_json.get("data", {}).get("url")
+                    if page_url and "tmpfiles.org/" in page_url:
+                        dl_url = page_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+                        logger.info(f"Custom video uploaded to Tmpfiles CDN for Meta Reels/Videos: {dl_url}")
+                        return dl_url
+            except Exception as e:
+                logger.error(f"Tmpfiles CDN video upload failed: {e}")
 
         # 📸 Photo Upload Handling (Optimized with PIL)
         from PIL import Image
@@ -53,16 +73,33 @@ def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
         img.save(buffer, format="JPEG", quality=85, optimize=True)
         img_bytes = buffer.getvalue()
 
-        files = {"fileToUpload": ("custom_post_photo.jpg", img_bytes, "image/jpeg")}
-        data = {"reqtype": "fileupload"}
-        res = requests.post("https://catbox.moe/user/api.php", data=data, files=files, timeout=20)
+        # Primary CDN: Catbox
+        try:
+            files = {"fileToUpload": ("custom_post_photo.jpg", img_bytes, "image/jpeg")}
+            data = {"reqtype": "fileupload"}
+            res = requests.post("https://catbox.moe/user/api.php", data=data, files=files, timeout=20)
+            if res.status_code == 200 and res.text.startswith("https://files.catbox.moe/"):
+                public_url = res.text.strip()
+                logger.info(f"Custom photo uploaded to Catbox CDN for Meta: {public_url}")
+                return public_url
+        except Exception as e:
+            logger.warning(f"Catbox CDN photo upload failed: {e}. Trying secondary CDN...")
 
-        if res.status_code == 200 and res.text.startswith("https://files.catbox.moe/"):
-            public_url = res.text.strip()
-            logger.info(f"Custom photo uploaded to public HTTPS CDN for Meta: {public_url}")
-            return public_url
+        # Fallback CDN: Tmpfiles
+        try:
+            files = {"file": ("custom_post_photo.jpg", img_bytes, "image/jpeg")}
+            res = requests.post("https://tmpfiles.org/api/v1/upload", files=files, timeout=20)
+            if res.status_code == 200:
+                res_json = res.json()
+                page_url = res_json.get("data", {}).get("url")
+                if page_url and "tmpfiles.org/" in page_url:
+                    dl_url = page_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+                    logger.info(f"Custom photo uploaded to Tmpfiles CDN for Meta: {dl_url}")
+                    return dl_url
+        except Exception as e:
+            logger.error(f"Tmpfiles CDN photo upload failed: {e}")
     except Exception as e:
-        logger.error(f"Failed to upload base64 media to catbox CDN: {e}")
+        logger.error(f"Failed to upload base64 media to public CDN: {e}")
     return None
 
 class PostService:
@@ -178,7 +215,14 @@ class PostService:
         formatted_caption = f"{post.caption}\n\n{' '.join(post.hashtags or [])}\n\n{post.cta or ''}".strip()
         errors = []
 
-        is_video = bool(public_image_url and any(public_image_url.lower().endswith(ext) for ext in [".mp4", ".mov", ".webm", ".m4v"]))
+        raw_url = (post.image_url or "").lower()
+        pub_url = (public_image_url or "").lower()
+        is_video = bool(
+            "video" in raw_url or
+            "video" in pub_url or
+            any(ext in pub_url for ext in [".mp4", ".mov", ".webm", ".m4v"]) or
+            any(ext in raw_url for ext in [".mp4", ".mov", ".webm", ".m4v"])
+        )
 
         is_sandbox_fb = False
         is_sandbox_ig = False
@@ -289,16 +333,24 @@ class PostService:
 
     def check_and_publish_due_posts(self, db: Session) -> List[Post]:
         """Find any scheduled posts whose scheduled time has passed and execute publishing."""
-        now = datetime.utcnow()
-        due_posts = post_repo.get_due_scheduled_posts(db, now)
-        published_posts = []
-        for post in due_posts:
+        try:
+            now = datetime.utcnow()
+            due_posts = post_repo.get_due_scheduled_posts(db, now)
+            published_posts = []
+            for post in due_posts:
+                try:
+                    published = self.execute_publish(db, post.id)
+                    published_posts.append(published)
+                    logger.info(f"Auto-published scheduled post ID={post.id} (Scheduled at: {post.scheduled_at})")
+                except Exception as e:
+                    logger.error(f"Auto-publish failed for scheduled post ID={post.id}: {e}")
+            return published_posts
+        except Exception as e:
+            logger.error(f"Failed checking due posts: {e}")
             try:
-                published = self.execute_publish(db, post.id)
-                published_posts.append(published)
-                logger.info(f"Auto-published scheduled post ID={post.id} (Scheduled at: {post.scheduled_at})")
-            except Exception as e:
-                logger.error(f"Auto-publish failed for scheduled post ID={post.id}: {e}")
-        return published_posts
+                db.rollback()
+            except Exception:
+                pass
+            return []
 
 post_service = PostService()
