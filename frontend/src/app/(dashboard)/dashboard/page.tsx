@@ -94,31 +94,22 @@ export default function AnalyticsDashboardPage() {
       const res = await apiClient.get('/analytics/overview');
       setData(res.data);
     } catch (e) {
-      console.warn('Backend analytics query fallback:', e);
-      // Fallback data if backend is initializing
+      console.warn('Backend analytics query:', e);
       setData({
         overview: {
-          total_posts: 18,
-          published_posts: 14,
-          scheduled_posts: 4,
+          total_posts: 0,
+          published_posts: 0,
+          scheduled_posts: 0,
           failed_posts: 0,
-          total_likes: 3420,
-          total_comments: 610,
-          total_shares: 290,
-          total_reach: 48500,
-          total_impressions: 74200,
-          avg_engagement_rate: 8.6,
+          total_likes: 0,
+          total_comments: 0,
+          total_shares: 0,
+          total_reach: 0,
+          total_impressions: 0,
+          avg_engagement_rate: 0.0,
         },
-        daily_trends: [
-          { date: 'Mon', reach: 4400, impressions: 6800, engagement: 510 },
-          { date: 'Tue', reach: 5100, impressions: 7600, engagement: 620 },
-          { date: 'Wed', reach: 6500, impressions: 9200, engagement: 790 },
-          { date: 'Thu', reach: 7200, impressions: 10800, engagement: 940 },
-          { date: 'Fri', reach: 8800, impressions: 12400, engagement: 1190 },
-          { date: 'Sat', reach: 10100, impressions: 14200, engagement: 1350 },
-          { date: 'Sun', reach: 12600, impressions: 16500, engagement: 1680 },
-        ],
-        is_live_meta: true,
+        daily_trends: [],
+        is_live_meta: false,
       });
     } finally {
       setIsLoading(false);
@@ -137,7 +128,7 @@ export default function AnalyticsDashboardPage() {
         account_name: a.account_name,
         platform: a.platform,
         logo_url: a.logo_url,
-        followers_count: a.platform === 'facebook' ? 14200 : 18900,
+        followers_count: 0,
         status: a.status,
         link: a.platform === 'facebook' ? `https://facebook.com/${a.account_id}` : `https://instagram.com/${a.account_name.replace('@', '')}`
       })))
@@ -260,7 +251,7 @@ export default function AnalyticsDashboardPage() {
                   <div className="bg-slate-900/50 p-2 rounded border border-slate-800/60">
                     <span className="text-[9px] text-slate-400">No. of Posts</span>
                     <p className="text-xs font-bold text-indigo-300 mt-0.5 font-mono">
-                      {(acc.media_count || overview?.published_posts || 14).toLocaleString()}
+                      {(acc.media_count || overview?.published_posts || 0).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -280,11 +271,8 @@ export default function AnalyticsDashboardPage() {
           </div>
           <div className="flex items-baseline justify-between">
             <h2 className="text-xl font-bold text-slate-100 tracking-tight">
-              {totalFollowersAll > 0 ? totalFollowersAll.toLocaleString() : '33,100'}
+              {totalFollowersAll.toLocaleString()}
             </h2>
-            <span className="text-[10px] font-bold text-emerald-400 flex items-center font-mono">
-              <TrendingUp className="w-3 h-3 mr-0.5" /> +8.4%
-            </span>
           </div>
           <p className="text-[10px] text-slate-400">FB Page Fans + IG Followers</p>
         </div>
@@ -297,11 +285,8 @@ export default function AnalyticsDashboardPage() {
           </div>
           <div className="flex items-baseline justify-between">
             <h2 className="text-xl font-bold text-slate-100 tracking-tight">
-              {overview?.published_posts || overview?.total_posts || 14}
+              {overview?.published_posts || overview?.total_posts || 0}
             </h2>
-            <span className="text-[10px] font-bold text-emerald-400 flex items-center font-mono">
-              <TrendingUp className="w-3 h-3 mr-0.5" /> Active
-            </span>
           </div>
           <p className="text-[10px] text-slate-400">Total posts published across accounts</p>
         </div>
@@ -316,9 +301,6 @@ export default function AnalyticsDashboardPage() {
             <h2 className="text-xl font-bold text-slate-100 tracking-tight">
               {(overview?.total_reach || 0).toLocaleString()}
             </h2>
-            <span className="text-[10px] font-bold text-emerald-400 flex items-center font-mono">
-              <TrendingUp className="w-3 h-3 mr-0.5" /> +14.2%
-            </span>
           </div>
           <p className="text-[10px] text-slate-400">Combined audience across pages</p>
         </div>
@@ -333,9 +315,6 @@ export default function AnalyticsDashboardPage() {
             <h2 className="text-xl font-bold text-slate-100 tracking-tight">
               {(overview?.total_impressions || 0).toLocaleString()}
             </h2>
-            <span className="text-[10px] font-bold text-emerald-400 flex items-center font-mono">
-              <TrendingUp className="w-3 h-3 mr-0.5" /> +18.6%
-            </span>
           </div>
           <p className="text-[10px] text-slate-400">Total content displays on feed</p>
         </div>
