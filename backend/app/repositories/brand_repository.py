@@ -56,4 +56,16 @@ class BrandRepository(BaseRepository[BrandProfile]):
                 db.refresh(brand)
         return brand
 
+    def deduplicate_brand_profiles(self, db: Session, user_id: int):
+        """Purge duplicate BrandProfiles with the exact same name for a user, keeping only the earliest created record."""
+        all_brands = db.query(BrandProfile).filter(BrandProfile.user_id == user_id).order_by(BrandProfile.id.asc()).all()
+        seen_names = set()
+        for b in all_brands:
+            clean_name = b.name.strip().lower()
+            if clean_name in seen_names:
+                db.delete(b)
+            else:
+                seen_names.add(clean_name)
+        db.commit()
+
 brand_repo = BrandRepository()

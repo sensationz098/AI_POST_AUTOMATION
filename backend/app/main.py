@@ -126,6 +126,13 @@ def seed_default_data():
             (MetaAccount.access_token.like("%sandbox%"))
         ).delete(synchronize_session=False)
 
+        # Backfill & deduplicate BrandProfiles for all existing real connected social accounts
+        from app.repositories.brand_repository import brand_repo
+        existing_socials = db.query(SocialAccount).all()
+        for sa in existing_socials:
+            brand_repo.ensure_brand_profile_exists(db, sa.user_id, sa.account_name, sa.logo_url)
+        brand_repo.deduplicate_brand_profiles(db, user.id)
+
         db.commit()
     finally:
         db.close()

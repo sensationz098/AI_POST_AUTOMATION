@@ -40,35 +40,15 @@ export default function BrandProfilesPage() {
     try {
       const res = await apiClient.get('/brands/');
       if (Array.isArray(res.data) && res.data.length > 0) {
-        const enrichedBrands = await Promise.all(
-          res.data.map(async (b: BrandProfile) => {
-            let metaAcc = b.meta_account;
-            if (!metaAcc || !metaAcc.is_connected) {
-              try {
-                const metaRes = await apiClient.get(`/meta/account/${b.id}`);
-                if (metaRes.data && metaRes.data.is_connected && metaRes.data.facebook_page_id) {
-                  metaAcc = metaRes.data;
-                }
-              } catch {}
-            }
-            if ((!metaAcc || !metaAcc.is_connected) && metaAccountLocal && metaAccountLocal.is_connected) {
-              metaAcc = metaAccountLocal;
-            }
-
-            if (metaAcc && metaAcc.is_connected) {
-              const metaName = metaAcc.facebook_page_name || (metaAcc.instagram_username ? `@${metaAcc.instagram_username}` : b.name);
-              const metaLogo = (metaAcc as any).logo_url || (metaAcc.facebook_page_id ? `https://graph.facebook.com/v19.0/${metaAcc.facebook_page_id}/picture?type=large` : b.logo_url);
-              return {
-                ...b,
-                name: metaName,
-                logo_url: metaLogo,
-                meta_account: metaAcc,
-              };
-            }
-            return b;
-          })
-        );
-        setBrands(enrichedBrands);
+        // Deduplicate brand profiles by unique name so each account has 1 clean profile
+        const uniqueMap = new Map<string, BrandProfile>();
+        for (const b of res.data) {
+          const key = b.name.trim().toLowerCase();
+          if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, b);
+          }
+        }
+        setBrands(Array.from(uniqueMap.values()));
       } else {
         // Create default list using meta account if available
         const defaultMeta = metaAccountLocal || {
