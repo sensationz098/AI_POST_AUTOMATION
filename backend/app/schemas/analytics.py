@@ -61,4 +61,5 @@ class DashboardAnalyticsResponse(BaseModel):
     daily_trends: List[DailyMetricPoint]
     facebook_page: Optional[FacebookPageMetrics] = None
     instagram_account: Optional[InstagramAccountMetrics] = None
+    accounts_list: Optional[List[dict]] = None
     is_live_meta: bool = False
