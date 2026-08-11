@@ -100,7 +100,8 @@ def meta_oauth_callback(
         ig_accounts = discovered.get("instagram_accounts", [])
 
         if not fb_pages and not ig_accounts:
-            return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote('Meta authorized successfully, but no eligible Facebook Pages or linked Instagram accounts were found.')}")
+            msg = "Meta authorized successfully, but 0 Facebook Pages or linked Instagram accounts were found. Make sure: 1) The Facebook account owns or manages a Facebook Page. 2) You checked 'Select All Pages' during Meta permission consent. 3) For Instagram posting, the Instagram account is converted to Professional mode and linked to your Page."
+            return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(msg)}")
 
         # 5. Save connected accounts in social_accounts table
         saved_fb = 0
