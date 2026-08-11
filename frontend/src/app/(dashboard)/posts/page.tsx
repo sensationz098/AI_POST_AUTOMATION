@@ -147,51 +147,47 @@ export default function PostSchedulerPage() {
   };
 
   return (
-    <div className="space-y-8 select-none">
-      {/* 2026 SaaS Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-6 md:p-8 rounded-3xl shadow-xl">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center space-x-2.5">
-              <div className="p-2 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
-                <CalendarIcon className="w-5 h-5" />
-              </div>
-              <span>Social Post Workflow & Scheduler</span>
+    <div className="space-y-5 select-none font-sans text-xs">
+      {/* Linear Style Context Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800/60">
+        <div>
+          <div className="flex items-center space-x-2.5">
+            <h1 className="text-lg font-bold text-slate-100 tracking-tight flex items-center space-x-2">
+              <CalendarIcon className="w-4 h-4 text-indigo-400" />
+              <span>Social Post Queue & Publishing Workflow</span>
             </h1>
-
-            <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-slate-950/80 text-slate-300 border border-slate-800 flex items-center space-x-1.5 shadow-sm">
-              <Clock className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Timezone: {userTimeZone}</span>
+            <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-slate-900/60 text-slate-400 border border-slate-800">
+              Timezone: {userTimeZone}
             </span>
           </div>
-          <p className="text-xs md:text-sm text-slate-400 leading-relaxed max-w-xl">
-            Manage drafts, approvals, scheduled publishing queues, and Meta Graph API retries. All timestamps automatically synchronized to your local clock ({userTimeZone}).
+          <p className="text-[11px] text-slate-400">
+            Track drafts, scheduled queue times, and automated Meta Graph API retries.
           </p>
         </div>
 
         <Link
           href="/studio"
-          className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs shadow-lg shadow-indigo-500/25 transition focus-ring self-start sm:self-auto"
+          className="inline-flex items-center space-x-1.5 px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] transition shadow-sm self-start sm:self-auto"
         >
-          <Plus className="w-4 h-4" />
-          <span>+ Create New AI Post</span>
+          <Plus className="w-3.5 h-3.5" />
+          <span>+ Create Post</span>
         </Link>
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center space-x-2 overflow-x-auto pb-1">
-        <span className="text-xs font-bold text-slate-400 mr-2 flex items-center space-x-1.5 flex-shrink-0">
-          <Filter className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Filter Status:</span>
+      <div className="flex items-center space-x-1.5 overflow-x-auto pb-1">
+        <span className="text-[11px] font-bold text-slate-400 mr-1 flex items-center space-x-1 flex-shrink-0">
+          <Filter className="w-3 h-3 text-indigo-400" />
+          <span>Filter:</span>
         </span>
         {['ALL', 'DRAFT', 'APPROVED', 'SCHEDULED', 'PUBLISHED', 'FAILED'].map((st) => (
           <button
             key={st}
             onClick={() => setFilterStatus(st)}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all duration-200 flex-shrink-0 ${
+            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition flex-shrink-0 ${
               filterStatus === st
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+                ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
+                : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
             }`}
           >
             {st}
@@ -199,92 +195,94 @@ export default function PostSchedulerPage() {
         ))}
       </div>
 
-      {/* Posts SaaS Table / Grid */}
-      <div className="saas-card rounded-3xl overflow-hidden border border-slate-800 shadow-xl">
+      {/* Enterprise Single Surface Jira/Linear Queue Table */}
+      <div className="linear-panel rounded-lg overflow-hidden border border-slate-800/80">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-950/80 border-b border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                <th className="p-5">Post & Visual</th>
-                <th className="p-5">Platforms</th>
-                <th className="p-5">Status</th>
-                <th className="p-5">Scheduled / Published ({userTimeZone})</th>
-                <th className="p-5 text-right">Actions</th>
+              <tr className="bg-slate-900/60 border-b border-slate-800/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <th className="p-3">Post ID & Visual</th>
+                <th className="p-3">Title & Summary</th>
+                <th className="p-3">Platforms</th>
+                <th className="p-3">Status</th>
+                <th className="p-3">Scheduled / Published ({userTimeZone})</th>
+                <th className="p-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80 text-xs">
+            <tbody className="divide-y divide-slate-800/60">
               {filteredPosts.map((post) => (
                 <tr key={post.id} className="hover:bg-slate-800/40 transition-colors duration-150">
-                  <td className="p-5">
-                    <div className="flex items-start space-x-3.5 max-w-md">
+                  <td className="p-3">
+                    <div className="flex items-center space-x-2.5">
+                      <span className="text-[10px] font-mono text-slate-500 font-bold">#{post.id}</span>
                       {post.image_url ? (
                         <img
                           src={post.image_url}
                           alt={post.title}
-                          className="w-14 h-14 rounded-2xl object-cover border border-slate-700/80 flex-shrink-0 shadow-md"
+                          className="w-9 h-9 rounded object-cover border border-slate-700 flex-shrink-0"
                         />
                       ) : (
-                        <div className="w-14 h-14 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500 text-lg flex-shrink-0 shadow-inner">
+                        <div className="w-9 h-9 rounded bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 text-xs flex-shrink-0">
                           📝
                         </div>
                       )}
-                      <div>
-                        <h4 className="font-bold text-white text-xs tracking-tight">{post.title || 'Untitled Post'}</h4>
-                        <p className="text-slate-400 text-xs line-clamp-2 mt-1 leading-normal">{post.caption}</p>
-                      </div>
                     </div>
                   </td>
-                  <td className="p-5">
-                    <div className="flex items-center space-x-2">
+                  <td className="p-3 max-w-sm">
+                    <h4 className="font-semibold text-slate-100 text-xs truncate">{post.title || 'Untitled Post'}</h4>
+                    <p className="text-slate-400 text-[11px] truncate mt-0.5">{post.caption}</p>
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center space-x-1.5">
                       {post.platforms.includes('facebook') && (
-                        <span className="px-2.5 py-1 rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-300 text-[10px] font-bold shadow-sm">
+                        <span className="px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800/60 text-blue-300 text-[9px] font-mono font-medium">
                           FB Page
                         </span>
                       )}
                       {post.platforms.includes('instagram') && (
-                        <span className="px-2.5 py-1 rounded-lg bg-pink-600/20 border border-pink-500/30 text-pink-300 text-[10px] font-bold shadow-sm">
+                        <span className="px-1.5 py-0.5 rounded bg-pink-950/60 border border-pink-800/60 text-pink-300 text-[9px] font-mono font-medium">
                           IG Biz
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="p-5">
+                  <td className="p-3">
                     <PostStatusBadge status={post.status} />
                   </td>
-                  <td className="p-5 text-slate-300 font-mono text-xs font-semibold">
+                  <td className="p-3 text-slate-300 font-mono text-[11px]">
                     {post.published_at ? (
-                      <span className="text-indigo-300 font-semibold flex items-center space-x-1.5">
-                        <CheckCircle className="w-3.5 h-3.5 text-indigo-400 inline" />
+                      <span className="text-indigo-300 flex items-center space-x-1">
+                        <CheckCircle className="w-3 h-3 text-indigo-400 inline" />
                         <span>{formatToLocalDateTime(post.published_at)}</span>
                       </span>
                     ) : post.scheduled_at ? (
-                      <span className="text-blue-300 font-semibold flex items-center space-x-1.5">
-                        <Clock className="w-3.5 h-3.5 text-blue-400 inline" />
+                      <span className="text-sky-300 flex items-center space-x-1">
+                        <Clock className="w-3 h-3 text-sky-400 inline" />
                         <span>{formatToLocalDateTime(post.scheduled_at)}</span>
                       </span>
                     ) : (
                       <span className="text-slate-500">—</span>
                     )}
                   </td>
-                  <td className="p-5 text-right">
+                  <td className="p-3 text-right">
                     {post.status === 'FAILED' ? (
                       <button
                         onClick={() => handleRetry(post.id)}
-                        className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow-md shadow-rose-600/20 flex items-center space-x-1.5 ml-auto focus-ring"
+                        className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-semibold text-[10px] transition flex items-center space-x-1 ml-auto focus-ring"
                       >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>Retry Publish</span>
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Retry</span>
                       </button>
                     ) : post.status === 'APPROVED' ? (
                       <button
                         onClick={() => handleRetry(post.id)}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-md shadow-emerald-600/20 flex items-center space-x-1.5 ml-auto focus-ring"
+                        className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[10px] transition flex items-center space-x-1 ml-auto focus-ring"
                       >
-                        <Send className="w-3.5 h-3.5" />
+                        <Send className="w-3 h-3" />
                         <span>Publish Now</span>
                       </button>
                     ) : (
-                      <span className="text-slate-400 text-xs font-medium">Ready</span>
+                      <span className="text-slate-500 text-[10px] font-mono">Ready</span>
                     )}
                   </td>
                 </tr>

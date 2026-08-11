@@ -47,66 +47,64 @@ const sampleLogs: AuditLog[] = [
 
 export default function AuditLogsPage() {
   return (
-    <div className="space-y-8 select-none">
-      {/* 2026 SaaS Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 p-6 md:p-8 rounded-3xl shadow-xl">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center space-x-2.5">
-            <div className="p-2 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <span>Audit Logs & Activity Trail</span>
+    <div className="space-y-5 select-none font-sans text-xs">
+      {/* Linear Style Context Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800/60">
+        <div>
+          <h1 className="text-lg font-bold text-slate-100 tracking-tight flex items-center space-x-2">
+            <ShieldCheck className="w-4 h-4 text-indigo-400" />
+            <span>Enterprise Audit Logs & Activity Trail</span>
           </h1>
-          <p className="text-xs md:text-sm text-slate-400 leading-relaxed max-w-xl">
-            Complete enterprise compliance trail of user actions, AI generation events, Meta API tokens, and automated Celery publishing tasks.
+          <p className="text-[11px] text-slate-400">
+            Compliance trail of user actions, AI generation events, Meta API credentials, and Celery publishing tasks.
           </p>
         </div>
 
-        <div className="flex items-center space-x-2 bg-slate-950 px-3.5 py-2 rounded-2xl border border-slate-800 text-xs font-semibold text-slate-300 shadow-inner">
-          <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
-          <span>Real-time Event Logging Active</span>
+        <div className="flex items-center space-x-1.5 bg-slate-900/60 border border-slate-800 px-2.5 py-1 rounded text-[10px] font-mono text-emerald-400">
+          <Activity className="w-3 h-3 text-emerald-400 animate-pulse" />
+          <span>Real-time Logging Active</span>
         </div>
       </div>
 
-      {/* Activity Table */}
-      <div className="saas-card rounded-3xl overflow-hidden border border-slate-800 shadow-xl">
-        <div className="p-5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
-          <span className="text-xs font-extrabold text-slate-200 flex items-center space-x-2">
-            <Terminal className="w-4 h-4 text-indigo-400" />
-            <span>Enterprise Activity Log</span>
+      {/* Activity Table Surface */}
+      <div className="linear-panel rounded-lg overflow-hidden border border-slate-800/80">
+        <div className="px-3.5 py-2.5 bg-slate-900/60 border-b border-slate-800/80 flex items-center justify-between">
+          <span className="text-xs font-semibold text-slate-200 flex items-center space-x-2">
+            <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Security Event Trail</span>
           </span>
-          <span className="text-xs text-slate-400 font-mono">Showing latest 50 security events</span>
+          <span className="text-[10px] text-slate-400 font-mono">Showing latest 50 events</span>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-950/40 border-b border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                <th className="p-5">Action Event</th>
-                <th className="p-5">Resource Target</th>
-                <th className="p-5">Payload Details</th>
-                <th className="p-5">Client IP</th>
-                <th className="p-5">Event Timestamp</th>
+              <tr className="bg-slate-900/40 border-b border-slate-800/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <th className="p-3">Action Event</th>
+                <th className="p-3">Target Resource</th>
+                <th className="p-3">Payload Details</th>
+                <th className="p-3">Client IP</th>
+                <th className="p-3">Timestamp</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80 text-xs">
+            <tbody className="divide-y divide-slate-800/60">
               {sampleLogs.map((log) => (
                 <tr key={log.id} className="hover:bg-slate-800/40 transition-colors duration-150">
-                  <td className="p-5">
-                    <span className="px-3 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-mono font-bold text-xs shadow-sm">
+                  <td className="p-3">
+                    <span className="px-2 py-0.5 rounded bg-indigo-950/60 border border-indigo-800/60 text-indigo-300 font-mono text-[10px] font-medium">
                       {log.action}
                     </span>
                   </td>
-                  <td className="p-5 text-white font-bold tracking-tight">
+                  <td className="p-3 text-slate-200 font-medium font-mono text-[11px]">
                     {log.resource_type} {log.resource_id ? `#${log.resource_id}` : ''}
                   </td>
-                  <td className="p-5 text-slate-400 font-mono text-xs max-w-sm truncate">
+                  <td className="p-3 text-slate-400 font-mono text-[11px] max-w-sm truncate">
                     {JSON.stringify(log.details)}
                   </td>
-                  <td className="p-5 text-slate-400 font-mono text-xs font-semibold">
+                  <td className="p-3 text-slate-400 font-mono text-[11px]">
                     {log.ip_address}
                   </td>
-                  <td className="p-5 text-slate-300 font-mono text-xs font-semibold">
+                  <td className="p-3 text-slate-300 font-mono text-[11px]">
                     {new Date(log.created_at).toLocaleString()}
                   </td>
                 </tr>
