@@ -103,7 +103,8 @@ def meta_oauth_callback(
             msg = "Meta authorized successfully, but 0 Facebook Pages or linked Instagram accounts were found. Make sure: 1) The Facebook account owns or manages a Facebook Page. 2) You checked 'Select All Pages' during Meta permission consent. 3) For Instagram posting, the Instagram account is converted to Professional mode and linked to your Page."
             return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(msg)}")
 
-        # 5. Save connected accounts in social_accounts table
+        # 5. Save connected accounts in social_accounts table & auto-create matching Brand Profiles
+        from app.repositories.brand_repository import brand_repo
         saved_fb = 0
         saved_ig = 0
 
@@ -118,6 +119,7 @@ def meta_oauth_callback(
                 token_type="page_access_token",
                 logo_url=p["logo_url"]
             )
+            brand_repo.ensure_brand_profile_exists(db, user_id, p["account_name"], p["logo_url"])
             saved_fb += 1
 
         for ig in ig_accounts:
@@ -132,6 +134,7 @@ def meta_oauth_callback(
                 logo_url=ig["logo_url"],
                 metadata_json=ig.get("metadata")
             )
+            brand_repo.ensure_brand_profile_exists(db, user_id, ig["account_name"], ig["logo_url"])
             saved_ig += 1
 
         logger.info(f"Successfully processed Meta OAuth for user {user_id}: {saved_fb} FB pages, {saved_ig} IG accounts.")

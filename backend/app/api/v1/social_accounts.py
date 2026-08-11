@@ -39,6 +39,9 @@ def connect_social_account(
     if not logo:
         logo = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80"
 
+    from app.repositories.brand_repository import brand_repo
+    brand_repo.ensure_brand_profile_exists(db, current_user.id, request.account_name, logo)
+
     account = social_account_repo.create_or_update(
         db=db,
         user_id=current_user.id,
