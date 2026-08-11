@@ -48,7 +48,7 @@ def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
             except Exception as e:
                 logger.warning(f"Catbox CDN video upload failed: {e}. Trying secondary CDN...")
 
-            # Fallback CDN: Tmpfiles
+            # Secondary CDN: Tmpfiles
             try:
                 files = {"file": (filename, raw_bytes, mime_type)}
                 res = requests.post("https://tmpfiles.org/api/v1/upload", files=files, timeout=45)
@@ -60,7 +60,18 @@ def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
                         logger.info(f"Custom video uploaded to Tmpfiles CDN for Meta Reels/Videos: {dl_url}")
                         return dl_url
             except Exception as e:
-                logger.error(f"Tmpfiles CDN video upload failed: {e}")
+                logger.warning(f"Tmpfiles CDN video upload failed: {e}. Trying tertiary CDN...")
+
+            # Tertiary CDN: 0x0.st
+            try:
+                files = {"file": (filename, raw_bytes, mime_type)}
+                res = requests.post("https://0x0.st", files=files, timeout=45)
+                if res.status_code == 200 and res.text.startswith("http"):
+                    public_url = res.text.strip().replace("http://", "https://")
+                    logger.info(f"Custom video uploaded to 0x0.st CDN for Meta Reels/Videos: {public_url}")
+                    return public_url
+            except Exception as e:
+                logger.error(f"0x0.st CDN video upload failed: {e}")
 
         # 📸 Photo Upload Handling (Optimized with PIL)
         from PIL import Image
@@ -85,7 +96,7 @@ def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
         except Exception as e:
             logger.warning(f"Catbox CDN photo upload failed: {e}. Trying secondary CDN...")
 
-        # Fallback CDN: Tmpfiles
+        # Secondary CDN: Tmpfiles
         try:
             files = {"file": ("custom_post_photo.jpg", img_bytes, "image/jpeg")}
             res = requests.post("https://tmpfiles.org/api/v1/upload", files=files, timeout=20)
@@ -97,15 +108,55 @@ def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
                     logger.info(f"Custom photo uploaded to Tmpfiles CDN for Meta: {dl_url}")
                     return dl_url
         except Exception as e:
-            logger.error(f"Tmpfiles CDN photo upload failed: {e}")
+            logger.warning(f"Tmpfiles CDN photo upload failed: {e}. Trying tertiary CDN...")
+
+        # Tertiary CDN: 0x0.st
+        try:
+            files = {"file": ("custom_post_photo.jpg", img_bytes, "image/jpeg")}
+            res = requests.post("https://0x0.st", files=files, timeout=20)
+            if res.status_code == 200 and res.text.startswith("http"):
+                public_url = res.text.strip().replace("http://", "https://")
+                logger.info(f"Custom photo uploaded to 0x0.st CDN for Meta: {public_url}")
+                return public_url
+        except Exception as e:
+            logger.error(f"0x0.st CDN photo upload failed: {e}")
     except Exception as e:
         logger.error(f"Failed to upload base64 media to public CDN: {e}")
     return None
 
 class PostService:
     def create_post(self, db: Session, user_id: int, post_in: PostCreate) -> Post:
+        from app.models.brand import BrandProfile
         data = post_in.model_dump()
         data["user_id"] = user_id
+
+        # Ensure brand exists before creating post to prevent foreign key errors
+        brand_id = data.get("brand_id", 1)
+        existing_brand = db.query(BrandProfile).filter(BrandProfile.id == brand_id).first()
+        if not existing_brand:
+            user_brand = db.query(BrandProfile).filter(BrandProfile.user_id == user_id).first()
+            if user_brand:
+                data["brand_id"] = user_brand.id
+            else:
+                new_brand = BrandProfile(
+                    name="Apex Innovations",
+                    industry="Artificial Intelligence",
+                    tone_of_voice="Professional & Energetic",
+                    target_audience="Tech Enthusiasts",
+                    cta_style="Value focused",
+                    user_id=user_id
+                )
+                db.add(new_brand)
+                try:
+                    db.commit()
+                    db.refresh(new_brand)
+                    data["brand_id"] = new_brand.id
+                except Exception:
+                    db.rollback()
+                    first_brand = db.query(BrandProfile).first()
+                    if first_brand:
+                        data["brand_id"] = first_brand.id
+
         post = post_repo.create(db, data)
         
         audit_repo.log(

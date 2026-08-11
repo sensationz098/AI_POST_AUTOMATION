@@ -12,7 +12,7 @@ class MetaGraphService:
         self, page_id: str, access_token: str, message: str, image_url: Optional[str] = None, is_video: bool = False
     ) -> Dict[str, Any]:
         """Publish a photo or video post to a Facebook Page via Meta Graph API."""
-        if not page_id or not access_token or page_id == "sandbox":
+        if not page_id or not access_token or page_id == "sandbox" or access_token.startswith("sandbox") or access_token.startswith("mock"):
             logger.info("Meta Graph API: Executing Sandbox FB Publish Simulation.")
             return {"id": f"fb_mock_post_{abs(hash(message)) % 1000000}", "status": "published_sandbox"}
 
@@ -74,7 +74,7 @@ class MetaGraphService:
         Step 2: Poll container status until FINISHED
         Step 3: Publish IG Media Container (POST /{ig-user-id}/media_publish)
         """
-        if not ig_user_id or not access_token or ig_user_id == "sandbox":
+        if not ig_user_id or not access_token or ig_user_id == "sandbox" or access_token.startswith("sandbox") or access_token.startswith("mock"):
             logger.info("Meta Graph API: Executing Sandbox IG Publish Simulation.")
             return {
                 "container_id": f"ig_container_mock_{abs(hash(caption)) % 100000}",

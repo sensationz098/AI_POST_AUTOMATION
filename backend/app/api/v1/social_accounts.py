@@ -1,0 +1,65 @@
+from fastapi import APIRouter, Depends, status, HTTPException
+from sqlalchemy.orm import Session
+from typing import List
+from app.core.database import get_db
+from app.schemas.social_account import (
+    SocialAccountConnectRequest,
+    SocialAccountResponse
+)
+from app.repositories.social_account_repository import social_account_repo
+from app.api.v1.deps import get_current_user
+from app.models.user import User
+
+router = APIRouter(prefix="/social-accounts", tags=["Connected Social Accounts"])
+
+@router.get("/", response_model=List[SocialAccountResponse])
+def get_connected_social_accounts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieve list of connected Facebook Pages & Instagram accounts (excluding sensitive access tokens)."""
+    accounts = social_account_repo.get_by_user(db, current_user.id)
+    return accounts
+
+@router.post("/connect", response_model=SocialAccountResponse, status_code=status.HTTP_201_CREATED)
+def connect_social_account(
+    request: SocialAccountConnectRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Link a Facebook Page or Instagram Business account independently to user workspace."""
+    logo = request.logo_url
+    if not logo and request.platform == "facebook":
+        logo = f"https://graph.facebook.com/v19.0/{request.account_id}/picture?type=large"
+    if not logo:
+        logo = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80"
+
+    account = social_account_repo.create_or_update(
+        db=db,
+        user_id=current_user.id,
+        platform=request.platform.lower(),
+        account_id=request.account_id,
+        account_name=request.account_name,
+        access_token=request.access_token,
+        brand_id=request.brand_id,
+        token_type=request.token_type or "page_access_token",
+        expires_at=request.expires_at,
+        logo_url=logo,
+        metadata_json=request.metadata_json
+    )
+    return account
+
+@router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+def disconnect_social_account(
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Disconnect and delete a connected social account."""
+    success = social_account_repo.delete(db, account_id, current_user.id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Social account not found or access denied"
+        )
+    return None

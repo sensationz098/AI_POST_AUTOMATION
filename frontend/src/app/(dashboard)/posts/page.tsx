@@ -97,13 +97,29 @@ export default function PostSchedulerPage() {
 
   useEffect(() => {
     async function fetchPosts() {
+      let localQueue: SocialPost[] = [];
+      try {
+        const stored = localStorage.getItem('local_posts_queue');
+        if (stored) localQueue = JSON.parse(stored);
+      } catch {}
+
       try {
         const res = await apiClient.get('/posts/brand/1');
         if (res.data && res.data.length > 0) {
-          setPosts(res.data);
+          const combined = [...localQueue, ...res.data];
+          const uniquePosts = Array.from(new Map(combined.map(p => [p.id, p])).values());
+          setPosts(uniquePosts);
+        } else if (localQueue.length > 0) {
+          const combined = [...localQueue, ...samplePosts];
+          const uniquePosts = Array.from(new Map(combined.map(p => [p.id, p])).values());
+          setPosts(uniquePosts);
         }
       } catch (e) {
-        // Keep sample posts if backend offline
+        if (localQueue.length > 0) {
+          const combined = [...localQueue, ...samplePosts];
+          const uniquePosts = Array.from(new Map(combined.map(p => [p.id, p])).values());
+          setPosts(uniquePosts);
+        }
       }
     }
     fetchPosts();
