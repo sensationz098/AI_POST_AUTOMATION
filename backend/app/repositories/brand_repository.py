@@ -27,4 +27,33 @@ class BrandRepository(BaseRepository[BrandProfile]):
         db.refresh(meta)
         return meta
 
+    def ensure_brand_profile_exists(self, db: Session, user_id: int, account_name: str, logo_url: Optional[str] = None) -> BrandProfile:
+        """Check if a BrandProfile exists for this user and account_name; if not, create a new BrandProfile with the same name and logo."""
+        clean_name = account_name.strip()
+        brand = db.query(BrandProfile).filter(
+            BrandProfile.user_id == user_id,
+            BrandProfile.name == clean_name
+        ).first()
+
+        if not brand:
+            brand = BrandProfile(
+                name=clean_name,
+                logo_url=logo_url or "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
+                user_id=user_id,
+                brand_colors=["#6366F1", "#38BDF8"],
+                tone_of_voice="Professional, Engaging & Visionary",
+                target_audience="Target Audience & Followers",
+                cta_style="Value-driven Call to Action",
+                industry="Social Media & Brand"
+            )
+            db.add(brand)
+            db.commit()
+            db.refresh(brand)
+        else:
+            if logo_url and brand.logo_url != logo_url:
+                brand.logo_url = logo_url
+                db.commit()
+                db.refresh(brand)
+        return brand
+
 brand_repo = BrandRepository()
