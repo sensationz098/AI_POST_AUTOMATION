@@ -71,9 +71,6 @@ export const Sidebar = () => {
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <h1 className="font-bold text-xs text-slate-100 truncate tracking-tight">SocialAI Workspace</h1>
-              <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                v2.4
-              </span>
             </div>
             <p className="text-[10px] text-slate-400 truncate">Enterprise Meta Suite</p>
           </div>
