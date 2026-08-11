@@ -19,7 +19,12 @@ def get_connected_social_accounts(
 ):
     """Retrieve list of connected Facebook Pages & Instagram accounts (excluding sensitive access tokens)."""
     accounts = social_account_repo.get_by_user(db, current_user.id)
-    return accounts
+    fake_ids = {"109823471029", "17841400928371", "17841400928372", "17841400928373", "109823471030", "sandbox"}
+    real_accounts = [
+        a for a in accounts
+        if a.account_id not in fake_ids and not (a.access_token and ("sandbox" in a.access_token or "mock" in a.access_token))
+    ]
+    return real_accounts
 
 @router.post("/connect", response_model=SocialAccountResponse, status_code=status.HTTP_201_CREATED)
 def connect_social_account(

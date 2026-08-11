@@ -260,4 +260,134 @@ class MetaGraphService:
                 "is_sandbox": False
             }
 
+    def get_authorization_url(self, state: str) -> str:
+        """Generate official Meta OAuth Authorization Dialog URL with required permissions."""
+        from urllib.parse import urlencode
+        params = {
+            "client_id": settings.META_APP_ID or "YOUR_META_APP_ID",
+            "redirect_uri": settings.META_OAUTH_REDIRECT_URI,
+            "state": state,
+            "scope": "pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish",
+            "response_type": "code"
+        }
+        return f"https://www.facebook.com/{settings.META_GRAPH_API_VERSION}/dialog/oauth?{urlencode(params)}"
+
+    def exchange_code_for_user_token(self, code: str) -> str:
+        """Exchange Meta authorization code for short-lived user access token."""
+        if not settings.META_APP_SECRET or settings.META_APP_SECRET == "your-meta-app-secret" or settings.META_APP_SECRET.startswith("your-"):
+            raise Exception("Meta OAuth error: META_APP_SECRET is not configured in .env. Please copy your exact 32-character App Secret from Meta Developer Dashboard (App Settings -> Basic).")
+
+        url = f"{self.BASE_URL}/oauth/access_token"
+        params = {
+            "client_id": settings.META_APP_ID,
+            "client_secret": settings.META_APP_SECRET,
+            "redirect_uri": settings.META_OAUTH_REDIRECT_URI,
+            "code": code
+        }
+        res = requests.get(url, params=params, timeout=20)
+        data = res.json()
+        if res.status_code != 200 or "access_token" not in data:
+            error_msg = data.get("error", {}).get("message", "Token exchange failed")
+            if "client secret" in error_msg.lower():
+                raise Exception("Meta OAuth error: Invalid META_APP_SECRET in .env. Please copy your exact 32-character App Secret from Meta Developer Dashboard (App Settings -> Basic).")
+            raise Exception(f"Meta OAuth token exchange error: {error_msg}")
+        return data["access_token"]
+
+    def get_long_lived_user_token(self, short_lived_token: str) -> str:
+        """Exchange short-lived user token for 60-day long-lived user token."""
+        url = f"{self.BASE_URL}/oauth/access_token"
+        params = {
+            "grant_type": "fb_exchange_token",
+            "client_id": settings.META_APP_ID,
+            "client_secret": settings.META_APP_SECRET,
+            "fb_exchange_token": short_lived_token
+        }
+        res = requests.get(url, params=params, timeout=20)
+        data = res.json()
+        if res.status_code == 200 and "access_token" in data:
+            return data["access_token"]
+        # Fallback to short lived token if exchange fails
+        return short_lived_token
+
+    def fetch_user_pages_and_instagram_accounts(self, user_access_token: str) -> Dict[str, Any]:
+        """
+        Discover all authorized Facebook Pages and linked Instagram Professional accounts.
+        Returns:
+        {
+          "facebook_pages": [{"account_id", "account_name", "access_token", "logo_url"}],
+          "instagram_accounts": [{"account_id", "account_name", "access_token", "logo_url"}]
+        }
+        """
+        url = f"{self.BASE_URL}/me/accounts"
+        params = {
+            "fields": "id,name,access_token,picture.type(large),instagram_business_account",
+            "access_token": user_access_token
+        }
+        res = requests.get(url, params=params, timeout=20)
+        data = res.json()
+        if res.status_code != 200:
+            error_msg = data.get("error", {}).get("message", "Failed to retrieve Facebook Pages")
+            raise Exception(f"Meta Graph API error: {error_msg}")
+
+        pages_raw = data.get("data", [])
+        fb_pages = []
+        ig_accounts = []
+
+        for page in pages_raw:
+            page_id = str(page.get("id"))
+            page_name = page.get("name", "Facebook Page")
+            page_token = page.get("access_token")
+            picture_url = page.get("picture", {}).get("data", {}).get("url") or f"https://graph.facebook.com/v19.0/{page_id}/picture?type=large"
+
+            fb_pages.append({
+                "account_id": page_id,
+                "account_name": page_name,
+                "access_token": page_token,
+                "logo_url": picture_url
+            })
+
+            # Check linked Instagram Business account
+            ig_obj = page.get("instagram_business_account")
+            if not ig_obj and page_token:
+                # Query page endpoint directly for instagram_business_account
+                try:
+                    ig_query_res = requests.get(
+                        f"{self.BASE_URL}/{page_id}",
+                        params={"fields": "instagram_business_account", "access_token": page_token},
+                        timeout=10
+                    )
+                    ig_q_data = ig_query_res.json()
+                    ig_obj = ig_q_data.get("instagram_business_account")
+                except Exception:
+                    ig_obj = None
+
+            if ig_obj and page_token:
+                ig_id = str(ig_obj.get("id"))
+                # Retrieve Instagram Professional Account Details
+                try:
+                    ig_res = requests.get(
+                        f"{self.BASE_URL}/{ig_id}",
+                        params={"fields": "id,username,name,profile_picture_url", "access_token": page_token},
+                        timeout=10
+                    )
+                    ig_data = ig_res.json()
+                    username = ig_data.get("username") or f"ig_{ig_id}"
+                    ig_name = ig_data.get("name") or username
+                    ig_pic = ig_data.get("profile_picture_url") or picture_url
+
+                    ig_accounts.append({
+                        "account_id": ig_id,
+                        "account_name": f"@{username}",
+                        "access_token": page_token,  # IG publishing uses Page access token
+                        "logo_url": ig_pic,
+                        "metadata": {"username": username, "name": ig_name, "linked_page_id": page_id}
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to fetch IG profile details for {ig_id}: {e}")
+
+        return {
+            "facebook_pages": fb_pages,
+            "instagram_accounts": ig_accounts
+        }
+
 meta_service = MetaGraphService()

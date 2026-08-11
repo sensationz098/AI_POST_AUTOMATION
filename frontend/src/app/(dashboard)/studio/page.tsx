@@ -284,10 +284,12 @@ export default function AIStudioPage() {
     async function loadSocialAccounts() {
       try {
         const res = await apiClient.get('/social-accounts/');
-        if (Array.isArray(res.data) && res.data.length > 0) {
-          setSocialAccounts(res.data);
+        if (Array.isArray(res.data)) {
+          const fakeIds = new Set(['109823471029', '17841400928371', '17841400928372', '17841400928373', '109823471030', 'sandbox']);
+          const realAccounts = res.data.filter(a => !fakeIds.has(a.account_id) && !a.account_name?.includes('Apex Innovations Page'));
+          setSocialAccounts(realAccounts);
           // Pre-select all connected accounts by default
-          const validIds = res.data.filter(a => a.status !== 'TOKEN_EXPIRED').map(a => a.id);
+          const validIds = realAccounts.filter(a => a.status !== 'TOKEN_EXPIRED').map(a => a.id);
           setSelectedAccountIds(validIds);
         }
       } catch (e) {
