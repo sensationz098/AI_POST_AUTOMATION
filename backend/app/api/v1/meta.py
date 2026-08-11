@@ -32,11 +32,13 @@ def cleanup_expired_states():
 
 @router.get("/oauth/start")
 def start_meta_oauth(
+    redirect: bool = Query(True),
     current_user: User = Depends(get_current_user)
 ):
     """
     Generate Meta OAuth Authorization URL for Facebook Pages & Instagram Business accounts.
     Includes cryptographically secure CSRF state token tied to current user session.
+    Redirects browser directly to Meta's authorization dialog when redirect=True.
     """
     cleanup_expired_states()
     state_token = secrets.token_urlsafe(32)
@@ -46,6 +48,8 @@ def start_meta_oauth(
     }
 
     auth_url = meta_service.get_authorization_url(state_token)
+    if redirect:
+        return RedirectResponse(url=auth_url, status_code=307)
     return {
         "authorization_url": auth_url,
         "state": state_token,
