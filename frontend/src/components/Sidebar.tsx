@@ -37,7 +37,7 @@ const navGroups: NavGroup[] = [
     title: 'Workspace',
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-      { name: 'AI Studio', href: '/studio', icon: Sparkles, badge: 'AI Engine' },
+      { name: 'Studio', href: '/studio', icon: Sparkles },
       { name: 'Post Scheduler', href: '/posts', icon: Calendar },
     ],
   },
