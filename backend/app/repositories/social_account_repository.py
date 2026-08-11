@@ -1,0 +1,94 @@
+from sqlalchemy.orm import Session
+from typing import List, Optional
+from app.models.social_account import SocialAccount
+from datetime import datetime
+
+class SocialAccountRepository:
+    def get_by_id(self, db: Session, account_id: int) -> Optional[SocialAccount]:
+        return db.query(SocialAccount).filter(SocialAccount.id == account_id).first()
+
+    def get_by_user(self, db: Session, user_id: int) -> List[SocialAccount]:
+        return db.query(SocialAccount).filter(SocialAccount.user_id == user_id).all()
+
+    def get_by_user_and_platform(self, db: Session, user_id: int, platform: str) -> List[SocialAccount]:
+        return db.query(SocialAccount).filter(
+            SocialAccount.user_id == user_id,
+            SocialAccount.platform == platform
+        ).all()
+
+    def get_by_account_id(self, db: Session, user_id: int, platform: str, account_id: str) -> Optional[SocialAccount]:
+        return db.query(SocialAccount).filter(
+            SocialAccount.user_id == user_id,
+            SocialAccount.platform == platform,
+            SocialAccount.account_id == account_id
+        ).first()
+
+    def create_or_update(
+        self,
+        db: Session,
+        user_id: int,
+        platform: str,
+        account_id: str,
+        account_name: str,
+        access_token: str,
+        brand_id: Optional[int] = None,
+        token_type: str = "page_access_token",
+        expires_at: Optional[datetime] = None,
+        logo_url: Optional[str] = None,
+        metadata_json: Optional[dict] = None
+    ) -> SocialAccount:
+        existing = self.get_by_account_id(db, user_id, platform, account_id)
+        if existing:
+            existing.account_name = account_name
+            existing.access_token = access_token
+            existing.brand_id = brand_id or existing.brand_id
+            existing.token_type = token_type
+            existing.expires_at = expires_at or existing.expires_at
+            existing.status = "CONNECTED"
+            existing.logo_url = logo_url or existing.logo_url
+            if metadata_json:
+                existing.metadata_json = metadata_json
+            existing.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(existing)
+            return existing
+
+        new_acc = SocialAccount(
+            user_id=user_id,
+            brand_id=brand_id,
+            platform=platform,
+            account_id=account_id,
+            account_name=account_name,
+            access_token=access_token,
+            token_type=token_type,
+            expires_at=expires_at,
+            status="CONNECTED",
+            logo_url=logo_url,
+            metadata_json=metadata_json or {}
+        )
+        db.add(new_acc)
+        db.commit()
+        db.refresh(new_acc)
+        return new_acc
+
+    def mark_status(self, db: Session, account_id: int, status: str) -> Optional[SocialAccount]:
+        acc = self.get_by_id(db, account_id)
+        if acc:
+            acc.status = status
+            acc.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(acc)
+        return acc
+
+    def delete(self, db: Session, account_id: int, user_id: int) -> bool:
+        acc = db.query(SocialAccount).filter(
+            SocialAccount.id == account_id,
+            SocialAccount.user_id == user_id
+        ).first()
+        if acc:
+            db.delete(acc)
+            db.commit()
+            return True
+        return False
+
+social_account_repo = SocialAccountRepository()

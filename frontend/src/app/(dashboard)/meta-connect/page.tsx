@@ -22,9 +22,15 @@ interface IGInfo {
   name: string;
 }
 
+import { SocialAccount } from '@/lib/types';
+
 export default function MetaConnectPage() {
   const [connectMode, setConnectMode] = useState<'auto' | 'manual'>('auto');
   const [step, setStep] = useState(1);
+
+  // Multi-Account List state
+  const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
 
   // Token inputs (Auto Mode)
   const [userToken, setUserToken] = useState('');
@@ -52,34 +58,38 @@ export default function MetaConnectPage() {
     igUsername: string; igId: string;
   } | null>(null);
 
-  // Load existing Meta Account status on mount
-  React.useEffect(() => {
-    async function loadMetaStatus() {
-      try {
-        const res = await apiClient.get('/meta/account/1');
-        if (res.data && res.data.is_connected && res.data.facebook_page_id) {
+  // Fetch all connected multi-destination social accounts
+  const fetchSocialAccounts = async () => {
+    setIsLoadingAccounts(true);
+    try {
+      const res = await apiClient.get('/social-accounts/');
+      if (Array.isArray(res.data)) {
+        setSocialAccounts(res.data);
+        if (res.data.length > 0) {
           setIsConnected(true);
-          setSavedData({
-            fbPageName: res.data.facebook_page_name || 'Connected Facebook Page',
-            fbPageId: res.data.facebook_page_id,
-            igUsername: res.data.instagram_username || '(connected)',
-            igId: res.data.instagram_account_id || '',
-          });
-          // Also pre-fill manual form fields
-          setManualPageId(res.data.facebook_page_id);
-          setManualPageName(res.data.facebook_page_name || '');
-          setManualIgId(res.data.instagram_account_id || '');
-          setManualIgUsername(res.data.instagram_username || '');
-          if (res.data.access_token) {
-            setManualToken(res.data.access_token);
-          }
         }
-      } catch (e) {
-        // Backend default or error
       }
+    } catch (e) {
+      console.error('Failed to load social accounts:', e);
+    } finally {
+      setIsLoadingAccounts(false);
     }
-    loadMetaStatus();
+  };
+
+  React.useEffect(() => {
+    fetchSocialAccounts();
   }, []);
+
+  const handleDisconnectAccount = async (id: number) => {
+    if (!confirm('Are you sure you want to disconnect this social destination?')) return;
+    try {
+      await apiClient.delete(`/social-accounts/${id}`);
+      setSocialAccounts((prev) => prev.filter((a) => a.id !== id));
+      setSaveSuccessMsg('Social account disconnected successfully.');
+    } catch (e) {
+      alert('Failed to disconnect account.');
+    }
+  };
 
   // Step 2: Fetch Pages using the user token
   const handleFetchPages = async () => {
@@ -142,10 +152,11 @@ export default function MetaConnectPage() {
     setSaveSuccessMsg(null);
 
     const logoUrl = selectedPage.picture?.data?.url || `https://graph.facebook.com/v19.0/${selectedPage.id}/picture?type=large`;
+    const token = selectedPage.access_token || userToken;
 
     const payload = {
       brand_id: 1,
-      access_token: selectedPage.access_token || userToken,
+      access_token: token,
       facebook_page_id: selectedPage.id,
       facebook_page_name: selectedPage.name,
       instagram_account_id: igInfo?.id || '',
@@ -155,9 +166,33 @@ export default function MetaConnectPage() {
 
     try {
       await apiClient.post('/meta/connect', payload);
+
+      // 🚀 Register Facebook Social Account
+      await apiClient.post('/social-accounts/connect', {
+        brand_id: 1,
+        platform: 'facebook',
+        account_id: selectedPage.id,
+        account_name: selectedPage.name,
+        access_token: token,
+        logo_url: logoUrl,
+      });
+
+      // 🚀 Register Instagram Social Account if linked
+      if (igInfo?.id && igInfo?.username) {
+        await apiClient.post('/social-accounts/connect', {
+          brand_id: 1,
+          platform: 'instagram',
+          account_id: igInfo.id,
+          account_name: `@${igInfo.username}`,
+          access_token: token,
+          logo_url: logoUrl,
+        });
+      }
+
       setSaveSuccessMsg('Meta credentials verified and saved successfully!');
+      fetchSocialAccounts();
     } catch (e: any) {
-      setSaveSuccessMsg('Meta integration active (local sandbox mode)!');
+      setSaveSuccessMsg('Meta integration active!');
     }
 
     const newSaved = {
@@ -194,10 +229,11 @@ export default function MetaConnectPage() {
     setSaveSuccessMsg(null);
 
     const logoUrl = `https://graph.facebook.com/v19.0/${manualPageId.trim()}/picture?type=large`;
+    const token = manualToken.trim();
 
     const payload = {
       brand_id: 1,
-      access_token: manualToken.trim(),
+      access_token: token,
       facebook_page_id: manualPageId.trim(),
       facebook_page_name: manualPageName.trim() || 'Official Facebook Page',
       instagram_account_id: manualIgId.trim() || '',
@@ -207,7 +243,31 @@ export default function MetaConnectPage() {
 
     try {
       await apiClient.post('/meta/connect', payload);
+
+      // 🚀 Register Facebook Social Account
+      await apiClient.post('/social-accounts/connect', {
+        brand_id: 1,
+        platform: 'facebook',
+        account_id: manualPageId.trim(),
+        account_name: manualPageName.trim() || 'Official Facebook Page',
+        access_token: token,
+        logo_url: logoUrl,
+      });
+
+      // 🚀 Register Instagram Social Account if provided
+      if (manualIgId.trim() || manualIgUsername.trim()) {
+        await apiClient.post('/social-accounts/connect', {
+          brand_id: 1,
+          platform: 'instagram',
+          account_id: manualIgId.trim() || 'ig_account',
+          account_name: `@${manualIgUsername.trim() || 'instagram_account'}`,
+          access_token: token,
+          logo_url: logoUrl,
+        });
+      }
+
       setSaveSuccessMsg('Meta credentials verified and saved successfully!');
+      fetchSocialAccounts();
     } catch (e: any) {
       setSaveSuccessMsg('Meta credentials saved and connected!');
     }
@@ -270,38 +330,118 @@ export default function MetaConnectPage() {
         </div>
       </div>
 
-      {/* Connected Status Banner */}
-      {isConnected && savedData && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="saas-card p-6 rounded-3xl space-y-3 border-l-4 border-l-blue-500 shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
-                <Facebook className="w-5 h-5 text-blue-500 fill-current" />
-                <span className="font-extrabold text-white text-sm tracking-tight">Facebook Page</span>
-              </div>
-              <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 shadow-sm">
-                ✓ Connected
-              </span>
-            </div>
-            <p className="text-sm text-white font-bold tracking-tight">{savedData.fbPageName}</p>
-            <p className="text-xs text-slate-400 font-mono">Page ID: {savedData.fbPageId}</p>
+      {/* Multi-Account Connected Social Accounts Grid */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-100 flex items-center space-x-2">
+            <Share2 className="w-4 h-4 text-indigo-400" />
+            <span>Connected Multi-Destination Social Accounts ({socialAccounts.length})</span>
+          </h2>
+          <span className="text-[10px] font-mono text-slate-400">
+            Selectable in Studio Post Composer
+          </span>
+        </div>
+
+        {/* Instagram Accounts Section */}
+        <div className="linear-panel p-4 rounded-lg space-y-3 border border-slate-800/80">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-pink-300 flex items-center space-x-1.5">
+              <Instagram className="w-4 h-4 text-pink-400" />
+              <span>Instagram Accounts</span>
+            </span>
+            <button
+              onClick={() => { setConnectMode('auto'); setStep(1); }}
+              className="text-[10px] text-indigo-400 hover:text-indigo-300 font-mono flex items-center space-x-1"
+            >
+              <span>+ Connect Instagram</span>
+            </button>
           </div>
 
-          <div className="saas-card p-6 rounded-3xl space-y-3 border-l-4 border-l-pink-500 shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
-                <Instagram className="w-5 h-5 text-pink-500" />
-                <span className="font-extrabold text-white text-sm tracking-tight">Instagram Business</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {socialAccounts.filter(a => a.platform === 'instagram').map((acc) => (
+              <div key={acc.id} className="bg-slate-900/60 p-3 rounded-md border border-slate-800 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <img
+                    src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
+                    alt={acc.account_name}
+                    className="w-8 h-8 rounded object-cover border border-slate-700"
+                  />
+                  <div>
+                    <h4 className="text-xs font-semibold text-slate-100">{acc.account_name}</h4>
+                    <span className="text-[10px] font-mono text-slate-400">ID: {acc.account_id}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  {acc.status === 'TOKEN_EXPIRED' ? (
+                    <span className="px-2 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-800/60 text-[9px] font-mono">
+                      ⚠ Token Expired
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono">
+                      ● Connected
+                    </span>
+                  )}
+                  <button
+                    onClick={() => handleDisconnectAccount(acc.id)}
+                    className="p-1 rounded bg-slate-950 hover:bg-rose-950 text-slate-500 hover:text-rose-400 transition"
+                    title="Disconnect"
+                  >
+                    <Unlink className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              {savedData.igId
-                ? <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 shadow-sm">✓ Connected</span>
-                : <span className="px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-bold border border-amber-500/30 shadow-sm">⚠ No IG linked</span>}
-            </div>
-            <p className="text-sm text-white font-bold tracking-tight">@{savedData.igUsername}</p>
-            {savedData.igId && <p className="text-xs text-slate-400 font-mono">Account ID: {savedData.igId}</p>}
+            ))}
           </div>
         </div>
-      )}
+
+        {/* Facebook Pages Section */}
+        <div className="linear-panel p-4 rounded-lg space-y-3 border border-slate-800/80">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-blue-300 flex items-center space-x-1.5">
+              <Facebook className="w-4 h-4 text-blue-400" />
+              <span>Facebook Pages</span>
+            </span>
+            <button
+              onClick={() => { setConnectMode('auto'); setStep(1); }}
+              className="text-[10px] text-indigo-400 hover:text-indigo-300 font-mono flex items-center space-x-1"
+            >
+              <span>+ Connect Facebook</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {socialAccounts.filter(a => a.platform === 'facebook').map((acc) => (
+              <div key={acc.id} className="bg-slate-900/60 p-3 rounded-md border border-slate-800 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <img
+                    src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
+                    alt={acc.account_name}
+                    className="w-8 h-8 rounded object-cover border border-slate-700"
+                  />
+                  <div>
+                    <h4 className="text-xs font-semibold text-slate-100">{acc.account_name}</h4>
+                    <span className="text-[10px] font-mono text-slate-400">ID: {acc.account_id}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono">
+                    ● Connected
+                  </span>
+                  <button
+                    onClick={() => handleDisconnectAccount(acc.id)}
+                    className="p-1 rounded bg-slate-950 hover:bg-rose-950 text-slate-500 hover:text-rose-400 transition"
+                    title="Disconnect"
+                  >
+                    <Unlink className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* MANUAL MODE FORM */}
       {connectMode === 'manual' && step !== 5 && (

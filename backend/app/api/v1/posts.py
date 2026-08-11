@@ -1,9 +1,14 @@
-from fastapi import APIRouter, Depends, status, Query
+from fastapi import APIRouter, Depends, status, Query, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
 from app.schemas.post import PostCreate, PostUpdate, PostResponse, SchedulePostRequest
+from app.schemas.social_account import MultiPublishRequest, PublishingBatchResponse
 from app.services.post_service import post_service
+from app.services.publisher_service import publishing_engine
+from app.repositories.publishing_repository import publishing_repo
+from app.repositories.social_account_repository import social_account_repo
+from app.models.publishing_batch import BatchStatus, JobStatus, PublishingJob
 from app.api.v1.deps import get_current_user
 from app.models.user import User
 
@@ -84,3 +89,132 @@ def retry_failed(
 ):
     """Retry publication for a failed post."""
     return post_service.retry_failed_post(db, post_id, current_user.id)
+
+# 🚀 MULTI-ACCOUNT PUBLISHING ENDPOINTS 🚀
+
+@router.post("/publish-multi", response_model=PublishingBatchResponse, status_code=status.HTTP_201_CREATED)
+def publish_multi_account(
+    request: MultiPublishRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Publish one post to multiple selected Facebook Pages and Instagram Accounts concurrently.
+    Supports idempotency, per-account job tracking, token expiration detection, and partial batch success.
+    """
+    post = post_service.get_post(db, request.post_id)
+    if not request.social_account_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one target social account must be selected."
+        )
+
+    # Fetch user's authorized target social accounts
+    accounts = [
+        acc for acc in social_account_repo.get_by_user(db, current_user.id)
+        if acc.id in request.social_account_ids
+    ]
+    if not accounts:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No matching authorized social accounts found for publishing."
+        )
+
+    # 1. Create or retrieve PublishingBatch with idempotency safeguard
+    idempotency_key = request.idempotency_key or f"batch_{post.id}_{abs(hash(tuple(request.social_account_ids)))}"
+    batch = publishing_repo.create_batch(
+        db=db,
+        post_id=post.id,
+        user_id=current_user.id,
+        total_targets=len(accounts),
+        idempotency_key=idempotency_key
+    )
+
+    # 2. Initialize PublishingJob entries for targets
+    existing_jobs = db.query(PublishingJob).filter(
+        PublishingJob.batch_id == batch.id
+    ).all()
+
+    if not existing_jobs:
+        for acc in accounts:
+            publishing_repo.create_job(db, batch.id, acc.id, acc.platform)
+
+    # 3. Format caption & execute batch publishing engine concurrently
+    formatted_caption = f"{post.caption}\n\n{' '.join(post.hashtags or [])}\n\n{post.cta or ''}".strip()
+    publishing_engine.execute_batch(
+        db=db,
+        batch_id=batch.id,
+        post_caption=formatted_caption,
+        raw_media_url=post.image_url,
+        accounts=accounts
+    )
+
+    # 4. Refresh & return complete PublishingBatchResponse
+    res_batch = publishing_repo.get_batch(db, batch.id)
+    
+    # Update main Post status based on batch result
+    if res_batch.status in [BatchStatus.SUCCESS.value, BatchStatus.PARTIAL_SUCCESS.value]:
+        post.status = "PUBLISHED"
+        post.published_at = post.published_at or res_batch.completed_at
+    else:
+        post.status = "FAILED"
+        post.last_error = f"Multi-account publishing failed on {res_batch.failed_targets} target accounts."
+    db.commit()
+
+    return res_batch
+
+@router.get("/batch/{batch_id}", response_model=PublishingBatchResponse)
+def get_publishing_batch(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieve detailed status of a publishing batch and individual target jobs."""
+    batch = publishing_repo.get_batch(db, batch_id)
+    if not batch or batch.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Publishing batch not found."
+        )
+    return batch
+
+@router.post("/batch/{batch_id}/retry", response_model=PublishingBatchResponse)
+def retry_failed_batch_jobs(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retry ONLY the failed target jobs within a multi-account publishing batch."""
+    batch = publishing_repo.get_batch(db, batch_id)
+    if not batch or batch.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Publishing batch not found."
+        )
+
+    failed_jobs = [j for j in batch.jobs if j.status == JobStatus.FAILED.value]
+    if not failed_jobs:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No failed jobs to retry in this batch."
+        )
+
+    failed_account_ids = [j.social_account_id for j in failed_jobs]
+    accounts = [
+        acc for acc in social_account_repo.get_by_user(db, current_user.id)
+        if acc.id in failed_account_ids
+    ]
+
+    post = post_service.get_post(db, batch.post_id)
+    formatted_caption = f"{post.caption}\n\n{' '.join(post.hashtags or [])}\n\n{post.cta or ''}".strip()
+
+    publishing_engine.execute_batch(
+        db=db,
+        batch_id=batch.id,
+        post_caption=formatted_caption,
+        raw_media_url=post.image_url,
+        accounts=accounts
+    )
+
+    return publishing_repo.get_batch(db, batch.id)
+

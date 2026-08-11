@@ -11,6 +11,7 @@ from app.api.v1.brands import router as brand_router
 from app.api.v1.posts import router as post_router
 from app.api.v1.ai import router as ai_router
 from app.api.v1.meta import router as meta_router
+from app.api.v1.social_accounts import router as social_accounts_router
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.health import router as health_router
@@ -64,6 +65,7 @@ app.include_router(brand_router, prefix=settings.API_V1_STR)
 app.include_router(post_router, prefix=settings.API_V1_STR)
 app.include_router(ai_router, prefix=settings.API_V1_STR)
 app.include_router(meta_router, prefix=settings.API_V1_STR)
+app.include_router(social_accounts_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
 app.include_router(audit_router, prefix=settings.API_V1_STR)
 
@@ -73,13 +75,14 @@ def seed_default_data():
     from app.models.user import User
     from app.models.brand import BrandProfile
     from app.models.meta_account import MetaAccount
+    from app.models.social_account import SocialAccount
     from datetime import datetime
 
     db = SessionLocal()
     try:
         # Create default admin user if not exists
-        existing = db.query(User).filter(User.email == "admin@socialai.com").first()
-        if not existing:
+        user = db.query(User).filter(User.email == "admin@socialai.com").first()
+        if not user:
             user = User(
                 email="admin@socialai.com",
                 full_name="Admin User",
@@ -91,7 +94,9 @@ def seed_default_data():
             db.commit()
             db.refresh(user)
 
-            # Create default brand profile
+        # Create default brand profile if not exists
+        brand = db.query(BrandProfile).filter(BrandProfile.user_id == user.id).first()
+        if not brand:
             brand = BrandProfile(
                 name="Apex Innovations",
                 logo_url="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
@@ -106,19 +111,9 @@ def seed_default_data():
             db.commit()
             db.refresh(brand)
 
-            # Create default sandbox Meta account
-            meta = MetaAccount(
-                brand_id=brand.id,
-                access_token="sandbox_token",
-                facebook_page_id="sandbox",
-                facebook_page_name="Apex Innovations (Sandbox)",
-                instagram_account_id="sandbox",
-                instagram_username="apex_innovations",
-                is_connected=True,
-                last_synced_at=datetime.utcnow(),
-            )
-            db.add(meta)
-            db.commit()
+        # Clean up any dummy test accounts from database so user only sees accounts they added
+        db.query(SocialAccount).filter(SocialAccount.access_token == "sandbox_token_secret").delete(synchronize_session=False)
+        db.commit()
     finally:
         db.close()
 
