@@ -509,41 +509,39 @@ export default function AIStudioPage() {
 
 
   return (
-    <div className="space-y-8 select-none">
-      {/* Top Banner Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-slate-900/80 border border-slate-800 p-6 md:p-8 rounded-3xl relative overflow-hidden shadow-xl">
-        <div className="space-y-2 relative z-10">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/20">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <h1 className="text-2xl font-extrabold text-white tracking-tight">Social Post Creator & Publisher</h1>
-          </div>
-          <p className="text-xs md:text-sm text-slate-400 max-w-xl leading-relaxed">
-            Generate high-converting copy, viral hashtags, and visuals with AI—or upload your custom graphics for instant Meta publishing.
+    <div className="space-y-5 select-none font-sans text-xs">
+      {/* Linear Workspace Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800/60">
+        <div>
+          <h1 className="text-lg font-bold text-slate-100 tracking-tight flex items-center space-x-2">
+            <Sparkles className="w-4 h-4 text-indigo-400" />
+            <span>Social Media Creator Studio</span>
+          </h1>
+          <p className="text-[11px] text-slate-400">
+            Generate AI captions & graphics or upload custom media clips for Meta Facebook & Instagram publishing.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 relative z-10 flex-shrink-0">
+        <div className="flex items-center space-x-3 flex-shrink-0">
           {/* Active Brand Profile Dropdown */}
-          <div className="flex items-center space-x-2.5 bg-slate-950/80 border border-slate-800 px-4 py-2 rounded-2xl shadow-inner">
-            <span className="text-xs font-semibold text-slate-400">Active Brand:</span>
+          <div className="flex items-center space-x-2 bg-slate-900/60 border border-slate-800 px-3 py-1 rounded">
+            <span className="text-[10px] text-slate-400">Brand Persona:</span>
             <select
               value={selectedBrand.id}
               onChange={(e) => {
                 const b = brands.find((x) => x.id === Number(e.target.value));
                 if (b) setSelectedBrand(b);
               }}
-              className="bg-transparent text-xs text-indigo-300 font-extrabold focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-indigo-400 font-semibold focus:outline-none cursor-pointer"
             >
               {brands.length > 0 ? (
                 brands.map((b) => (
-                  <option key={b.id} value={b.id} className="bg-slate-900 text-white">
+                  <option key={b.id} value={b.id} className="bg-slate-900 text-slate-100">
                     {b.name} ({b.industry})
                   </option>
                 ))
               ) : (
-                <option value={1} className="bg-slate-900 text-white">
+                <option value={1} className="bg-slate-900 text-slate-100">
                   Apex Innovations (AI & Software)
                 </option>
               )}
@@ -551,37 +549,37 @@ export default function AIStudioPage() {
           </div>
 
           {statusNotification && (
-            <div className="flex items-center space-x-2 bg-emerald-500/15 border border-emerald-500/35 px-4 py-2 rounded-2xl text-emerald-300 text-xs font-bold shadow-md animate-pulse">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <div className="flex items-center space-x-1.5 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded text-emerald-300 text-[11px]">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
               <span className="truncate max-w-xs">{statusNotification}</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Mode Selection Switcher */}
-      <div className="flex items-center space-x-2 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800/80 w-fit shadow-md">
+      {/* Creation Mode Tabs */}
+      <div className="flex items-center space-x-1.5 bg-slate-900/60 p-1 rounded border border-slate-800/80 w-fit">
         <button
           onClick={() => setCreationMode('ai')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-semibold transition ${
             creationMode === 'ai'
-              ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+              ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
           }`}
         >
-          <Sparkles className="w-4 h-4" />
-          <span>⚡ AI Content & Visual Generator</span>
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>AI Content & Visual Generator</span>
         </button>
         <button
           onClick={() => setCreationMode('premade')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded text-xs font-semibold transition ${
             creationMode === 'premade'
-              ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+              ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
           }`}
         >
-          <ImageIcon className="w-4 h-4" />
-          <span>📤 Upload Custom Graphic & Copy</span>
+          <ImageIcon className="w-3.5 h-3.5" />
+          <span>Upload Custom Graphic & Copy</span>
         </button>
       </div>
 

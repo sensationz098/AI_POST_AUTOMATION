@@ -5,58 +5,54 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary: #090d16;
-  --bg-surface: #0f172a;
-  --bg-surface-hover: #1e293b;
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-accent: rgba(99, 102, 241, 0.25);
+  --bg-canvas: #0b0f17;
+  --bg-surface: #111827;
+  --bg-surface-hover: #1f2937;
+  --border-color: #1f2937;
+  --border-accent: rgba(99, 102, 241, 0.3);
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
+  --accent-primary: #6366f1;
 }
 
 html[data-theme='light'],
 html.light {
-  --bg-primary: #f8fafc;
+  --bg-canvas: #f8fafc;
   --bg-surface: #ffffff;
   --bg-surface-hover: #f1f5f9;
-  --border-subtle: #e2e8f0;
+  --border-color: #e2e8f0;
   --border-accent: rgba(99, 102, 241, 0.4);
   --text-main: #0f172a;
-  --text-muted: #475569;
+  --text-muted: #64748b;
+  --accent-primary: #4f46e5;
 }
 
 @layer base {
   body {
-    @apply bg-[#090D16] text-slate-100 font-sans antialiased min-h-screen selection:bg-indigo-500 selection:text-white transition-colors duration-200;
+    @apply bg-[#0B0F17] text-slate-100 font-sans antialiased min-h-screen selection:bg-indigo-500 selection:text-white transition-colors duration-150;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 }
 
-/* 2026 Premium SaaS Cards & Glass Panels */
-.saas-card {
-  background: #0f172a;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+/* 🏢 LINEAR × NOTION WORKSPACE COMPONENT DESIGN SYSTEM 🏢 */
+.linear-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.saas-card:hover {
-  border-color: rgba(99, 102, 241, 0.3);
+.linear-card:hover {
+  border-color: var(--border-accent);
 }
 
-.glass-panel {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+.linear-panel {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
 }
 
-.glass-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* ☀️ COMPREHENSIVE LIGHT MODE OVERRIDES ☀️ */
+/* ☀️ LIGHT MODE OVERRIDES ☀️ */
 html.light body,
 html[data-theme='light'] body {
   background-color: #f8fafc !important;
@@ -64,7 +60,9 @@ html[data-theme='light'] body {
 }
 
 html.light div.bg-\[\#090D16\],
-html[data-theme='light'] div.bg-\[\#090D16\] {
+html.light div.bg-\[\#0B0F17\],
+html[data-theme='light'] div.bg-\[\#090D16\],
+html[data-theme='light'] div.bg-\[\#0B0F17\] {
   background-color: #f8fafc !important;
 }
 
@@ -76,29 +74,23 @@ html[data-theme='light'] aside {
 
 html.light header,
 html[data-theme='light'] header {
-  background-color: rgba(255, 255, 255, 0.95) !important;
+  background-color: #ffffff !important;
   border-color: #e2e8f0 !important;
 }
 
+html.light .linear-card,
+html.light .linear-panel,
 html.light .saas-card,
-html[data-theme='light'] .saas-card {
-  background: #ffffff !important;
+html.light .glass-panel {
+  background-color: #ffffff !important;
   border-color: #e2e8f0 !important;
   color: #0f172a !important;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
 }
 
-html.light .saas-card:hover,
-html[data-theme='light'] .saas-card:hover {
-  border-color: rgba(99, 102, 241, 0.4) !important;
-}
-
-html.light .glass-panel,
-html[data-theme='light'] .glass-panel {
-  background: #ffffff !important;
-  border-color: #e2e8f0 !important;
-  color: #0f172a !important;
-  box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.05);
+html.light .linear-card:hover,
+html.light .saas-card:hover {
+  border-color: #cbd5e1 !important;
 }
 
 /* Background Utility Overrides in Light Mode */
@@ -121,10 +113,7 @@ html.light .bg-\[\#111827\] {
 }
 
 /* Text Overrides in Light Mode */
-html.light .text-white {
-  color: #0f172a !important;
-}
-
+html.light .text-white,
 html.light .text-slate-100 {
   color: #0f172a !important;
 }
@@ -134,10 +123,7 @@ html.light .text-slate-300 {
   color: #334155 !important;
 }
 
-html.light .text-slate-400 {
-  color: #64748b !important;
-}
-
+html.light .text-slate-400,
 html.light .text-slate-500 {
   color: #64748b !important;
 }
@@ -152,7 +138,7 @@ html.light .border-slate-700\/60 {
   border-color: #e2e8f0 !important;
 }
 
-/* Form Inputs, Textareas & Selects in Light Mode */
+/* Form Inputs & Selects in Light Mode */
 html.light input,
 html.light textarea,
 html.light select {
@@ -176,27 +162,10 @@ html.light table tbody tr:hover {
   background-color: #f1f5f9 !important;
 }
 
-/* Subtle Glow Utilities */
-.glow-subtle-indigo {
-  box-shadow: 0 0 30px -5px rgba(99, 102, 241, 0.25);
-}
-
-.glow-subtle-purple {
-  box-shadow: 0 0 30px -5px rgba(168, 85, 247, 0.25);
-}
-
-.glow-subtle-emerald {
-  box-shadow: 0 0 30px -5px rgba(16, 185, 129, 0.25);
-}
-
-.glow-subtle-pink {
-  box-shadow: 0 0 30px -5px rgba(236, 72, 153, 0.25);
-}
-
 /* Custom Sleek Scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -209,7 +178,7 @@ html.light table tbody tr:hover {
 }
 
 html.dark ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #1f2937;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -218,5 +187,5 @@ html.dark ::-webkit-scrollbar-thumb {
 
 /* Smooth Focus Ring Accessibility Utility */
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-2;
+  @apply focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:ring-offset-1;
 }

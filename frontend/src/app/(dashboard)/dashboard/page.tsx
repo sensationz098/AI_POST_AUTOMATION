@@ -144,81 +144,70 @@ export default function AnalyticsDashboardPage() {
   const ig = data?.instagram_account;
 
   return (
-    <div className="space-y-8 select-none">
-      {/* 2026 Premium SaaS Header Banner */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-slate-900/80 border border-slate-800 p-6 md:p-8 rounded-3xl relative overflow-hidden shadow-xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl -z-0 pointer-events-none" />
-        
-        <div className="space-y-2 relative z-10">
-          <div className="flex items-center space-x-3">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-              Good day, <span className="bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">Software Architect</span> 👋
+    <div className="space-y-6 select-none font-sans text-xs">
+      {/* Linear Style Context Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/60">
+        <div className="space-y-1">
+          <div className="flex items-center space-x-2.5">
+            <h1 className="text-lg font-bold text-slate-100 tracking-tight">
+              Good morning, Software Architect
             </h1>
-
             {data?.is_live_meta ? (
-              <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1.5 shadow-sm">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Live Meta API Connected</span>
+              <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                ● Live Meta API
               </span>
             ) : (
-              <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center space-x-1.5 shadow-sm">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>Sandbox Demo Engine</span>
+              <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                ● Sandbox Mode
               </span>
             )}
           </div>
-          <p className="text-xs md:text-sm text-slate-400 max-w-2xl leading-relaxed">
-            Here's what's happening with your connected Facebook Page & Instagram Business accounts today. Real-time reach, engagement metrics, and growth trajectory.
+          <p className="text-[11px] text-slate-400">
+            Social performance, post activity queue, and connected Meta Facebook & Instagram metrics.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3 relative z-10 flex-shrink-0">
+        <div className="flex items-center space-x-2 flex-shrink-0">
           <button
             onClick={fetchAnalytics}
-            className="p-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-slate-300 transition shadow-sm focus-ring"
+            className="p-1.5 rounded bg-slate-900/60 hover:bg-slate-800 border border-slate-800 text-slate-300 transition focus-ring"
             title="Refresh Live Metrics"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
           </button>
 
-          <div className="bg-slate-950/80 border border-slate-800 px-3.5 py-2 rounded-2xl text-xs font-semibold text-slate-300 flex items-center space-x-2">
-            <Calendar className="w-4 h-4 text-indigo-400" />
+          <div className="bg-slate-900/60 border border-slate-800 px-2.5 py-1 rounded text-[11px] font-medium text-slate-300 flex items-center space-x-1.5">
+            <Calendar className="w-3.5 h-3.5 text-indigo-400" />
             <span>Last 7 Days</span>
           </div>
 
           <a
             href="/studio"
-            className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs shadow-lg shadow-indigo-500/25 transition focus-ring"
+            className="inline-flex items-center space-x-1.5 px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] transition shadow-sm"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>+ Create New Post</span>
+            <Sparkles className="w-3 h-3" />
+            <span>+ Create Post</span>
           </a>
         </div>
       </div>
 
-      {/* Connected Real Meta Page & Instagram Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Facebook Page Real Data Card */}
-        <div className="saas-card p-6 rounded-3xl space-y-5 border border-blue-500/25 bg-gradient-to-br from-blue-950/20 via-slate-900/90 to-slate-950 shadow-lg">
+      {/* Connected Facebook Page & Instagram Account Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Facebook Page Meta Connection Card */}
+        <div className="linear-card p-4 rounded-lg space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3.5">
-              <div className="relative">
-                <img
-                  src={fb?.picture_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
-                  alt={fb?.name || 'FB Page'}
-                  className="w-12 h-12 rounded-2xl object-cover border-2 border-blue-500/40 shadow-md"
-                />
-                <div className="absolute -bottom-1 -right-1 bg-blue-600 p-1 rounded-full text-white shadow-sm">
-                  <Facebook className="w-3 h-3 fill-current" />
-                </div>
-              </div>
-
+            <div className="flex items-center space-x-3">
+              <img
+                src={fb?.picture_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
+                alt={fb?.name || 'FB Page'}
+                className="w-8 h-8 rounded object-cover border border-slate-700"
+              />
               <div>
                 <div className="flex items-center space-x-1.5">
-                  <h3 className="font-bold text-sm text-white tracking-tight">{fb?.name || 'Facebook Page'}</h3>
-                  <CheckCircle2 className="w-4 h-4 text-blue-400 fill-blue-400/20" />
+                  <h3 className="font-semibold text-xs text-slate-100">{fb?.name || 'Facebook Page'}</h3>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">{fb?.category || 'Meta Page'}</p>
+                <p className="text-[10px] text-slate-400">{fb?.category || 'Meta Page'}</p>
               </div>
             </div>
 
@@ -227,7 +216,7 @@ export default function AnalyticsDashboardPage() {
                 href={fb.link}
                 target="_blank"
                 rel="noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 transition text-xs font-semibold flex items-center space-x-1 border border-slate-700/60"
+                className="px-2 py-1 rounded bg-slate-900/60 border border-slate-800 hover:border-slate-700 text-slate-300 text-[10px] font-medium transition flex items-center space-x-1"
               >
                 <span>View Page</span>
                 <ExternalLink className="w-3 h-3 text-blue-400" />
@@ -235,43 +224,37 @@ export default function AnalyticsDashboardPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-800/80">
-            <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80">
-              <span className="text-xs text-slate-400 font-semibold">Page Followers</span>
-              <p className="text-xl font-black text-white mt-1 tracking-tight">
+          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/60">
+            <div className="bg-slate-900/40 p-2.5 rounded border border-slate-800/60">
+              <span className="text-[10px] text-slate-400">Page Followers</span>
+              <p className="text-base font-bold text-slate-100 mt-0.5">
                 {(fb?.followers_count || 0).toLocaleString()}
               </p>
             </div>
-            <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80">
-              <span className="text-xs text-slate-400 font-semibold">Page Likes</span>
-              <p className="text-xl font-black text-white mt-1 tracking-tight">
+            <div className="bg-slate-900/40 p-2.5 rounded border border-slate-800/60">
+              <span className="text-[10px] text-slate-400">Page Likes</span>
+              <p className="text-base font-bold text-slate-100 mt-0.5">
                 {(fb?.fan_count || 0).toLocaleString()}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Instagram Business Account Real Data Card */}
-        <div className="saas-card p-6 rounded-3xl space-y-5 border border-pink-500/25 bg-gradient-to-br from-pink-950/20 via-slate-900/90 to-slate-950 shadow-lg">
+        {/* Instagram Business Account Card */}
+        <div className="linear-card p-4 rounded-lg space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3.5">
-              <div className="relative">
-                <img
-                  src={ig?.profile_picture_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
-                  alt={ig?.username || 'IG Account'}
-                  className="w-12 h-12 rounded-2xl object-cover border-2 border-pink-500/40 shadow-md"
-                />
-                <div className="absolute -bottom-1 -right-1 bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 p-1 rounded-full text-white shadow-sm">
-                  <Instagram className="w-3 h-3" />
-                </div>
-              </div>
-
+            <div className="flex items-center space-x-3">
+              <img
+                src={ig?.profile_picture_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
+                alt={ig?.username || 'IG Account'}
+                className="w-8 h-8 rounded object-cover border border-slate-700"
+              />
               <div>
                 <div className="flex items-center space-x-1.5">
-                  <h3 className="font-bold text-sm text-white tracking-tight">@{ig?.username || 'instagram_account'}</h3>
-                  <CheckCircle2 className="w-4 h-4 text-pink-400 fill-pink-400/20" />
+                  <h3 className="font-semibold text-xs text-slate-100">@{ig?.username || 'instagram_account'}</h3>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-pink-400" />
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">{ig?.name || 'Instagram Business'}</p>
+                <p className="text-[10px] text-slate-400">{ig?.name || 'Instagram Business'}</p>
               </div>
             </div>
 
@@ -279,23 +262,23 @@ export default function AnalyticsDashboardPage() {
               href={`https://instagram.com/${ig?.username || ''}`}
               target="_blank"
               rel="noreferrer"
-              className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 transition text-xs font-semibold flex items-center space-x-1 border border-slate-700/60"
+              className="px-2 py-1 rounded bg-slate-900/60 border border-slate-800 hover:border-slate-700 text-slate-300 text-[10px] font-medium transition flex items-center space-x-1"
             >
               <span>View Profile</span>
               <ExternalLink className="w-3 h-3 text-pink-400" />
             </a>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-800/80">
-            <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80">
-              <span className="text-xs text-slate-400 font-semibold">IG Followers</span>
-              <p className="text-xl font-black text-white mt-1 tracking-tight">
+          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/60">
+            <div className="bg-slate-900/40 p-2.5 rounded border border-slate-800/60">
+              <span className="text-[10px] text-slate-400">IG Followers</span>
+              <p className="text-base font-bold text-slate-100 mt-0.5">
                 {(ig?.followers_count || 0).toLocaleString()}
               </p>
             </div>
-            <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80">
-              <span className="text-xs text-slate-400 font-semibold">Total Media Posts</span>
-              <p className="text-xl font-black text-white mt-1 tracking-tight">
+            <div className="bg-slate-900/40 p-2.5 rounded border border-slate-800/60">
+              <span className="text-[10px] text-slate-400">Total Media Posts</span>
+              <p className="text-base font-bold text-slate-100 mt-0.5">
                 {(ig?.media_count || 0).toLocaleString()}
               </p>
             </div>
@@ -303,136 +286,128 @@ export default function AnalyticsDashboardPage() {
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* KPI Compact Metric Blocks Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Total Reach */}
-        <div className="saas-card p-6 rounded-3xl space-y-3 border-l-4 border-l-indigo-500 shadow-md">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">Total Reach</span>
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400">
-              <Users className="w-4 h-4" />
-            </div>
+        <div className="linear-card p-3.5 rounded-lg space-y-1.5">
+          <div className="flex items-center justify-between text-slate-400 text-[11px]">
+            <span>Total Reach</span>
+            <Users className="w-3.5 h-3.5 text-indigo-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <h3 className="text-2xl font-black text-white tracking-tight">
+            <h3 className="text-lg font-bold text-slate-100">
               {(overview?.total_reach || 28400).toLocaleString()}
             </h3>
-            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
+            <span className="text-[10px] font-mono text-emerald-400">
               +18.4%
             </span>
           </div>
-          <p className="text-xs text-slate-400 leading-normal">Unique accounts reached across FB & IG</p>
+          <p className="text-[10px] text-slate-400">Unique accounts reached</p>
         </div>
 
         {/* Total Impressions */}
-        <div className="saas-card p-6 rounded-3xl space-y-3 border-l-4 border-l-purple-500 shadow-md">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">Total Impressions</span>
-            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
-              <Eye className="w-4 h-4" />
-            </div>
+        <div className="linear-card p-3.5 rounded-lg space-y-1.5">
+          <div className="flex items-center justify-between text-slate-400 text-[11px]">
+            <span>Total Impressions</span>
+            <Eye className="w-3.5 h-3.5 text-purple-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <h3 className="text-2xl font-black text-white tracking-tight">
+            <h3 className="text-lg font-bold text-slate-100">
               {(overview?.total_impressions || 42100).toLocaleString()}
             </h3>
-            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
+            <span className="text-[10px] font-mono text-emerald-400">
               +24.1%
             </span>
           </div>
-          <p className="text-xs text-slate-400 leading-normal">Total post views and screen feeds</p>
+          <p className="text-[10px] text-slate-400">Screen feed impressions</p>
         </div>
 
         {/* Avg Engagement Rate */}
-        <div className="saas-card p-6 rounded-3xl space-y-3 border-l-4 border-l-pink-500 shadow-md">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">Avg Engagement</span>
-            <div className="p-2 rounded-xl bg-pink-500/10 text-pink-400">
-              <Heart className="w-4 h-4" />
-            </div>
+        <div className="linear-card p-3.5 rounded-lg space-y-1.5">
+          <div className="flex items-center justify-between text-slate-400 text-[11px]">
+            <span>Avg Engagement</span>
+            <Heart className="w-3.5 h-3.5 text-pink-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <h3 className="text-2xl font-black text-white tracking-tight">
+            <h3 className="text-lg font-bold text-slate-100">
               {overview?.avg_engagement_rate || 8.4}%
             </h3>
-            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
-              +3.2%
+            <span className="text-[10px] font-mono text-emerald-400">
+              +2.1%
             </span>
           </div>
-          <p className="text-xs text-slate-400 leading-normal">Likes, comments & saves ratio</p>
+          <p className="text-[10px] text-slate-400">Interaction ratio per post</p>
         </div>
 
         {/* Total Interactions */}
-        <div className="saas-card p-6 rounded-3xl space-y-3 border-l-4 border-l-cyan-500 shadow-md">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">Total Interactions</span>
-            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
-              <MessageSquare className="w-4 h-4" />
-            </div>
+        <div className="linear-card p-3.5 rounded-lg space-y-1.5">
+          <div className="flex items-center justify-between text-slate-400 text-[11px]">
+            <span>Total Interactions</span>
+            <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <h3 className="text-2xl font-black text-white tracking-tight">
+            <h3 className="text-lg font-bold text-slate-100">
               {((overview?.total_likes || 1840) + (overview?.total_comments || 320) + (overview?.total_shares || 145)).toLocaleString()}
             </h3>
-            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
-              +12.8%
+            <span className="text-[10px] font-mono text-emerald-400">
+              +14.8%
             </span>
           </div>
-          <p className="text-xs text-slate-400 leading-normal">Likes, comments & shares combined</p>
+          <p className="text-[10px] text-slate-400">Likes, comments & shares</p>
         </div>
       </div>
 
-      {/* Visual Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* Visual Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Reach & Impression Trend Chart */}
-        <div className="lg:col-span-8 saas-card p-6 md:p-8 rounded-3xl space-y-6 shadow-xl">
+        <div className="lg:col-span-8 linear-panel p-4 rounded-lg space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-base font-bold text-white tracking-tight">Reach & Impression Trends</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Daily trajectory of organic & AI boosted reach</p>
+              <h3 className="text-xs font-semibold text-slate-100">Reach & Impression Trajectory</h3>
+              <p className="text-[10px] text-slate-400">Daily organic reach and impressions across Meta channels</p>
             </div>
-            <div className="flex items-center space-x-5 text-xs font-semibold">
-              <div className="flex items-center space-x-2">
-                <span className="w-3 h-3 rounded-full bg-indigo-500" />
+            <div className="flex items-center space-x-4 text-[10px]">
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
                 <span className="text-slate-300">Reach</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="w-3 h-3 rounded-full bg-purple-500" />
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
                 <span className="text-slate-300">Impressions</span>
               </div>
             </div>
           </div>
 
-          <div className="h-72 w-full pt-4">
+          <div className="h-60 w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data?.daily_trends || []}>
                 <defs>
                   <linearGradient id="reachGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366F1" stopOpacity={0.4} />
+                    <stop offset="5%" stopColor="#6366F1" stopOpacity={0.3} />
                     <stop offset="95%" stopColor="#6366F1" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="impGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#A855F7" stopOpacity={0.4} />
+                    <stop offset="5%" stopColor="#A855F7" stopOpacity={0.3} />
                     <stop offset="95%" stopColor="#A855F7" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
-                <XAxis dataKey="date" stroke="#64748B" fontSize={12} tickLine={false} />
-                <YAxis stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#1F2937" vertical={false} />
+                <XAxis dataKey="date" stroke="#64748B" fontSize={10} tickLine={false} />
+                <YAxis stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#0F172A',
-                    borderColor: '#1E293B',
-                    borderRadius: '1rem',
+                    backgroundColor: '#111827',
+                    borderColor: '#1F2937',
+                    borderRadius: '0.375rem',
                     color: '#fff',
-                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
+                    fontSize: '11px',
                   }}
                 />
                 <Area
                   type="monotone"
                   dataKey="reach"
                   stroke="#6366F1"
-                  strokeWidth={3}
+                  strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#reachGrad)"
                 />
@@ -440,7 +415,7 @@ export default function AnalyticsDashboardPage() {
                   type="monotone"
                   dataKey="impressions"
                   stroke="#A855F7"
-                  strokeWidth={3}
+                  strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#impGrad)"
                 />
@@ -450,27 +425,27 @@ export default function AnalyticsDashboardPage() {
         </div>
 
         {/* Engagement Distribution Bar Chart */}
-        <div className="lg:col-span-4 saas-card p-6 md:p-8 rounded-3xl space-y-6 shadow-xl">
+        <div className="lg:col-span-4 linear-panel p-4 rounded-lg space-y-4">
           <div>
-            <h3 className="text-base font-bold text-white tracking-tight">Daily Interactions</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Total likes, comments & shares per day</p>
+            <h3 className="text-xs font-semibold text-slate-100">Daily Interactions</h3>
+            <p className="text-[10px] text-slate-400">Total likes, comments & shares per day</p>
           </div>
 
-          <div className="h-72 w-full pt-4">
+          <div className="h-60 w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data?.daily_trends || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
-                <XAxis dataKey="date" stroke="#64748B" fontSize={11} tickLine={false} />
-                <YAxis stroke="#64748B" fontSize={11} tickLine={false} axisLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#1F2937" vertical={false} />
+                <XAxis dataKey="date" stroke="#64748B" fontSize={10} tickLine={false} />
+                <YAxis stroke="#64748B" fontSize={10} tickLine={false} axisLine={false} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#0F172A',
-                    borderColor: '#1E293B',
-                    borderRadius: '1rem',
-                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
+                    backgroundColor: '#111827',
+                    borderColor: '#1F2937',
+                    borderRadius: '0.375rem',
+                    fontSize: '11px',
                   }}
                 />
-                <Bar dataKey="engagement" fill="#06B6D4" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="engagement" fill="#4F46E5" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
