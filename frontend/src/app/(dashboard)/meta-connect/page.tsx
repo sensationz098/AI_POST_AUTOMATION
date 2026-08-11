@@ -61,24 +61,13 @@ export default function MetaConnectPage() {
     }
   }, []);
 
-  // Initiate Real Meta OAuth Flow
-  const handleConnectMetaOAuth = async () => {
+  // Initiate Real Meta OAuth Flow - Navigates directly to /meta/oauth/start which redirects to Meta Authorization Dialog
+  const handleConnectMetaOAuth = () => {
     setIsOAuthStarting(true);
     setOauthError(null);
     setOauthSuccess(null);
-    try {
-      const res = await apiClient.get('/meta/oauth/start');
-      if (res.data?.authorization_url) {
-        window.location.href = res.data.authorization_url;
-      } else {
-        setOauthError('Failed to generate Meta authorization URL.');
-      }
-    } catch (e: any) {
-      const msg = e?.response?.data?.detail || 'Failed to initiate Meta OAuth authorization. Check server connection.';
-      setOauthError(msg);
-    } finally {
-      setIsOAuthStarting(false);
-    }
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    window.location.href = `${apiUrl}/meta/oauth/start`;
   };
 
   // Disconnect a single social account
