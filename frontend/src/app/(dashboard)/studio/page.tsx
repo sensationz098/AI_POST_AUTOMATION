@@ -153,8 +153,8 @@ function MusicCard({
 }
 
 export default function AIStudioPage() {
-  // Creation Mode: 'ai' = AI Generator | 'premade' = Upload Custom Pre-Made Post
-  const [creationMode, setCreationMode] = useState<'ai' | 'premade'>('ai');
+  // Creation Mode: 'premade' = Upload Custom Pre-Made Post Mode
+  const [creationMode, setCreationMode] = useState<'ai' | 'premade'>('premade');
 
   // Auto-login with default admin account so API calls are authenticated
   React.useEffect(() => {
@@ -687,14 +687,14 @@ export default function AIStudioPage() {
         <div className="lg:col-span-7 space-y-6">
           {creationMode === 'premade' ? (
             /* Mode B: Pre-Made Post Upload Card */
-            <div className="glass-panel p-6 rounded-2xl space-y-5 border-l-4 border-pink-500">
+            <div className="glass-panel p-6 rounded-2xl space-y-5 border-l-4 border-indigo-500">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h2 className="text-sm font-bold text-white flex items-center space-x-2">
-                  <ImageIcon className="w-4 h-4 text-pink-400" />
-                  <span>Upload Pre-Made Graphic & Post Copy</span>
+                  <ImageIcon className="w-4 h-4 text-indigo-400" />
+                  <span>Upload Custom Graphic & Post Copy</span>
                 </h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-pink-500/20 text-pink-300">
-                  Custom Upload Mode
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-mono">
+                  Custom Post Mode
                 </span>
               </div>
 
@@ -705,7 +705,7 @@ export default function AIStudioPage() {
                     Post Media (Upload Photo or Video Reel)
                   </label>
                   {imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.startsWith('data:video/')) && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-mono">
                       🎥 Video Reel Attached
                     </span>
                   )}
@@ -713,8 +713,8 @@ export default function AIStudioPage() {
                 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Photo Upload Button */}
-                  <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-pink-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
-                    <ImageIcon className="w-5 h-5 text-slate-400 group-hover:text-pink-400 mb-1" />
+                  <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
+                    <ImageIcon className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 mb-1" />
                     <span className="text-xs font-bold text-slate-200">Upload Photo</span>
                     <span className="text-[9px] text-slate-400">PNG, JPG, WEBP</span>
                     <input
@@ -726,8 +726,8 @@ export default function AIStudioPage() {
                   </label>
 
                   {/* Video Reel Upload Button */}
-                  <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-purple-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
-                    <Play className="w-5 h-5 text-slate-400 group-hover:text-purple-400 mb-1" />
+                  <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
+                    <Play className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 mb-1" />
                     <span className="text-xs font-bold text-slate-200">Upload Video Reel</span>
                     <span className="text-[9px] text-slate-400">MP4, MOV, WEBM</span>
                     <input
