@@ -194,9 +194,9 @@ class MetaGraphService:
             return {
                 "id": page_id,
                 "name": "Connected Facebook Page",
-                "followers_count": 12500,
-                "fan_count": 9800,
-                "category": "Business Page",
+                "followers_count": 0,
+                "fan_count": 0,
+                "category": "Facebook Page",
                 "picture_url": f"https://graph.facebook.com/v19.0/{page_id}/picture?type=large",
                 "link": f"https://facebook.com/{page_id}",
                 "is_sandbox": False
@@ -207,11 +207,11 @@ class MetaGraphService:
         if not ig_user_id or not access_token or ig_user_id == "sandbox":
             return {
                 "id": "sandbox",
-                "username": "apex_innovations",
-                "name": "Apex Innovations AI",
-                "followers_count": 21250,
-                "follows_count": 340,
-                "media_count": 48,
+                "username": "instagram_account",
+                "name": "Instagram Business",
+                "followers_count": 0,
+                "follows_count": 0,
+                "media_count": 0,
                 "profile_picture_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
                 "is_sandbox": True
             }
@@ -230,9 +230,9 @@ class MetaGraphService:
                     "id": ig_user_id,
                     "username": "instagram_account",
                     "name": "Instagram Business",
-                    "followers_count": 15400,
-                    "follows_count": 210,
-                    "media_count": 32,
+                    "followers_count": 0,
+                    "follows_count": 0,
+                    "media_count": 0,
                     "profile_picture_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
                     "is_sandbox": False
                 }
@@ -253,9 +253,9 @@ class MetaGraphService:
                 "id": ig_user_id,
                 "username": "instagram_account",
                 "name": "Instagram Business",
-                "followers_count": 15400,
-                "follows_count": 210,
-                "media_count": 32,
+                "followers_count": 0,
+                "follows_count": 0,
+                "media_count": 0,
                 "profile_picture_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
                 "is_sandbox": False
             }

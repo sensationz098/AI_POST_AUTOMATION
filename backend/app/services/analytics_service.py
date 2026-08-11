@@ -72,24 +72,22 @@ class AnalyticsService:
                 if not ig_raw.get("is_sandbox"):
                     has_live_meta = True
 
-        if total_followers_combined > 0:
-            total_reach_combined = max(total_reach_combined, total_followers_combined + 1200)
-            total_impressions_combined = max(total_impressions_combined, int(total_followers_combined * 1.5) + 2400)
-
         summary["total_reach"] = total_reach_combined
         summary["total_impressions"] = total_impressions_combined
 
         overview = MetricOverview(**summary)
-        base_reach = summary["total_reach"] // 7 if summary["total_reach"] > 0 else 1000
-        daily_trends = [
-            DailyMetricPoint(date="Mon", reach=int(base_reach * 0.7), impressions=int(base_reach * 1.1), engagement=int(base_reach * 0.08)),
-            DailyMetricPoint(date="Tue", reach=int(base_reach * 0.8), impressions=int(base_reach * 1.3), engagement=int(base_reach * 0.09)),
-            DailyMetricPoint(date="Wed", reach=int(base_reach * 0.95), impressions=int(base_reach * 1.5), engagement=int(base_reach * 0.11)),
-            DailyMetricPoint(date="Thu", reach=int(base_reach * 1.1), impressions=int(base_reach * 1.7), engagement=int(base_reach * 0.13)),
-            DailyMetricPoint(date="Fri", reach=int(base_reach * 1.3), impressions=int(base_reach * 2.0), engagement=int(base_reach * 0.16)),
-            DailyMetricPoint(date="Sat", reach=int(base_reach * 1.5), impressions=int(base_reach * 2.3), engagement=int(base_reach * 0.18)),
-            DailyMetricPoint(date="Sun", reach=int(base_reach * 1.7), impressions=int(base_reach * 2.6), engagement=int(base_reach * 0.21)),
-        ]
+        daily_trends = []
+        if summary["total_reach"] > 0:
+            base_reach = summary["total_reach"] // 7
+            daily_trends = [
+                DailyMetricPoint(date="Mon", reach=int(base_reach * 0.7), impressions=int(base_reach * 1.1), engagement=int(base_reach * 0.08)),
+                DailyMetricPoint(date="Tue", reach=int(base_reach * 0.8), impressions=int(base_reach * 1.3), engagement=int(base_reach * 0.09)),
+                DailyMetricPoint(date="Wed", reach=int(base_reach * 0.95), impressions=int(base_reach * 1.5), engagement=int(base_reach * 0.11)),
+                DailyMetricPoint(date="Thu", reach=int(base_reach * 1.1), impressions=int(base_reach * 1.7), engagement=int(base_reach * 0.13)),
+                DailyMetricPoint(date="Fri", reach=int(base_reach * 1.3), impressions=int(base_reach * 2.0), engagement=int(base_reach * 0.16)),
+                DailyMetricPoint(date="Sat", reach=int(base_reach * 1.5), impressions=int(base_reach * 2.3), engagement=int(base_reach * 0.18)),
+                DailyMetricPoint(date="Sun", reach=int(base_reach * 1.7), impressions=int(base_reach * 2.6), engagement=int(base_reach * 0.21)),
+            ]
 
         return DashboardAnalyticsResponse(
             overview=overview,
@@ -124,23 +122,20 @@ class AnalyticsService:
 
             is_live = not (fb_raw.get("is_sandbox") and ig_raw.get("is_sandbox"))
 
-            total_followers = fb_metrics.followers_count + ig_metrics.followers_count
-            if total_followers > 0:
-                summary["total_reach"] = max(summary["total_reach"], total_followers + 2500)
-                summary["total_impressions"] = max(summary["total_impressions"], int(total_followers * 1.6) + 4100)
-
         overview = MetricOverview(**summary)
 
-        base_reach = summary["total_reach"] // 7 if summary["total_reach"] > 0 else 1800
-        daily_trends = [
-            DailyMetricPoint(date="Mon", reach=int(base_reach * 0.7), impressions=int(base_reach * 1.1), engagement=int(base_reach * 0.08)),
-            DailyMetricPoint(date="Tue", reach=int(base_reach * 0.8), impressions=int(base_reach * 1.3), engagement=int(base_reach * 0.09)),
-            DailyMetricPoint(date="Wed", reach=int(base_reach * 0.95), impressions=int(base_reach * 1.5), engagement=int(base_reach * 0.11)),
-            DailyMetricPoint(date="Thu", reach=int(base_reach * 1.1), impressions=int(base_reach * 1.7), engagement=int(base_reach * 0.13)),
-            DailyMetricPoint(date="Fri", reach=int(base_reach * 1.3), impressions=int(base_reach * 2.0), engagement=int(base_reach * 0.16)),
-            DailyMetricPoint(date="Sat", reach=int(base_reach * 1.5), impressions=int(base_reach * 2.3), engagement=int(base_reach * 0.18)),
-            DailyMetricPoint(date="Sun", reach=int(base_reach * 1.7), impressions=int(base_reach * 2.6), engagement=int(base_reach * 0.21)),
-        ]
+        daily_trends = []
+        if summary["total_reach"] > 0:
+            base_reach = summary["total_reach"] // 7
+            daily_trends = [
+                DailyMetricPoint(date="Mon", reach=int(base_reach * 0.7), impressions=int(base_reach * 1.1), engagement=int(base_reach * 0.08)),
+                DailyMetricPoint(date="Tue", reach=int(base_reach * 0.8), impressions=int(base_reach * 1.3), engagement=int(base_reach * 0.09)),
+                DailyMetricPoint(date="Wed", reach=int(base_reach * 0.95), impressions=int(base_reach * 1.5), engagement=int(base_reach * 0.11)),
+                DailyMetricPoint(date="Thu", reach=int(base_reach * 1.1), impressions=int(base_reach * 1.7), engagement=int(base_reach * 0.13)),
+                DailyMetricPoint(date="Fri", reach=int(base_reach * 1.3), impressions=int(base_reach * 2.0), engagement=int(base_reach * 0.16)),
+                DailyMetricPoint(date="Sat", reach=int(base_reach * 1.5), impressions=int(base_reach * 2.3), engagement=int(base_reach * 0.18)),
+                DailyMetricPoint(date="Sun", reach=int(base_reach * 1.7), impressions=int(base_reach * 2.6), engagement=int(base_reach * 0.21)),
+            ]
 
         return DashboardAnalyticsResponse(
             overview=overview,
