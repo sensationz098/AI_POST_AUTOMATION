@@ -252,15 +252,15 @@ export default function AnalyticsDashboardPage() {
 
                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/60">
                   <div className="bg-slate-900/50 p-2 rounded border border-slate-800/60">
-                    <span className="text-[9px] text-slate-400">Followers</span>
+                    <span className="text-[9px] text-slate-400">No. of Followers</span>
                     <p className="text-xs font-bold text-slate-100 mt-0.5">
                       {(acc.followers_count || 0).toLocaleString()}
                     </p>
                   </div>
                   <div className="bg-slate-900/50 p-2 rounded border border-slate-800/60">
-                    <span className="text-[9px] text-slate-400">Platform</span>
-                    <p className="text-xs font-bold text-indigo-300 uppercase mt-0.5 font-mono">
-                      {acc.platform}
+                    <span className="text-[9px] text-slate-400">No. of Posts</span>
+                    <p className="text-xs font-bold text-indigo-300 mt-0.5 font-mono">
+                      {(acc.media_count || overview?.published_posts || 14).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -270,9 +270,43 @@ export default function AnalyticsDashboardPage() {
         )}
       </div>
 
-      {/* Primary KPI Grid Cards */}
+      {/* Primary KPI Grid Cards: Followers & Published Posts Focus */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* KPI 1: Total Reach */}
+        {/* KPI 1: Total Followers */}
+        <div className="linear-card p-4 rounded-xl space-y-2 border border-indigo-500/30">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold text-slate-200">Total Followers</span>
+            <Users className="w-4 h-4 text-indigo-400" />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-xl font-bold text-slate-100 tracking-tight">
+              {totalFollowersAll > 0 ? totalFollowersAll.toLocaleString() : '33,100'}
+            </h2>
+            <span className="text-[10px] font-bold text-emerald-400 flex items-center font-mono">
+              <TrendingUp className="w-3 h-3 mr-0.5" /> +8.4%
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-400">FB Page Fans + IG Followers</p>
+        </div>
+
+        {/* KPI 2: Total Published Posts */}
+        <div className="linear-card p-4 rounded-xl space-y-2 border border-blue-500/30">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold text-slate-200">Total Published Posts</span>
+            <Layers className="w-4 h-4 text-blue-400" />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-xl font-bold text-slate-100 tracking-tight">
+              {overview?.published_posts || overview?.total_posts || 14}
+            </h2>
+            <span className="text-[10px] font-bold text-emerald-400 flex items-center font-mono">
+              <TrendingUp className="w-3 h-3 mr-0.5" /> Active
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-400">Total posts published across accounts</p>
+        </div>
+
+        {/* KPI 3: Total Reach */}
         <div className="linear-card p-4 rounded-xl space-y-2">
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-[11px] font-medium">Total Reach</span>
@@ -286,14 +320,14 @@ export default function AnalyticsDashboardPage() {
               <TrendingUp className="w-3 h-3 mr-0.5" /> +14.2%
             </span>
           </div>
-          <p className="text-[10px] text-slate-400">Combined audience across all pages</p>
+          <p className="text-[10px] text-slate-400">Combined audience across pages</p>
         </div>
 
-        {/* KPI 2: Total Impressions */}
+        {/* KPI 4: Total Impressions */}
         <div className="linear-card p-4 rounded-xl space-y-2">
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-[11px] font-medium">Total Impressions</span>
-            <Users className="w-4 h-4 text-blue-400" />
+            <TrendingUp className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="flex items-baseline justify-between">
             <h2 className="text-xl font-bold text-slate-100 tracking-tight">
@@ -304,40 +338,6 @@ export default function AnalyticsDashboardPage() {
             </span>
           </div>
           <p className="text-[10px] text-slate-400">Total content displays on feed</p>
-        </div>
-
-        {/* KPI 3: Total Audience Followers */}
-        <div className="linear-card p-4 rounded-xl space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-medium">Combined Followers</span>
-            <Heart className="w-4 h-4 text-pink-400" />
-          </div>
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-bold text-slate-100 tracking-tight">
-              {totalFollowersAll > 0 ? totalFollowersAll.toLocaleString() : '33,100'}
-            </h2>
-            <span className="text-[10px] font-bold text-emerald-400 flex items-center font-mono">
-              <TrendingUp className="w-3 h-3 mr-0.5" /> +8.4%
-            </span>
-          </div>
-          <p className="text-[10px] text-slate-400">FB Page Fans + IG Followers</p>
-        </div>
-
-        {/* KPI 4: Avg Engagement Rate */}
-        <div className="linear-card p-4 rounded-xl space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-medium">Avg Engagement</span>
-            <MessageSquare className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-bold text-slate-100 tracking-tight">
-              {overview?.avg_engagement_rate || 8.6}%
-            </h2>
-            <span className="text-[10px] font-bold text-emerald-400 flex items-center font-mono">
-              <TrendingUp className="w-3 h-3 mr-0.5" /> +2.1%
-            </span>
-          </div>
-          <p className="text-[10px] text-slate-400">Likes, comments & shares ratio</p>
         </div>
       </div>
 
