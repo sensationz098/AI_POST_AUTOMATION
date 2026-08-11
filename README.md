@@ -168,6 +168,49 @@ Test coverage includes:
 
 ---
 
+## 🔐 Meta Developer Setup Guide (OAuth 2.0 Integration)
+
+To connect real Facebook Pages and Instagram Professional accounts using official Meta OAuth 2.0 authorization, follow these setup steps:
+
+### 1. Create Meta Developer App
+1. Go to [Meta for Developers](https://developers.facebook.com/) and log in with your Facebook account.
+2. Click **My Apps** ➔ **Create App**.
+3. Select **Other** ➔ **Business** as the app type.
+4. Give your app a name (e.g. `Social AI Automation Platform`) and link your Business Manager account.
+
+### 2. Configure Products & Permissions
+In your Meta App Dashboard:
+1. Add **Facebook Login for Business** product.
+2. Add **Instagram Graph API** product.
+3. Under **Facebook Login for Business Settings**, add your backend callback redirect URI under **Valid OAuth Redirect URIs**:
+   - For local development: `http://localhost:8000/api/v1/meta/oauth/callback`
+   - For production: `https://your-domain.com/api/v1/meta/oauth/callback`
+
+### 3. Required Meta Permissions
+The OAuth authorization flow requests only the essential permissions needed to publish content to authorized Pages and linked Instagram Professional accounts:
+- `pages_show_list`: Allows discovering Facebook Pages managed by the user.
+- `pages_read_engagement`: Allows fetching page engagement & profile details.
+- `pages_manage_posts`: Grants permission to post photo, video reels & text status updates to authorized Pages.
+- `instagram_basic`: Allows reading linked Instagram Business account IDs and profile handles.
+- `instagram_content_publish`: Grants permission to publish photo and video Reels to Instagram Business feeds.
+
+### 4. Configure Environment Variables
+Copy your Meta App credentials from **App Settings ➔ Basic**:
+```env
+META_APP_ID="your_15_digit_app_id"
+META_APP_SECRET="your_32_character_app_secret"
+META_GRAPH_API_VERSION="v19.0"
+META_OAUTH_REDIRECT_URI="http://localhost:8000/api/v1/meta/oauth/callback"
+FRONTEND_URL="http://localhost:3000"
+```
+
+### 5. Local Testing & App Review Requirements
+- **Development Mode Testing**: While your Meta App is in Development mode, you can test OAuth authorization using your own Facebook account, App Admins, Developers, or added Test Users in **Roles ➔ Roles**.
+- **Instagram Account Eligibility**: The Instagram account MUST be converted to a **Professional Account** (Business or Creator) and linked directly to your Facebook Page in Facebook Page Settings (Linked Accounts ➔ Instagram).
+- **Production App Review**: To allow public users outside your Meta App Roles to connect their Facebook Pages & Instagram accounts, submit your app for Meta App Review for the permissions listed above.
+
+---
+
 ## 📜 License
 
 MIT License. Built for Production AI Social Media Automation.

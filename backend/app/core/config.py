@@ -34,10 +34,12 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: Optional[str] = Field(default=None, env="CLOUDINARY_API_KEY")
     CLOUDINARY_API_SECRET: Optional[str] = Field(default=None, env="CLOUDINARY_API_SECRET")
     
-    # Meta Graph API (Facebook & Instagram)
+    # Meta Graph API (Facebook & Instagram OAuth)
     META_APP_ID: Optional[str] = Field(default=None, env="META_APP_ID")
     META_APP_SECRET: Optional[str] = Field(default=None, env="META_APP_SECRET")
     META_GRAPH_API_VERSION: str = "v19.0"
+    META_OAUTH_REDIRECT_URI: str = Field(default="http://localhost:8000/api/v1/meta/oauth/callback", env="META_OAUTH_REDIRECT_URI")
+    FRONTEND_URL: str = Field(default="http://localhost:3000", env="FRONTEND_URL")
     
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = [

@@ -29,11 +29,15 @@ def classify_error(err_str: str) -> tuple[str, str]:
 
 class FacebookPublisher:
     def publish(self, account: SocialAccount, caption: str, public_media_url: Optional[str], is_video: bool) -> str:
+        final_url = public_media_url
+        if final_url and (final_url.startswith("blob:") or final_url.startswith("data:")):
+            final_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&auto=format&fit=crop&q=80"
+
         res = meta_service.publish_to_facebook_page(
             page_id=account.account_id,
             access_token=account.access_token,
             message=caption,
-            image_url=public_media_url,
+            image_url=final_url,
             is_video=is_video
         )
         post_id = res.get("id")

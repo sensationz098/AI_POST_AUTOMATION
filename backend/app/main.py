@@ -111,8 +111,21 @@ def seed_default_data():
             db.commit()
             db.refresh(brand)
 
-        # Clean up any dummy test accounts from database so user only sees accounts they added
-        db.query(SocialAccount).filter(SocialAccount.access_token == "sandbox_token_secret").delete(synchronize_session=False)
+        # Clean up any dummy test accounts from database so user ONLY sees real connected accounts
+        from app.models.meta_account import MetaAccount
+        db.query(SocialAccount).filter(
+            (SocialAccount.account_id.in_(["109823471029", "17841400928371", "17841400928372", "17841400928373", "109823471030"])) |
+            (SocialAccount.access_token.like("%sandbox%")) |
+            (SocialAccount.access_token.like("%mock%")) |
+            (SocialAccount.access_token == "sandbox_token_secret")
+        ).delete(synchronize_session=False)
+
+        db.query(MetaAccount).filter(
+            (MetaAccount.facebook_page_id.in_(["109823471029", "109823471030", "sandbox"])) |
+            (MetaAccount.instagram_account_id.in_(["17841400928371", "17841400928372", "sandbox"])) |
+            (MetaAccount.access_token.like("%sandbox%"))
+        ).delete(synchronize_session=False)
+
         db.commit()
     finally:
         db.close()

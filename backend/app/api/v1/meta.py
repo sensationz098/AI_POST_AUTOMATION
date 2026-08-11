@@ -1,15 +1,140 @@
-from fastapi import APIRouter, Depends, status
+import secrets
+import logging
+from typing import Dict, Any, Optional
+from urllib.parse import quote
+from fastapi import APIRouter, Depends, status, Query, HTTPException
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
+
 from app.core.database import get_db
+from app.core.config import settings
 from app.schemas.meta import MetaConnectRequest, MetaAccountResponse
 from app.repositories.brand_repository import brand_repo
+from app.repositories.social_account_repository import social_account_repo
+from app.services.meta_service import meta_service
 from app.api.v1.deps import get_current_user
 from app.models.user import User
-from datetime import datetime
-
 from app.models.brand import BrandProfile
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/meta", tags=["Meta Graph Integration"])
+
+# In-memory OAuth state registry to prevent CSRF callback attacks
+# Maps state_token -> {"user_id": int, "expires_at": datetime}
+OAUTH_STATES: Dict[str, Dict[str, Any]] = {}
+
+def cleanup_expired_states():
+    now = datetime.utcnow()
+    expired = [s for s, data in OAUTH_STATES.items() if data["expires_at"] < now]
+    for s in expired:
+        OAUTH_STATES.pop(s, None)
+
+@router.get("/oauth/start")
+def start_meta_oauth(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generate Meta OAuth Authorization URL for Facebook Pages & Instagram Business accounts.
+    Includes cryptographically secure CSRF state token tied to current user session.
+    """
+    cleanup_expired_states()
+    state_token = secrets.token_urlsafe(32)
+    OAUTH_STATES[state_token] = {
+        "user_id": current_user.id,
+        "expires_at": datetime.utcnow() + timedelta(minutes=15)
+    }
+
+    auth_url = meta_service.get_authorization_url(state_token)
+    return {
+        "authorization_url": auth_url,
+        "state": state_token,
+        "app_id_configured": bool(settings.META_APP_ID and settings.META_APP_ID != "your-meta-app-id")
+    }
+
+@router.get("/oauth/callback")
+def meta_oauth_callback(
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    error_description: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Server-side OAuth Callback endpoint registered in Meta Developer Dashboard.
+    Exchanges code for long-lived access token, discovers authorized Facebook Pages
+    & linked Instagram accounts, and saves credentials securely in DB.
+    """
+    cleanup_expired_states()
+    frontend_base = settings.FRONTEND_URL.rstrip('/')
+
+    # 1. Handle user cancellation or Meta authorization errors
+    if error or error_description:
+        err_msg = error_description or error or "Meta authorization cancelled by user"
+        logger.warning(f"Meta OAuth Callback Error: {err_msg}")
+        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(err_msg)}")
+
+    # 2. Verify CSRF State
+    if not state or state not in OAUTH_STATES:
+        logger.error("Meta OAuth Callback failed: Invalid or expired state token.")
+        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote('Invalid or expired OAuth state token. Please try again.')}")
+
+    state_data = OAUTH_STATES.pop(state)
+    user_id = state_data["user_id"]
+
+    if not code:
+        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote('Missing authorization code from Meta.')}")
+
+    try:
+        # 3. Server-side token exchange (Never exposes App Secret to browser)
+        short_token = meta_service.exchange_code_for_user_token(code)
+        long_token = meta_service.get_long_lived_user_token(short_token)
+
+        # 4. Discover authorized Facebook Pages & linked Instagram accounts via Graph API
+        discovered = meta_service.fetch_user_pages_and_instagram_accounts(long_token)
+        fb_pages = discovered.get("facebook_pages", [])
+        ig_accounts = discovered.get("instagram_accounts", [])
+
+        if not fb_pages and not ig_accounts:
+            return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote('Meta authorized successfully, but no eligible Facebook Pages or linked Instagram accounts were found.')}")
+
+        # 5. Save connected accounts in social_accounts table
+        saved_fb = 0
+        saved_ig = 0
+
+        for p in fb_pages:
+            social_account_repo.create_or_update(
+                db=db,
+                user_id=user_id,
+                platform="facebook",
+                account_id=p["account_id"],
+                account_name=p["account_name"],
+                access_token=p["access_token"],
+                token_type="page_access_token",
+                logo_url=p["logo_url"]
+            )
+            saved_fb += 1
+
+        for ig in ig_accounts:
+            social_account_repo.create_or_update(
+                db=db,
+                user_id=user_id,
+                platform="instagram",
+                account_id=ig["account_id"],
+                account_name=ig["account_name"],
+                access_token=ig["access_token"],
+                token_type="page_access_token",
+                logo_url=ig["logo_url"],
+                metadata_json=ig.get("metadata")
+            )
+            saved_ig += 1
+
+        logger.info(f"Successfully processed Meta OAuth for user {user_id}: {saved_fb} FB pages, {saved_ig} IG accounts.")
+        return RedirectResponse(url=f"{frontend_base}/meta-connect?connected=true&pages={saved_fb}&ig={saved_ig}")
+
+    except Exception as e:
+        logger.error(f"Error during Meta OAuth callback processing: {e}")
+        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(str(e))}")
 
 @router.post("/connect", response_model=MetaAccountResponse)
 def connect_meta_account(
@@ -18,7 +143,6 @@ def connect_meta_account(
     current_user: User = Depends(get_current_user)
 ):
     """Link Facebook Page & Instagram Business account to a Brand Profile."""
-    # Determine Meta brand name & profile picture URL
     brand_name = request.facebook_page_name or (f"@{request.instagram_username}" if request.instagram_username else "Meta Connected Brand")
     
     brand_logo_url = request.logo_url
@@ -27,16 +151,18 @@ def connect_meta_account(
     if not brand_logo_url:
         brand_logo_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80"
 
-    # 1. Check if specific brand_id was requested
+    target_brand = None
     if request.brand_id and not request.create_new_brand:
         target_brand = db.query(BrandProfile).filter(
             BrandProfile.id == request.brand_id,
             BrandProfile.user_id == current_user.id
         ).first()
 
-    # 2. If create_new_brand or brand not found, check existing user brands or create new brand
     if not target_brand:
-        if request.create_new_brand:
+        user_brands = brand_repo.get_by_user(db, current_user.id)
+        if user_brands:
+            target_brand = user_brands[0]
+        else:
             target_brand = BrandProfile(
                 name=brand_name,
                 logo_url=brand_logo_url,
@@ -50,27 +176,7 @@ def connect_meta_account(
             db.add(target_brand)
             db.commit()
             db.refresh(target_brand)
-        else:
-            # Pick first existing brand profile for user or create one
-            user_brands = brand_repo.get_by_user(db, current_user.id)
-            if user_brands:
-                target_brand = user_brands[0]
-            else:
-                target_brand = BrandProfile(
-                    name=brand_name,
-                    logo_url=brand_logo_url,
-                    brand_colors=["#6366F1", "#06B6D4"],
-                    tone_of_voice="Professional & Engaging",
-                    target_audience="Facebook & Instagram Audience",
-                    cta_style="Direct & Value-driven",
-                    industry="Social Media Brand",
-                    user_id=current_user.id
-                )
-                db.add(target_brand)
-                db.commit()
-                db.refresh(target_brand)
 
-    # 3. Always update brand profile name and logo_url to match Meta Account details
     if target_brand:
         if request.facebook_page_name or request.instagram_username:
             target_brand.name = brand_name
@@ -81,10 +187,10 @@ def connect_meta_account(
 
     data = {
         "access_token": request.access_token,
-        "facebook_page_id": request.facebook_page_id or "109823471029",
-        "facebook_page_name": request.facebook_page_name or "Official Facebook Page",
-        "instagram_account_id": request.instagram_account_id or "17841400928371",
-        "instagram_username": request.instagram_username or "brand_official",
+        "facebook_page_id": request.facebook_page_id,
+        "facebook_page_name": request.facebook_page_name,
+        "instagram_account_id": request.instagram_account_id,
+        "instagram_username": request.instagram_username,
         "logo_url": brand_logo_url,
         "is_connected": True,
         "last_synced_at": datetime.utcnow()
@@ -101,7 +207,6 @@ def get_meta_account(
     """Get linked Meta account status for a brand."""
     meta = brand_repo.get_meta_account(db, brand_id)
     if not meta:
-        # Return un-connected default
         return MetaAccountResponse(
             id=0,
             brand_id=brand_id,
