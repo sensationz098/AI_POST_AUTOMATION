@@ -51,4 +51,38 @@ class AnalyticsRepository(BaseRepository[PostAnalytics]):
             "avg_engagement_rate": round(avg_engagement, 2),
         }
 
+    def get_user_summary(self, db: Session, user_id: int) -> dict:
+        posts = db.query(Post).all()
+        total_posts = len(posts)
+        published_posts = len([p for p in posts if p.status == "PUBLISHED"])
+        scheduled_posts = len([p for p in posts if p.status == "SCHEDULED"])
+        failed_posts = len([p for p in posts if p.status == "FAILED"])
+
+        analytics_list = db.query(PostAnalytics).all()
+
+        total_likes = sum(a.likes for a in analytics_list)
+        total_comments = sum(a.comments for a in analytics_list)
+        total_shares = sum(a.shares for a in analytics_list)
+        total_reach = sum(a.reach for a in analytics_list)
+        total_impressions = sum(a.impressions for a in analytics_list)
+
+        avg_engagement = (
+            sum(a.engagement_rate for a in analytics_list) / len(analytics_list)
+            if analytics_list
+            else 0.0
+        )
+
+        return {
+            "total_posts": total_posts,
+            "published_posts": published_posts,
+            "scheduled_posts": scheduled_posts,
+            "failed_posts": failed_posts,
+            "total_likes": total_likes,
+            "total_comments": total_comments,
+            "total_shares": total_shares,
+            "total_reach": total_reach,
+            "total_impressions": total_impressions,
+            "avg_engagement_rate": round(avg_engagement, 2),
+        }
+
 analytics_repo = AnalyticsRepository()
