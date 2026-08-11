@@ -146,11 +146,8 @@ export default function MetaConnectPage() {
               <Share2 className="w-5 h-5 text-indigo-400" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-slate-100 tracking-tight flex items-center space-x-2">
-                <span>Connect Meta Accounts</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-semibold">
-                  OAuth 2.0
-                </span>
+              <h1 className="text-lg font-bold text-slate-100 tracking-tight">
+                Connect Meta Accounts
               </h1>
               <p className="text-xs text-slate-400 mt-1">
                 Authorize your Facebook Pages & Instagram Professional accounts seamlessly through Meta.
