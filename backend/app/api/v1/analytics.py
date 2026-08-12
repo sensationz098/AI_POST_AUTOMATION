@@ -23,4 +23,4 @@ def get_brand_analytics(
     current_user: User = Depends(get_current_user)
 ):
     """Retrieve reach, impressions, engagement rates, and trend metrics for brand analytics dashboard."""
-    return analytics_service.get_brand_dashboard(db, brand_id)
+    return analytics_service.get_brand_dashboard(db, brand_id, current_user.id)

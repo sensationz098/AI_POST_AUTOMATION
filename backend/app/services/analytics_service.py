@@ -12,6 +12,9 @@ from app.schemas.analytics import (
 from app.services.meta_service import meta_service
 from app.models.meta_account import MetaAccount
 
+from app.core.security_encryption import decrypt_token
+from fastapi import HTTPException, status
+
 class AnalyticsService:
     def get_user_overview_dashboard(self, db: Session, user_id: int) -> DashboardAnalyticsResponse:
         """Fetch aggregated insights across ALL connected Facebook Pages & Instagram accounts belonging to the user."""
@@ -35,8 +38,9 @@ class AnalyticsService:
         has_live_meta = False
 
         for acc in real_accounts:
+            token = decrypt_token(acc.access_token) or acc.access_token
             if acc.platform == "facebook":
-                fb_raw = meta_service.fetch_facebook_page_metrics(page_id=acc.account_id, access_token=acc.access_token)
+                fb_raw = meta_service.fetch_facebook_page_metrics(page_id=acc.account_id, access_token=token)
                 followers = fb_raw.get("followers_count", 0)
                 total_followers_combined += followers
                 accounts_list.append({
@@ -55,7 +59,7 @@ class AnalyticsService:
                     has_live_meta = True
 
             elif acc.platform == "instagram":
-                ig_raw = meta_service.fetch_instagram_account_metrics(ig_user_id=acc.account_id, access_token=acc.access_token)
+                ig_raw = meta_service.fetch_instagram_account_metrics(ig_user_id=acc.account_id, access_token=token)
                 followers = ig_raw.get("followers_count", 0)
                 total_followers_combined += followers
                 accounts_list.append({
@@ -77,17 +81,6 @@ class AnalyticsService:
 
         overview = MetricOverview(**summary)
         daily_trends = []
-        if summary["total_reach"] > 0:
-            base_reach = summary["total_reach"] // 7
-            daily_trends = [
-                DailyMetricPoint(date="Mon", reach=int(base_reach * 0.7), impressions=int(base_reach * 1.1), engagement=int(base_reach * 0.08)),
-                DailyMetricPoint(date="Tue", reach=int(base_reach * 0.8), impressions=int(base_reach * 1.3), engagement=int(base_reach * 0.09)),
-                DailyMetricPoint(date="Wed", reach=int(base_reach * 0.95), impressions=int(base_reach * 1.5), engagement=int(base_reach * 0.11)),
-                DailyMetricPoint(date="Thu", reach=int(base_reach * 1.1), impressions=int(base_reach * 1.7), engagement=int(base_reach * 0.13)),
-                DailyMetricPoint(date="Fri", reach=int(base_reach * 1.3), impressions=int(base_reach * 2.0), engagement=int(base_reach * 0.16)),
-                DailyMetricPoint(date="Sat", reach=int(base_reach * 1.5), impressions=int(base_reach * 2.3), engagement=int(base_reach * 0.18)),
-                DailyMetricPoint(date="Sun", reach=int(base_reach * 1.7), impressions=int(base_reach * 2.6), engagement=int(base_reach * 0.21)),
-            ]
 
         return DashboardAnalyticsResponse(
             overview=overview,
@@ -96,46 +89,42 @@ class AnalyticsService:
             is_live_meta=has_live_meta
         )
 
-    def get_brand_dashboard(self, db: Session, brand_id: int) -> DashboardAnalyticsResponse:
-        summary = analytics_repo.get_brand_summary(db, brand_id)
+    def get_brand_dashboard(self, db: Session, brand_id: int, user_id: int) -> DashboardAnalyticsResponse:
+        from app.models.brand import BrandProfile
+        brand = db.query(BrandProfile).filter(
+            BrandProfile.id == brand_id,
+            BrandProfile.user_id == user_id
+        ).first()
+        if not brand:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Brand profile not found or access denied"
+            )
 
+        summary = analytics_repo.get_brand_summary(db, brand_id)
         meta_acc = brand_repo.get_meta_account(db, brand_id)
-        if not meta_acc or not meta_acc.is_connected:
-            meta_acc = db.query(MetaAccount).filter(MetaAccount.is_connected == True).first()
 
         fb_metrics = None
         ig_metrics = None
         is_live = False
 
-        if meta_acc:
+        if meta_acc and meta_acc.is_connected:
+            token = decrypt_token(meta_acc.access_token) or meta_acc.access_token
             fb_raw = meta_service.fetch_facebook_page_metrics(
                 page_id=meta_acc.facebook_page_id,
-                access_token=meta_acc.access_token
+                access_token=token
             )
             ig_raw = meta_service.fetch_instagram_account_metrics(
                 ig_user_id=meta_acc.instagram_account_id,
-                access_token=meta_acc.access_token
+                access_token=token
             )
 
             fb_metrics = FacebookPageMetrics(**fb_raw)
             ig_metrics = InstagramAccountMetrics(**ig_raw)
-
             is_live = not (fb_raw.get("is_sandbox") and ig_raw.get("is_sandbox"))
 
         overview = MetricOverview(**summary)
-
         daily_trends = []
-        if summary["total_reach"] > 0:
-            base_reach = summary["total_reach"] // 7
-            daily_trends = [
-                DailyMetricPoint(date="Mon", reach=int(base_reach * 0.7), impressions=int(base_reach * 1.1), engagement=int(base_reach * 0.08)),
-                DailyMetricPoint(date="Tue", reach=int(base_reach * 0.8), impressions=int(base_reach * 1.3), engagement=int(base_reach * 0.09)),
-                DailyMetricPoint(date="Wed", reach=int(base_reach * 0.95), impressions=int(base_reach * 1.5), engagement=int(base_reach * 0.11)),
-                DailyMetricPoint(date="Thu", reach=int(base_reach * 1.1), impressions=int(base_reach * 1.7), engagement=int(base_reach * 0.13)),
-                DailyMetricPoint(date="Fri", reach=int(base_reach * 1.3), impressions=int(base_reach * 2.0), engagement=int(base_reach * 0.16)),
-                DailyMetricPoint(date="Sat", reach=int(base_reach * 1.5), impressions=int(base_reach * 2.3), engagement=int(base_reach * 0.18)),
-                DailyMetricPoint(date="Sun", reach=int(base_reach * 1.7), impressions=int(base_reach * 2.6), engagement=int(base_reach * 0.21)),
-            ]
 
         return DashboardAnalyticsResponse(
             overview=overview,

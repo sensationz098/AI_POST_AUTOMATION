@@ -22,21 +22,21 @@ class BrandService:
         brand_repo.deduplicate_brand_profiles(db, user_id)
         return brand_repo.get_by_user(db, user_id)
 
-    def get_brand(self, db: Session, brand_id: int) -> BrandProfile:
+    def get_brand(self, db: Session, brand_id: int, user_id: int) -> BrandProfile:
         brand = brand_repo.get(db, brand_id)
-        if not brand:
+        if not brand or brand.user_id != user_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Brand profile not found"
+                detail="Brand profile not found or access denied"
             )
         return brand
 
-    def update_brand(self, db: Session, brand_id: int, brand_in: BrandUpdate) -> BrandProfile:
-        brand = self.get_brand(db, brand_id)
+    def update_brand(self, db: Session, brand_id: int, user_id: int, brand_in: BrandUpdate) -> BrandProfile:
+        brand = self.get_brand(db, brand_id, user_id)
         return brand_repo.update(db, brand, brand_in.model_dump(exclude_unset=True))
 
-    def delete_brand(self, db: Session, brand_id: int) -> Optional[BrandProfile]:
-        self.get_brand(db, brand_id)
+    def delete_brand(self, db: Session, brand_id: int, user_id: int) -> Optional[BrandProfile]:
+        self.get_brand(db, brand_id, user_id)
         return brand_repo.delete(db, brand_id)
 
 brand_service = BrandService()

@@ -16,7 +16,7 @@ def generate_ai_content(
     current_user: User = Depends(get_current_user)
 ):
     """Generate caption, hashtags, CTA, SEO keywords, and visual image prompt using OpenAI GPT."""
-    brand = brand_service.get_brand(db, request.brand_id)
+    brand = brand_service.get_brand(db, request.brand_id, current_user.id)
     return ai_service.generate_content(brand, request)
 
 @router.post("/generate-image", response_model=AIImageGenerateResponse)

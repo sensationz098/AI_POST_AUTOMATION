@@ -1,8 +1,11 @@
+import os
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
 from app.core.config import settings
-from app.core.database import engine, Base, SessionLocal
-from app.core.security import get_password_hash
+from app.core.database import engine, Base
 import app.models  # Register all models with SQLAlchemy Base
 
 # Import API routers
@@ -16,25 +19,7 @@ from app.api.v1.analytics import router as analytics_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.health import router as health_router
 
-from sqlalchemy import inspect, text
-
-def run_db_migrations():
-    """Ensure database schema is up-to-date with new model columns."""
-    try:
-        inspector = inspect(engine)
-        if "meta_accounts" in inspector.get_table_names():
-            columns = [c["name"] for c in inspector.get_columns("meta_accounts")]
-            if "logo_url" not in columns:
-                with engine.connect() as conn:
-                    conn.execute(text("ALTER TABLE meta_accounts ADD COLUMN logo_url VARCHAR(500);"))
-                    conn.commit()
-    except Exception as e:
-        print(f"Migration notice: {e}")
-
-run_db_migrations()
-
-# Create database tables automatically if not already existing
-Base.metadata.create_all(bind=engine)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -43,22 +28,20 @@ app = FastAPI(
     description="Production-Ready AI Social Media Automation Platform for Facebook & Instagram API."
 )
 
-# CORS configuration
+# Enforce production-safe restricted CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Static files route for uploaded post photos/graphics
-import os
-from fastapi.staticfiles import StaticFiles
+# Static files route for local asset cache
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# Include v1 API routes
+# Register v1 API routers
 app.include_router(health_router, prefix=settings.API_V1_STR)
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(brand_router, prefix=settings.API_V1_STR)
@@ -69,79 +52,12 @@ app.include_router(social_accounts_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
 app.include_router(audit_router, prefix=settings.API_V1_STR)
 
-@app.on_event("startup")
-def seed_default_data():
-    """Seed a default Admin user and Brand Profile on first run so the app works immediately."""
-    from app.models.user import User
-    from app.models.brand import BrandProfile
-    from app.models.meta_account import MetaAccount
-    from app.models.social_account import SocialAccount
-    from datetime import datetime
-
-    db = SessionLocal()
-    try:
-        # Create default admin user if not exists
-        user = db.query(User).filter(User.email == "admin@socialai.com").first()
-        if not user:
-            user = User(
-                email="admin@socialai.com",
-                full_name="Admin User",
-                hashed_password=get_password_hash("admin123"),
-                role="Admin",
-                is_active=True,
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-
-        # Create default brand profile if not exists
-        brand = db.query(BrandProfile).filter(BrandProfile.user_id == user.id).first()
-        if not brand:
-            brand = BrandProfile(
-                name="Apex Innovations",
-                logo_url="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
-                brand_colors=["#6366F1", "#06B6D4"],
-                tone_of_voice="Professional, Energetic & Visionary",
-                target_audience="Tech-savvy entrepreneurs, developers & agency leads",
-                cta_style="Urgency-driven & Value focused",
-                industry="AI & Software",
-                user_id=user.id,
-            )
-            db.add(brand)
-            db.commit()
-            db.refresh(brand)
-
-        # Clean up any dummy test accounts from database so user ONLY sees real connected accounts
-        from app.models.meta_account import MetaAccount
-        db.query(SocialAccount).filter(
-            (SocialAccount.account_id.in_(["109823471029", "17841400928371", "17841400928372", "17841400928373", "109823471030"])) |
-            (SocialAccount.access_token.like("%sandbox%")) |
-            (SocialAccount.access_token.like("%mock%")) |
-            (SocialAccount.access_token == "sandbox_token_secret")
-        ).delete(synchronize_session=False)
-
-        db.query(MetaAccount).filter(
-            (MetaAccount.facebook_page_id.in_(["109823471029", "109823471030", "sandbox"])) |
-            (MetaAccount.instagram_account_id.in_(["17841400928371", "17841400928372", "sandbox"])) |
-            (MetaAccount.access_token.like("%sandbox%"))
-        ).delete(synchronize_session=False)
-
-        # Backfill & deduplicate BrandProfiles for all existing real connected social accounts
-        from app.repositories.brand_repository import brand_repo
-        existing_socials = db.query(SocialAccount).all()
-        for sa in existing_socials:
-            brand_repo.ensure_brand_profile_exists(db, sa.user_id, sa.account_name, sa.logo_url)
-        brand_repo.deduplicate_brand_profiles(db, user.id)
-
-        db.commit()
-    finally:
-        db.close()
-
 @app.get("/")
 def root():
     return {
-        "message": "Welcome to Social AI Automation Platform API",
-        "docs": "/docs",
+        "name": settings.PROJECT_NAME,
+        "version": settings.VERSION,
+        "environment": settings.APP_ENV,
         "health": f"{settings.API_V1_STR}/health",
-        "default_login": {"email": "admin@socialai.com", "password": "admin123"}
+        "readiness": f"{settings.API_V1_STR}/ready"
     }

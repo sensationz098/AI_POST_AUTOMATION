@@ -31,8 +31,7 @@ def get_brand_posts(
     current_user: User = Depends(get_current_user)
 ):
     """Retrieve posts for a specific brand profile (auto-triggering due scheduled posts publishing)."""
-    post_service.check_and_publish_due_posts(db)
-    return post_service.get_brand_posts(db, brand_id, status)
+    return post_service.get_brand_posts(db, brand_id, current_user.id, status)
 
 @router.get("/{post_id}", response_model=PostResponse)
 def get_post(
@@ -41,7 +40,7 @@ def get_post(
     current_user: User = Depends(get_current_user)
 ):
     """Get single post by ID."""
-    return post_service.get_post(db, post_id)
+    return post_service.get_post(db, post_id, current_user.id)
 
 @router.put("/{post_id}", response_model=PostResponse)
 def update_post(
@@ -79,7 +78,7 @@ def publish_now(
     current_user: User = Depends(get_current_user)
 ):
     """Immediately trigger Meta Graph API publishing for Facebook & Instagram."""
-    return post_service.execute_publish(db, post_id)
+    return post_service.execute_publish(db, post_id, current_user.id)
 
 @router.post("/{post_id}/retry", response_model=PostResponse)
 def retry_failed(
@@ -102,7 +101,7 @@ def publish_multi_account(
     Publish one post to multiple selected Facebook Pages and Instagram Accounts concurrently.
     Supports idempotency, per-account job tracking, token expiration detection, and partial batch success.
     """
-    post = post_service.get_post(db, request.post_id)
+    post = post_service.get_post(db, request.post_id, current_user.id)
     if not request.social_account_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

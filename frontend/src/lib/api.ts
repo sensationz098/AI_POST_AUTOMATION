@@ -7,23 +7,32 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 15000,
 });
 
 apiClient.interceptors.request.use(async (config) => {
   if (typeof window !== 'undefined') {
-    let token = localStorage.getItem('social_ai_token');
-    if (!token) {
-      // Auto-set default token for admin sandbox user
-      token = 'admin_demo_access_token';
-      localStorage.setItem('social_ai_token', token);
-    }
+    const token = localStorage.getItem('social_ai_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
   }
   return config;
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (typeof window !== 'undefined' && error.response?.status === 401) {
+      localStorage.removeItem('social_ai_token');
+      // Redirect to login if user is on dashboard
+      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const mockStorage = {
   getToken: () => (typeof window !== 'undefined' ? localStorage.getItem('social_ai_token') : null),

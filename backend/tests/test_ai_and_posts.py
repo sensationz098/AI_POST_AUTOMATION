@@ -10,6 +10,15 @@ def get_auth_token_and_brand(client):
     
     brand_res = client.post("/api/v1/brands/", json={"name": "Pulse Tech", "tone_of_voice": "Friendly"}, headers=headers)
     brand_id = brand_res.json()["id"]
+
+    client.post("/api/v1/social-accounts/connect", json={
+        "brand_id": brand_id,
+        "platform": "facebook",
+        "account_id": "sandbox_fb_123",
+        "account_name": "Pulse Tech FB Page",
+        "access_token": "sandbox_access_token_secret"
+    }, headers=headers)
+
     return headers, brand_id
 
 def test_ai_generation_and_post_lifecycle(client):
