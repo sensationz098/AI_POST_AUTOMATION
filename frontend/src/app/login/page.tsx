@@ -182,10 +182,25 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Security Badge */}
-        <div className="flex items-center justify-center space-x-2 text-[11px] text-slate-500">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Encrypted JWT Token & Role-Based Security</span>
+        {/* Security Badge & Legal Links */}
+        <div className="space-y-2 text-center text-[11px] text-slate-500">
+          <div className="flex items-center justify-center space-x-2">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Encrypted JWT Token & Role-Based Security</span>
+          </div>
+          <div className="flex items-center justify-center space-x-3 text-slate-400 pt-1">
+            <Link href="/privacy-policy" className="hover:text-indigo-300 transition underline">
+              Privacy Policy
+            </Link>
+            <span>•</span>
+            <Link href="/data-deletion" className="hover:text-indigo-300 transition underline">
+              Data Deletion
+            </Link>
+            <span>•</span>
+            <Link href="/terms" className="hover:text-indigo-300 transition underline">
+              Terms of Service
+            </Link>
+          </div>
         </div>
       </div>
     </div>

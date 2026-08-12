@@ -202,6 +202,21 @@ export default function RegisterPage() {
             </Link>
           </div>
         </div>
+
+        {/* Legal Footer Links */}
+        <div className="flex items-center justify-center space-x-3 text-[11px] text-slate-400">
+          <Link href="/privacy-policy" className="hover:text-indigo-300 transition underline">
+            Privacy Policy
+          </Link>
+          <span>•</span>
+          <Link href="/data-deletion" className="hover:text-indigo-300 transition underline">
+            Data Deletion
+          </Link>
+          <span>•</span>
+          <Link href="/terms" className="hover:text-indigo-300 transition underline">
+            Terms of Service
+          </Link>
+        </div>
       </div>
     </div>
   );
