@@ -27,8 +27,10 @@ apiClient.interceptors.response.use(
     if (typeof window !== 'undefined' && error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem('social_ai_token');
       localStorage.removeItem('social_ai_user');
-      // Redirect to login if user is on dashboard
-      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+      const isPublicPage = ['/login', '/register', '/privacy-policy', '/data-deletion', '/terms'].some((path) =>
+        window.location.pathname.startsWith(path)
+      );
+      if (!isPublicPage) {
         window.location.href = '/login';
       }
     }
