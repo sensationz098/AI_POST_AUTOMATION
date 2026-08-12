@@ -23,8 +23,10 @@ apiClient.interceptors.request.use(async (config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (typeof window !== 'undefined' && error.response?.status === 401) {
+    const isAuthEndpoint = error.config?.url?.includes('/auth/login') || error.config?.url?.includes('/auth/register');
+    if (typeof window !== 'undefined' && error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem('social_ai_token');
+      localStorage.removeItem('social_ai_user');
       // Redirect to login if user is on dashboard
       if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
         window.location.href = '/login';

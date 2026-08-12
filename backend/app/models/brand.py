@@ -11,7 +11,7 @@ class BrandProfile(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    logo_url = Column(String(500), nullable=True)
+    logo_url = Column(Text, nullable=True)
     brand_colors = Column(JSON, default=list)  # e.g. ["#4F46E5", "#06B6D4"]
     tone_of_voice = Column(String(255), default="Professional & Engaging")
     target_audience = Column(Text, nullable=True)

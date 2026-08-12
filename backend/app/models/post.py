@@ -29,7 +29,7 @@ class Post(Base):
     cta = Column(String(255), nullable=True)
     seo_keywords = Column(JSON, default=list)
     image_prompt = Column(Text, nullable=True)
-    image_url = Column(String(1000), nullable=True)
+    image_url = Column(Text, nullable=True)
     
     platforms = Column(JSON, default=list)  # ["facebook", "instagram"]
     status = Column(String(50), default=PostStatus.DRAFT.value, index=True)

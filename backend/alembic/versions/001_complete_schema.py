@@ -1,16 +1,16 @@
 """Complete Schema and Constraints Migration for PostgreSQL
 
-Revision ID: 002_complete_schema
-Revises: 001_production_hardening
-Create Date: 2026-08-12 11:00:00.000000
+Revision ID: 001_complete_schema
+Revises: 
+Create Date: 2026-08-12 10:00:00.000000
 
 """
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = '002_complete_schema'
-down_revision: Union[str, None] = '001_production_hardening'
+revision: str = '001_complete_schema'
+down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -35,7 +35,7 @@ def upgrade() -> None:
         'brand_profiles',
         sa.Column('id', sa.Integer(), nullable=False, primary_key=True),
         sa.Column('name', sa.String(length=255), nullable=False),
-        sa.Column('logo_url', sa.String(length=500), nullable=True),
+        sa.Column('logo_url', sa.Text(), nullable=True),
         sa.Column('brand_colors', sa.JSON(), nullable=True),
         sa.Column('tone_of_voice', sa.String(length=255), nullable=True),
         sa.Column('target_audience', sa.Text(), nullable=True),
@@ -58,7 +58,7 @@ def upgrade() -> None:
         sa.Column('facebook_page_name', sa.String(length=255), nullable=True),
         sa.Column('instagram_account_id', sa.String(length=255), nullable=True),
         sa.Column('instagram_username', sa.String(length=255), nullable=True),
-        sa.Column('logo_url', sa.String(length=500), nullable=True),
+        sa.Column('logo_url', sa.Text(), nullable=True),
         sa.Column('is_connected', sa.Boolean(), server_default='false'),
         sa.Column('last_synced_at', sa.DateTime(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=True),
@@ -79,7 +79,7 @@ def upgrade() -> None:
         sa.Column('token_type', sa.String(length=100), server_default='page_access_token'),
         sa.Column('expires_at', sa.DateTime(), nullable=True),
         sa.Column('status', sa.String(length=50), server_default='CONNECTED'),
-        sa.Column('logo_url', sa.String(length=500), nullable=True),
+        sa.Column('logo_url', sa.Text(), nullable=True),
         sa.Column('metadata_json', sa.JSON(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=True),
         sa.Column('updated_at', sa.DateTime(), nullable=True),
@@ -98,7 +98,7 @@ def upgrade() -> None:
         sa.Column('cta', sa.String(length=255), nullable=True),
         sa.Column('seo_keywords', sa.JSON(), nullable=True),
         sa.Column('image_prompt', sa.Text(), nullable=True),
-        sa.Column('image_url', sa.String(length=1000), nullable=True),
+        sa.Column('image_url', sa.Text(), nullable=True),
         sa.Column('platforms', sa.JSON(), nullable=True),
         sa.Column('status', sa.String(length=50), server_default='DRAFT'),
         sa.Column('scheduled_at', sa.DateTime(), nullable=True),

@@ -50,9 +50,10 @@ def migrate(sqlite_uri: str, postgres_uri: str, dry_run: bool = False):
     logger.info(f"Found {len(sqlite_tables)} tables in SQLite source.")
 
     if not dry_run:
-        # Disable foreign key checks temporarily in PostgreSQL target session
         with postgres_engine.begin() as conn:
-            conn.execute(text("SET CONSTRAINTS ALL DEFERRED;"))
+            for table_name in reversed(TABLE_ORDER):
+                if table_name in postgres_tables:
+                    conn.execute(text(f'TRUNCATE TABLE "{table_name}" CASCADE;'))
 
     total_migrated_records = 0
 
@@ -82,9 +83,6 @@ def migrate(sqlite_uri: str, postgres_uri: str, dry_run: bool = False):
             continue
 
         with postgres_engine.begin() as tgt_conn:
-            # Delete any existing sample rows to prevent primary key collision
-            tgt_conn.execute(text(f'DELETE FROM "{table_name}" WHERE 1=1;'))
-
             for row in records:
                 row_dict = dict(row)
                 tgt_conn.execute(tgt_table.insert().values(**row_dict))

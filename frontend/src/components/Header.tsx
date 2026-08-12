@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, UserCheck, CheckCircle2, Sparkles, Sun, Moon, X, Clock, ExternalLink, Activity } from 'lucide-react';
+import { Bell, UserCheck, CheckCircle2, Sparkles, Sun, Moon, X, Clock, ExternalLink, Activity, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from '@/components/ThemeProvider';
 import { apiClient } from '@/lib/api';
@@ -224,6 +224,18 @@ export const Header: React.FC<Props> = ({
           <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
           <span className="font-semibold text-slate-200 text-[10px]">{userRole}</span>
         </div>
+
+        <button
+          onClick={() => {
+            localStorage.removeItem('social_ai_token');
+            localStorage.removeItem('social_ai_user');
+            window.location.href = '/login';
+          }}
+          className="p-1 text-slate-400 hover:text-rose-400 rounded hover:bg-slate-800/60 transition focus-ring"
+          title="Sign Out"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+        </button>
       </div>
     </header>
   );

@@ -61,13 +61,26 @@ export default function MetaConnectPage() {
     }
   }, []);
 
-  // Initiate Real Meta OAuth Flow - Navigates directly to /meta/oauth/start which redirects to Meta Authorization Dialog
-  const handleConnectMetaOAuth = () => {
+  // Initiate Real Meta OAuth Flow - Uses authenticated API call to retrieve Meta Authorization Dialog URL
+  const handleConnectMetaOAuth = async () => {
     setIsOAuthStarting(true);
     setOauthError(null);
     setOauthSuccess(null);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-    window.location.href = `${apiUrl}/meta/oauth/start`;
+    try {
+      const res = await apiClient.get('/meta/oauth/start?redirect=false');
+      if (res.data?.authorization_url) {
+        window.location.href = res.data.authorization_url;
+      } else {
+        const token = localStorage.getItem('social_ai_token') || '';
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+        window.location.href = `${apiUrl}/meta/oauth/start?token=${token}`;
+      }
+    } catch (e: any) {
+      console.error('Meta OAuth start error:', e);
+      const token = localStorage.getItem('social_ai_token') || '';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      window.location.href = `${apiUrl}/meta/oauth/start?token=${token}`;
+    }
   };
 
   // Disconnect a single social account
