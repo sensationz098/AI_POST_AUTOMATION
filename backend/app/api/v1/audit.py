@@ -15,5 +15,6 @@ def get_audit_logs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Retrieve system audit logs and action history."""
-    return audit_service.get_logs(db, limit=limit)
+    """Retrieve system audit logs and action history with strict user isolation."""
+    filter_user_id = None if current_user.role.lower() == "admin" else current_user.id
+    return audit_service.get_logs(db, limit=limit, user_id=filter_user_id)

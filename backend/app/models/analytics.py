@@ -1,7 +1,10 @@
 from sqlalchemy import Column, Integer, DateTime, ForeignKey, Float
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.database import Base
+
+def utc_now():
+    return datetime.now(timezone.utc)
 
 class PostAnalytics(Base):
     __tablename__ = "post_analytics"
@@ -16,6 +19,6 @@ class PostAnalytics(Base):
     impressions = Column(Integer, default=0)
     engagement_rate = Column(Float, default=0.0)
     follower_growth = Column(Integer, default=0)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     post = relationship("Post", back_populates="analytics")

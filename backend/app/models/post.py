@@ -1,8 +1,11 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, Enum
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, Enum, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 from app.core.database import Base
+
+def utc_now():
+    return datetime.now(timezone.utc)
 
 class PostStatus(str, enum.Enum):
     DRAFT = "DRAFT"
@@ -13,6 +16,11 @@ class PostStatus(str, enum.Enum):
 
 class Post(Base):
     __tablename__ = "posts"
+    __table_args__ = (
+        Index("idx_posts_user_status", "user_id", "status"),
+        Index("idx_posts_brand_status", "brand_id", "status"),
+        Index("idx_posts_scheduled", "scheduled_at", "status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=True)
@@ -37,11 +45,11 @@ class Post(Base):
     ig_container_id = Column(String(255), nullable=True)
     ig_media_id = Column(String(255), nullable=True)
     
-    brand_id = Column(Integer, ForeignKey("brand_profiles.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    brand_id = Column(Integer, ForeignKey("brand_profiles.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     brand = relationship("BrandProfile", back_populates="posts")
     author = relationship("User", back_populates="posts")

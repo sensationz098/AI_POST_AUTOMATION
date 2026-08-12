@@ -23,6 +23,15 @@ def create_post(
     """Create a draft post for approval or scheduling."""
     return post_service.create_post(db, current_user.id, post_in)
 
+@router.get("/", response_model=List[PostResponse])
+def get_user_posts(
+    status: Optional[str] = Query(None, description="Filter by status: DRAFT, APPROVED, SCHEDULED, PUBLISHED, FAILED"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieve all posts created by authenticated user."""
+    return post_service.get_user_posts(db, current_user.id, status)
+
 @router.get("/brand/{brand_id}", response_model=List[PostResponse])
 def get_brand_posts(
     brand_id: int,
@@ -92,6 +101,7 @@ def retry_failed(
 # 🚀 MULTI-ACCOUNT PUBLISHING ENDPOINTS 🚀
 
 @router.post("/publish-multi", response_model=PublishingBatchResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/multi-publish", response_model=PublishingBatchResponse, status_code=status.HTTP_201_CREATED)
 def publish_multi_account(
     request: MultiPublishRequest,
     db: Session = Depends(get_db),
@@ -149,12 +159,19 @@ def publish_multi_account(
     )
 
     # 4. Refresh & return complete PublishingBatchResponse
-    res_batch = publishing_repo.get_batch(db, batch.id)
+    db.expire_all()
+    res_batch = publishing_repo.update_batch_summary(db, batch.id)
+    if not res_batch:
+        res_batch = publishing_repo.get_batch(db, batch.id)
     
     # Update main Post status based on batch result
-    if res_batch.status in [BatchStatus.SUCCESS.value, BatchStatus.PARTIAL_SUCCESS.value]:
+    if res_batch.status in [BatchStatus.SUCCESS.value, BatchStatus.PARTIAL_SUCCESS.value] or res_batch.successful_targets > 0:
         post.status = "PUBLISHED"
         post.published_at = post.published_at or res_batch.completed_at
+        if res_batch.failed_targets > 0:
+            post.last_error = f"Published to {res_batch.successful_targets} of {res_batch.total_targets} target accounts."
+        else:
+            post.last_error = None
     else:
         post.status = "FAILED"
         post.last_error = f"Multi-account publishing failed on {res_batch.failed_targets} target accounts."

@@ -15,10 +15,13 @@ class PostRepository(BaseRepository[Post]):
         return query.order_by(Post.created_at.desc()).all()
 
     def get_due_scheduled_posts(self, db: Session, now: datetime) -> List[Post]:
-        return db.query(Post).filter(
+        query = db.query(Post).filter(
             Post.status == PostStatus.SCHEDULED.value,
             Post.scheduled_at <= now
-        ).all()
+        )
+        if db.bind and db.bind.dialect.name == "postgresql":
+            query = query.with_for_update(skip_locked=True)
+        return query.all()
 
     def get_failed_retryable_posts(self, db: Session) -> List[Post]:
         return db.query(Post).filter(

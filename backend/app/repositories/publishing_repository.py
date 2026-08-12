@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.models.publishing_batch import PublishingBatch, PublishingJob, BatchStatus, JobStatus
-from datetime import datetime
+from datetime import datetime, timezone
 
 class PublishingRepository:
     def create_batch(
@@ -75,8 +75,8 @@ class PublishingRepository:
             if error_message:
                 job.error_message = error_message
             if status == JobStatus.SUCCESS.value:
-                job.published_at = datetime.utcnow()
-            job.updated_at = datetime.utcnow()
+                job.published_at = datetime.now(timezone.utc)
+            job.updated_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(job)
         return job
@@ -94,17 +94,18 @@ class PublishingRepository:
         batch.successful_targets = success_count
         batch.failed_targets = failed_count
 
+        now_utc = datetime.now(timezone.utc)
         if processing_count > 0:
             batch.status = BatchStatus.PROCESSING.value
         elif success_count == len(jobs):
             batch.status = BatchStatus.SUCCESS.value
-            batch.completed_at = datetime.utcnow()
+            batch.completed_at = now_utc
         elif success_count > 0 and failed_count > 0:
             batch.status = BatchStatus.PARTIAL_SUCCESS.value
-            batch.completed_at = datetime.utcnow()
+            batch.completed_at = now_utc
         else:
             batch.status = BatchStatus.FAILED.value
-            batch.completed_at = datetime.utcnow()
+            batch.completed_at = now_utc
 
         db.commit()
         db.refresh(batch)

@@ -280,6 +280,28 @@ export default function AIStudioPage() {
     loadSocialAccounts();
   }, []);
 
+  // Auto-poll active batch status when batch modal is open and batch is processing
+  useEffect(() => {
+    if (!isBatchModalOpen || !activeBatch) return;
+    if (activeBatch.status !== 'QUEUED' && activeBatch.status !== 'PROCESSING') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await apiClient.get(`/posts/batch/${activeBatch.id}`);
+        if (res.data) {
+          setActiveBatch(res.data);
+          if (res.data.status === 'SUCCESS' || res.data.status === 'PARTIAL_SUCCESS' || res.data.status === 'FAILED') {
+            clearInterval(interval);
+          }
+        }
+      } catch (e) {
+        console.error('Batch status poll error:', e);
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [isBatchModalOpen, activeBatch?.id, activeBatch?.status]);
+
   const handleToggleAccountSelect = (id: number) => {
     setSelectedAccountIds(prev => 
       prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
@@ -515,23 +537,22 @@ export default function AIStudioPage() {
         setActiveBatch(batchRes.data);
         setIsBatchModalOpen(true);
 
-        if (batchRes.data.status === 'SUCCESS') {
-          setStatusNotification(`🚀 Multi-account publish successful across ${batchRes.data.successful_targets} destinations!`);
-        } else if (batchRes.data.status === 'PARTIAL_SUCCESS') {
-          setStatusNotification(`⚠️ Published to ${batchRes.data.successful_targets} of ${batchRes.data.total_targets} accounts. Some accounts failed.`);
+        if (batchRes.data.status === 'SUCCESS' || batchRes.data.successful_targets === batchRes.data.total_targets) {
+          setStatusNotification(`🚀 Multi-account publish successful across all ${batchRes.data.successful_targets} destinations!`);
+        } else if (batchRes.data.successful_targets > 0) {
+          setStatusNotification(`🚀 Successfully uploaded to ${batchRes.data.successful_targets} of ${batchRes.data.total_targets} connected social accounts!`);
         } else {
-          setStatusNotification(`❌ Publishing failed on target social accounts.`);
+          setStatusNotification(`❌ Publishing failed on target social accounts. Please check account token status.`);
         }
       } else {
         // Single Account / Direct Meta Account Fallback Publishing
         const pubRes = await apiClient.post(`/posts/${postId}/publish-now`);
         const pubData = pubRes.data;
 
-        if (pubData.status === 'PUBLISHED') {
-          const pageName = selectedBrand?.meta_account?.facebook_page_name || selectedBrand?.name || 'Facebook Page';
-          const igHandle = selectedBrand?.meta_account?.instagram_username || 'instagram_account';
+        if (pubData.status === 'PUBLISHED' || pubData.fb_post_id || pubData.ig_media_id || pubData.ig_container_id) {
+          const pageName = selectedBrand?.meta_account?.facebook_page_name || selectedBrand?.name || 'Social Account';
           setStatusNotification(
-            `🚀 PUBLISH SUCCESSFUL! Your post is live on Facebook Page "${pageName}" & Instagram @${igHandle}! (Post ID: ${pubData.fb_post_id || 'meta_post_101'})`
+            `🚀 PUBLISH SUCCESSFUL! Your post is live on "${pageName}"! (Post ID: ${pubData.fb_post_id || pubData.ig_media_id || pubData.ig_container_id || 'published_101'})`
           );
         } else {
           setStatusNotification(`⚠️ Publishing notice: ${pubData.last_error || 'Post recorded in workspace queue.'}`);

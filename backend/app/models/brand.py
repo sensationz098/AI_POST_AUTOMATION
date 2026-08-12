@@ -1,7 +1,10 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.database import Base
+
+def utc_now():
+    return datetime.now(timezone.utc)
 
 class BrandProfile(Base):
     __tablename__ = "brand_profiles"
@@ -14,9 +17,9 @@ class BrandProfile(Base):
     target_audience = Column(Text, nullable=True)
     cta_style = Column(String(255), default="Direct & Urgency-driven")
     industry = Column(String(255), nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     owner = relationship("User", back_populates="brands")
     posts = relationship("Post", back_populates="brand", cascade="all, delete-orphan")

@@ -104,7 +104,7 @@ export default function PostSchedulerPage() {
       } catch {}
 
       try {
-        const res = await apiClient.get('/posts/brand/1');
+        const res = await apiClient.get('/posts/');
         if (res.data && res.data.length > 0) {
           const combined = [...localQueue, ...res.data];
           const uniquePosts = Array.from(new Map(combined.map(p => [p.id, p])).values());

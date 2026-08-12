@@ -5,7 +5,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, status, Query, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -185,7 +185,7 @@ def connect_meta_account(
         "instagram_username": request.instagram_username,
         "logo_url": brand_logo_url,
         "is_connected": True,
-        "last_synced_at": datetime.utcnow()
+        "last_synced_at": datetime.now(timezone.utc)
     }
     meta_acc = brand_repo.create_or_update_meta(db, target_brand.id, data)
     return meta_acc
@@ -196,7 +196,14 @@ def get_meta_account(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get linked Meta account status for a brand."""
+    """Get linked Meta account status for a brand with strict ownership validation."""
+    brand = brand_repo.get(db, brand_id)
+    if not brand or brand.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Brand profile not found or access denied"
+        )
+
     meta = brand_repo.get_meta_account(db, brand_id)
     if not meta:
         return MetaAccountResponse(
@@ -208,6 +215,6 @@ def get_meta_account(
             instagram_username=None,
             is_connected=False,
             last_synced_at=None,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
     return meta
