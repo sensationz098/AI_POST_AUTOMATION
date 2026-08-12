@@ -27,7 +27,7 @@ def test_password_strength_validation(db_session):
 
 import uuid
 
-def test_registration_and_login_flow(db_session):
+def test_registration_and_login_flow(client):
     """Successful registration, login, and refresh token flow."""
     email = f"secure_{uuid.uuid4().hex[:8]}@test.com"
     reg_res = client.post("/api/v1/auth/register", json={
@@ -56,7 +56,7 @@ def test_registration_and_login_flow(db_session):
     assert ref_res.status_code == 200
     assert "access_token" in ref_res.json()
 
-def test_idor_user_isolation(db_session):
+def test_idor_user_isolation(client, db_session):
     """User A must NOT be able to access User B's brand profile or post."""
     # Register User A
     email_a = f"userA_{uuid.uuid4().hex[:8]}@test.com"

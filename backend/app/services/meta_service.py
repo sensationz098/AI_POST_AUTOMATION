@@ -24,6 +24,10 @@ class MetaGraphService:
         if not page_id or not access_token:
             raise Exception("Facebook Page ID and valid Access Token are required for publishing.")
 
+        if not access_token or access_token.startswith("sandbox") or access_token.startswith("mock") or page_id == "sandbox":
+            logger.info("Meta Graph API: Executing Sandbox Facebook Publish Simulation.")
+            return {"id": f"fb_post_mock_{abs(hash(message)) % 1000000}", "status": "published_sandbox"}
+
         try:
             # Determine if media is video
             is_video_media = is_video or (image_url and any(image_url.lower().endswith(ext) for ext in [".mp4", ".mov", ".webm", ".m4v"]))
@@ -78,7 +82,7 @@ class MetaGraphService:
     ) -> Dict[str, Any]:
         """
         Publish Photo or Video Reel to Instagram Business Account via 2-Step Container Graph API flow:
-        Step 1: Create IG Media Container (POST /{ig-user-id}/media with media_type=REELS for videos)
+        Step 1: Create IG Media Container (POST /{ig-user-id}/media)
         Step 2: Poll container status until FINISHED
         Step 3: Publish IG Media Container (POST /{ig-user-id}/media_publish)
         """
@@ -112,7 +116,7 @@ class MetaGraphService:
                     "access_token": access_token
                 }
 
-            container_res = requests.post(container_url, data=container_payload, timeout=20)
+            container_res = requests.post(container_url, data=container_payload, timeout=25)
             c_data = container_res.json()
             if container_res.status_code != 200:
                 err = c_data.get("error", {}).get("message", "IG Container Error")
@@ -120,28 +124,43 @@ class MetaGraphService:
 
             creation_id = c_data.get("id")
 
-            # For video reels, wait for container status to be FINISHED before publishing
-            if is_video_media:
-                import time
-                status_url = f"{self.BASE_URL}/{creation_id}"
-                for _ in range(12):
-                    time.sleep(2)
-                    st_res = requests.get(status_url, params={"fields": "status_code", "access_token": access_token}, timeout=10)
-                    st_data = st_res.json()
-                    status_code = st_data.get("status_code")
-                    if status_code == "FINISHED":
-                        break
-                    elif status_code == "ERROR":
-                        raise Exception("IG Reel container processing failed on Meta servers.")
+            # Step 2: Poll container status until FINISHED for BOTH photos and video reels
+            import time
+            status_url = f"{self.BASE_URL}/{creation_id}"
+            is_ready = False
+            for attempt in range(15):
+                st_res = requests.get(status_url, params={"fields": "status_code,status", "access_token": access_token}, timeout=10)
+                st_data = st_res.json()
+                status_code = st_data.get("status_code")
+                if status_code == "FINISHED":
+                    is_ready = True
+                    break
+                elif status_code in ["ERROR", "EXPIRED"]:
+                    err_details = st_data.get("status", "Unknown container processing error")
+                    raise Exception(f"IG Container processing failed on Meta servers ({status_code}): {err_details}")
+                time.sleep(2)
 
-            # Step 2 / 3: Publish Media Container
+            if not is_ready:
+                logger.warning(f"IG Container {creation_id} status poll timed out. Attempting publish.")
+
+            # Step 3: Publish Media Container
             publish_url = f"{self.BASE_URL}/{ig_user_id}/media_publish"
             publish_payload = {
                 "creation_id": creation_id,
                 "access_token": access_token
             }
-            pub_res = requests.post(publish_url, data=publish_payload, timeout=20)
+            pub_res = requests.post(publish_url, data=publish_payload, timeout=25)
             p_data = pub_res.json()
+
+            # Retry once if Meta returns "Media container is not ready" (Error code 9007 / 2454041)
+            if pub_res.status_code != 200:
+                err_msg = p_data.get("error", {}).get("message", "")
+                if "not ready" in err_msg.lower() or "9007" in str(p_data) or "2454041" in str(p_data):
+                    logger.info("IG Media Container not ready. Waiting 4 seconds before retrying publish...")
+                    time.sleep(4)
+                    pub_res = requests.post(publish_url, data=publish_payload, timeout=25)
+                    p_data = pub_res.json()
+
             if pub_res.status_code != 200:
                 err = p_data.get("error", {}).get("message", "IG Publish Error")
                 raise Exception(f"IG Media Publish Failed: {err}")

@@ -28,13 +28,17 @@ class Settings(BaseSettings):
     RATE_LIMIT_PUBLISH: str = "30 per minute"
     RATE_LIMIT_AI: str = "20 per minute"
     
-    # Database
+    # Database & Connection Pooling
     POSTGRES_SERVER: str = Field(default="localhost", env="POSTGRES_SERVER")
     POSTGRES_USER: str = Field(default="postgres", env="POSTGRES_USER")
     POSTGRES_PASSWORD: str = Field(default="postgres", env="POSTGRES_PASSWORD")
     POSTGRES_DB: str = Field(default="social_ai_db", env="POSTGRES_DB")
     POSTGRES_PORT: str = Field(default="5432", env="POSTGRES_PORT")
     DATABASE_URL: Optional[str] = Field(default=None, env="DATABASE_URL")
+    DB_POOL_SIZE: int = Field(default=10, env="DB_POOL_SIZE")
+    DB_MAX_OVERFLOW: int = Field(default=20, env="DB_MAX_OVERFLOW")
+    DB_POOL_TIMEOUT: int = Field(default=30, env="DB_POOL_TIMEOUT")
+    DB_POOL_RECYCLE: int = Field(default=1800, env="DB_POOL_RECYCLE")
     
     # Cache / Celery Redis
     REDIS_URL: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
@@ -85,6 +89,9 @@ class Settings(BaseSettings):
             return
 
         missing_fields = []
+        db_url = self.get_database_url()
+        if "sqlite" in db_url.lower():
+            missing_fields.append("DATABASE_URL (SQLite is strictly forbidden in production. Use PostgreSQL: postgresql+psycopg://...)")
         if not self.SECRET_KEY or "super-secret" in self.SECRET_KEY or len(self.SECRET_KEY) < 32:
             missing_fields.append("SECRET_KEY (must be a strong, unique secret of at least 32 characters)")
         if not self.TOKEN_ENCRYPTION_KEY or len(self.TOKEN_ENCRYPTION_KEY) < 32:

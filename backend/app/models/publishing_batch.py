@@ -1,8 +1,11 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 from app.core.database import Base
+
+def utc_now():
+    return datetime.now(timezone.utc)
 
 class BatchStatus(str, enum.Enum):
     QUEUED = "QUEUED"
@@ -20,6 +23,10 @@ class JobStatus(str, enum.Enum):
 
 class PublishingBatch(Base):
     __tablename__ = "publishing_batches"
+    __table_args__ = (
+        Index("idx_batches_user_status", "user_id", "status"),
+        Index("idx_batches_post", "post_id"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     post_id = Column(Integer, ForeignKey("posts.id"), nullable=False)
@@ -32,7 +39,7 @@ class PublishingBatch(Base):
     successful_targets = Column(Integer, default=0)
     failed_targets = Column(Integer, default=0)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     completed_at = Column(DateTime, nullable=True)
 
     post = relationship("Post")
@@ -41,6 +48,11 @@ class PublishingBatch(Base):
 
 class PublishingJob(Base):
     __tablename__ = "publishing_jobs"
+    __table_args__ = (
+        UniqueConstraint("batch_id", "social_account_id", name="uq_publishing_job_batch_social_account"),
+        Index("idx_jobs_batch_status", "batch_id", "status"),
+        Index("idx_jobs_account_status", "social_account_id", "status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     batch_id = Column(Integer, ForeignKey("publishing_batches.id"), nullable=False)
@@ -55,8 +67,8 @@ class PublishingJob(Base):
     
     attempts = Column(Integer, default=0)
     published_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     batch = relationship("PublishingBatch", back_populates="jobs")
     social_account = relationship("SocialAccount")

@@ -1,14 +1,22 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.database import Base
+
+def utc_now():
+    return datetime.now(timezone.utc)
 
 class SocialAccount(Base):
     __tablename__ = "social_accounts"
+    __table_args__ = (
+        UniqueConstraint("user_id", "platform", "account_id", name="uq_user_social_account"),
+        Index("idx_accounts_user_platform", "user_id", "platform"),
+        Index("idx_accounts_status", "status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    brand_id = Column(Integer, ForeignKey("brand_profiles.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    brand_id = Column(Integer, ForeignKey("brand_profiles.id"), nullable=True, index=True)
 
     platform = Column(String(50), nullable=False)  # "facebook" or "instagram"
     account_id = Column(String(255), nullable=False)  # Facebook Page ID or IG Business Account ID
@@ -22,8 +30,8 @@ class SocialAccount(Base):
     logo_url = Column(String(500), nullable=True)
     metadata_json = Column(JSON, default=dict)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     owner = relationship("User")
     brand = relationship("BrandProfile")

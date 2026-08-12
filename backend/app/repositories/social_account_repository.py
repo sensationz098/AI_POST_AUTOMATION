@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.models.social_account import SocialAccount
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.security_encryption import encrypt_token
 
@@ -51,7 +51,7 @@ class SocialAccountRepository:
             existing.logo_url = logo_url or existing.logo_url
             if metadata_json:
                 existing.metadata_json = metadata_json
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(existing)
             return existing
@@ -78,7 +78,7 @@ class SocialAccountRepository:
         acc = self.get_by_id(db, account_id)
         if acc:
             acc.status = status
-            acc.updated_at = datetime.utcnow()
+            acc.updated_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(acc)
         return acc
