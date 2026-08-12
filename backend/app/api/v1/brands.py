@@ -33,7 +33,7 @@ def get_brand(
     current_user: User = Depends(get_current_user)
 ):
     """Get specific brand profile details."""
-    return brand_service.get_brand(db, brand_id)
+    return brand_service.get_brand(db, brand_id, current_user.id)
 
 @router.put("/{brand_id}", response_model=BrandResponse)
 def update_brand(
@@ -43,7 +43,7 @@ def update_brand(
     current_user: User = Depends(get_current_user)
 ):
     """Update brand profile settings."""
-    return brand_service.update_brand(db, brand_id, brand_in)
+    return brand_service.update_brand(db, brand_id, current_user.id, brand_in)
 
 @router.delete("/{brand_id}")
 def delete_brand(
@@ -52,5 +52,5 @@ def delete_brand(
     current_user: User = Depends(get_current_user)
 ):
     """Delete a brand profile."""
-    brand_service.delete_brand(db, brand_id)
+    brand_service.delete_brand(db, brand_id, current_user.id)
     return {"message": "Brand deleted successfully"}

@@ -3,6 +3,8 @@ from typing import List, Optional
 from app.models.social_account import SocialAccount
 from datetime import datetime
 
+from app.core.security_encryption import encrypt_token
+
 class SocialAccountRepository:
     def get_by_id(self, db: Session, account_id: int) -> Optional[SocialAccount]:
         return db.query(SocialAccount).filter(SocialAccount.id == account_id).first()
@@ -37,10 +39,11 @@ class SocialAccountRepository:
         logo_url: Optional[str] = None,
         metadata_json: Optional[dict] = None
     ) -> SocialAccount:
+        encrypted_tok = encrypt_token(access_token)
         existing = self.get_by_account_id(db, user_id, platform, account_id)
         if existing:
             existing.account_name = account_name
-            existing.access_token = access_token
+            existing.access_token = encrypted_tok
             existing.brand_id = brand_id or existing.brand_id
             existing.token_type = token_type
             existing.expires_at = expires_at or existing.expires_at
@@ -59,7 +62,7 @@ class SocialAccountRepository:
             platform=platform,
             account_id=account_id,
             account_name=account_name,
-            access_token=access_token,
+            access_token=encrypted_tok,
             token_type=token_type,
             expires_at=expires_at,
             status="CONNECTED",

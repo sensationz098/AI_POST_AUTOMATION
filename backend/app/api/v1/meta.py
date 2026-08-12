@@ -17,18 +17,10 @@ from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.brand import BrandProfile
 
+from app.core.redis import set_oauth_state, pop_oauth_state
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/meta", tags=["Meta Graph Integration"])
-
-# In-memory OAuth state registry to prevent CSRF callback attacks
-# Maps state_token -> {"user_id": int, "expires_at": datetime}
-OAUTH_STATES: Dict[str, Dict[str, Any]] = {}
-
-def cleanup_expired_states():
-    now = datetime.utcnow()
-    expired = [s for s, data in OAUTH_STATES.items() if data["expires_at"] < now]
-    for s in expired:
-        OAUTH_STATES.pop(s, None)
 
 @router.get("/oauth/start")
 def start_meta_oauth(
@@ -37,15 +29,10 @@ def start_meta_oauth(
 ):
     """
     Generate Meta OAuth Authorization URL for Facebook Pages & Instagram Business accounts.
-    Includes cryptographically secure CSRF state token tied to current user session.
-    Redirects browser directly to Meta's authorization dialog when redirect=True.
+    Includes cryptographically secure CSRF state token tied to current user session in Redis.
     """
-    cleanup_expired_states()
     state_token = secrets.token_urlsafe(32)
-    OAUTH_STATES[state_token] = {
-        "user_id": current_user.id,
-        "expires_at": datetime.utcnow() + timedelta(minutes=15)
-    }
+    set_oauth_state(state_token, current_user.id, ttl_seconds=900)
 
     auth_url = meta_service.get_authorization_url(state_token)
     if redirect:
@@ -69,7 +56,6 @@ def meta_oauth_callback(
     Exchanges code for long-lived access token, discovers authorized Facebook Pages
     & linked Instagram accounts, and saves credentials securely in DB.
     """
-    cleanup_expired_states()
     frontend_base = settings.FRONTEND_URL.rstrip('/')
 
     # 1. Handle user cancellation or Meta authorization errors
@@ -78,13 +64,11 @@ def meta_oauth_callback(
         logger.warning(f"Meta OAuth Callback Error: {err_msg}")
         return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(err_msg)}")
 
-    # 2. Verify CSRF State
-    if not state or state not in OAUTH_STATES:
+    # 2. Verify CSRF State from Redis
+    user_id = pop_oauth_state(state) if state else None
+    if not user_id:
         logger.error("Meta OAuth Callback failed: Invalid or expired state token.")
         return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote('Invalid or expired OAuth state token. Please try again.')}")
-
-    state_data = OAUTH_STATES.pop(state)
-    user_id = state_data["user_id"]
 
     if not code:
         return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote('Missing authorization code from Meta.')}")
