@@ -27,7 +27,7 @@ class SocialAccount(Base):
     expires_at = Column(DateTime, nullable=True)
     
     status = Column(String(50), default="CONNECTED")  # "CONNECTED", "TOKEN_EXPIRED", "REVOKED"
-    logo_url = Column(String(500), nullable=True)
+    logo_url = Column(Text, nullable=True)
     metadata_json = Column(JSON, default=dict)
     
     created_at = Column(DateTime, default=utc_now)

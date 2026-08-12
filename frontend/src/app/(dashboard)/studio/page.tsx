@@ -164,8 +164,8 @@ export default function AIStudioPage() {
       if (!existing) {
         try {
           const res = await apiClient.post('/auth/login', {
-            email: 'admin@socialai.com',
-            password: 'admin123',
+            email: 'testadmin@socialai.com',
+            password: 'TestAdmin123!',
           });
           if (res.data?.access_token) {
             localStorage.setItem('social_ai_token', res.data.access_token);

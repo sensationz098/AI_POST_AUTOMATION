@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -12,9 +12,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login
 
 def get_current_user(
     db: Session = Depends(get_db),
-    token: Optional[str] = Depends(oauth2_scheme)
+    header_token: Optional[str] = Depends(oauth2_scheme),
+    token_param: Optional[str] = Query(None, alias="token")
 ) -> User:
-    """Strictly authenticate current user via JWT bearer token."""
+    """Strictly authenticate current user via JWT bearer token (header or query parameter)."""
+    token = header_token or token_param
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
