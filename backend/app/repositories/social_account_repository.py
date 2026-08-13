@@ -84,14 +84,58 @@ class SocialAccountRepository:
         return acc
 
     def delete(self, db: Session, account_id: int, user_id: int) -> bool:
+        # Search by DB id primary key or by string account_id
         acc = db.query(SocialAccount).filter(
-            SocialAccount.id == account_id,
-            SocialAccount.user_id == user_id
+            SocialAccount.user_id == user_id,
+            (SocialAccount.id == account_id) | (SocialAccount.account_id == str(account_id))
         ).first()
+
         if acc:
+            brand_id = acc.brand_id
+            # 1. Clean up referencing PublishingJobs to avoid IntegrityError (FK constraint)
+            from app.models.publishing_batch import PublishingJob
+            db.query(PublishingJob).filter(PublishingJob.social_account_id == acc.id).delete(synchronize_session=False)
+
+            # 2. Delete social account record
             db.delete(acc)
             db.commit()
+
+            # 3. Check if any remaining connected social accounts exist for this user/brand
+            remaining = db.query(SocialAccount).filter(SocialAccount.user_id == user_id).count()
+            if remaining == 0 and brand_id:
+                from app.models.meta_account import MetaAccount
+                meta = db.query(MetaAccount).filter(MetaAccount.brand_id == brand_id).first()
+                if meta:
+                    meta.is_connected = False
+                    db.commit()
             return True
         return False
 
+    def delete_all_for_user(self, db: Session, user_id: int) -> int:
+        accounts = db.query(SocialAccount).filter(SocialAccount.user_id == user_id).all()
+        if not accounts:
+            return 0
+        
+        acc_ids = [a.id for a in accounts]
+        brand_ids = set(a.brand_id for a in accounts if a.brand_id)
+
+        # 1. Clean up referencing PublishingJobs
+        from app.models.publishing_batch import PublishingJob
+        db.query(PublishingJob).filter(PublishingJob.social_account_id.in_(acc_ids)).delete(synchronize_session=False)
+
+        # 2. Delete all social accounts
+        count = db.query(SocialAccount).filter(SocialAccount.user_id == user_id).delete(synchronize_session=False)
+        db.commit()
+
+        # 3. Update MetaAccount records for user's brands
+        from app.models.meta_account import MetaAccount
+        from app.models.brand import BrandProfile
+        user_brand_ids = [b.id for b in db.query(BrandProfile.id).filter(BrandProfile.user_id == user_id).all()]
+        if user_brand_ids:
+            db.query(MetaAccount).filter(MetaAccount.brand_id.in_(user_brand_ids)).update({"is_connected": False}, synchronize_session=False)
+            db.commit()
+
+        return count
+
 social_account_repo = SocialAccountRepository()
+

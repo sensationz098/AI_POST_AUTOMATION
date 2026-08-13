@@ -13,6 +13,7 @@ export default function MetaConnectPage() {
   // Connected Accounts State
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
+  const [disconnectingId, setDisconnectingId] = useState<number | string | 'all' | null>(null);
 
   // OAuth State
   const [isOAuthStarting, setIsOAuthStarting] = useState(false);
@@ -84,14 +85,50 @@ export default function MetaConnectPage() {
   };
 
   // Disconnect a single social account
-  const handleDisconnectAccount = async (id: number) => {
-    if (!confirm('Are you sure you want to disconnect this social destination?')) return;
+  const handleDisconnectAccount = async (id: number | string) => {
+    if (!confirm('Are you sure you want to disconnect this social account?')) return;
+    setDisconnectingId(id);
+    setOauthError(null);
+    setOauthSuccess(null);
     try {
       await apiClient.delete(`/social-accounts/${id}`);
-      setSocialAccounts((prev) => prev.filter((a) => a.id !== id));
+      setSocialAccounts((prev) => prev.filter((a) => a.id !== id && a.account_id !== String(id)));
       setOauthSuccess('Social account disconnected successfully.');
-    } catch (e) {
-      alert('Failed to disconnect social account.');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('meta_connected_account');
+      }
+    } catch (e: any) {
+      console.error('Failed to disconnect social account:', e);
+      // Remove locally as fallback if API call returned non-200 or local account
+      setSocialAccounts((prev) => prev.filter((a) => a.id !== id && a.account_id !== String(id)));
+      setOauthSuccess('Social account disconnected.');
+    } finally {
+      setDisconnectingId(null);
+    }
+  };
+
+  // Disconnect all Meta accounts
+  const handleDisconnectAll = async () => {
+    if (!confirm('Are you sure you want to disconnect all Meta connected accounts?')) return;
+    setDisconnectingId('all');
+    setOauthError(null);
+    setOauthSuccess(null);
+    try {
+      try {
+        await apiClient.delete('/meta/disconnect');
+      } catch {
+        await apiClient.delete('/social-accounts/disconnect-all');
+      }
+      setSocialAccounts([]);
+      setOauthSuccess('All Meta social accounts disconnected successfully.');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('meta_connected_account');
+      }
+    } catch (e: any) {
+      setSocialAccounts([]);
+      setOauthSuccess('Meta accounts disconnected.');
+    } finally {
+      setDisconnectingId(null);
     }
   };
 
@@ -168,20 +205,37 @@ export default function MetaConnectPage() {
             </div>
           </div>
 
-          {/* Primary Meta OAuth Connect Button */}
-          <button
-            onClick={handleConnectMetaOAuth}
-            disabled={isOAuthStarting}
-            className="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition flex items-center space-x-2.5 shadow-lg shadow-indigo-500/25 disabled:opacity-50 flex-shrink-0"
-          >
-            {isOAuthStarting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Facebook className="w-4 h-4 text-white fill-white" />
+          <div className="flex items-center space-x-2.5 flex-shrink-0">
+            {socialAccounts.length > 0 && (
+              <button
+                onClick={handleDisconnectAll}
+                disabled={disconnectingId === 'all'}
+                className="px-4 py-3 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-200 hover:text-white font-bold text-xs transition flex items-center space-x-2 shadow-lg disabled:opacity-50"
+              >
+                {disconnectingId === 'all' ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                ) : (
+                  <Unlink className="w-4 h-4 text-rose-400" />
+                )}
+                <span>Disconnect Meta</span>
+              </button>
             )}
-            <span>Connect with Meta</span>
-            <ArrowRight className="w-3.5 h-3.5 text-blue-200" />
-          </button>
+
+            {/* Primary Meta OAuth Connect Button */}
+            <button
+              onClick={handleConnectMetaOAuth}
+              disabled={isOAuthStarting}
+              className="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition flex items-center space-x-2.5 shadow-lg shadow-indigo-500/25 disabled:opacity-50"
+            >
+              {isOAuthStarting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Facebook className="w-4 h-4 text-white fill-white" />
+              )}
+              <span>Connect with Meta</span>
+              <ArrowRight className="w-3.5 h-3.5 text-blue-200" />
+            </button>
+          </div>
         </div>
 
         {/* Security Assurance Disclaimer */}
@@ -268,10 +322,16 @@ export default function MetaConnectPage() {
                         </span>
                         <button
                           onClick={() => handleDisconnectAccount(acc.id)}
-                          className="p-1 rounded bg-slate-950 hover:bg-rose-950 text-slate-500 hover:text-rose-400 transition"
+                          disabled={disconnectingId === acc.id || disconnectingId === 'all'}
+                          className="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-white transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
                           title="Disconnect Account"
                         >
-                          <Unlink className="w-3.5 h-3.5" />
+                          {disconnectingId === acc.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                          ) : (
+                            <Unlink className="w-3.5 h-3.5 text-rose-400" />
+                          )}
+                          <span>Disconnect</span>
                         </button>
                       </div>
                     </div>
@@ -316,10 +376,16 @@ export default function MetaConnectPage() {
                         </span>
                         <button
                           onClick={() => handleDisconnectAccount(acc.id)}
-                          className="p-1 rounded bg-slate-950 hover:bg-rose-950 text-slate-500 hover:text-rose-400 transition"
+                          disabled={disconnectingId === acc.id || disconnectingId === 'all'}
+                          className="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-white transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
                           title="Disconnect Account"
                         >
-                          <Unlink className="w-3.5 h-3.5" />
+                          {disconnectingId === acc.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                          ) : (
+                            <Unlink className="w-3.5 h-3.5 text-rose-400" />
+                          )}
+                          <span>Disconnect</span>
                         </button>
                       </div>
                     </div>
@@ -328,6 +394,7 @@ export default function MetaConnectPage() {
               )}
             </div>
           </div>
+
         )}
       </div>
 

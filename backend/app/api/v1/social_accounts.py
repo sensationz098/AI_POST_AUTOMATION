@@ -57,17 +57,34 @@ def connect_social_account(
     )
     return account
 
-@router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-def disconnect_social_account(
-    account_id: int,
+@router.delete("/disconnect-all", status_code=status.HTTP_200_OK)
+@router.delete("/all", status_code=status.HTTP_200_OK)
+def disconnect_all_social_accounts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Disconnect and delete a connected social account."""
-    success = social_account_repo.delete(db, account_id, current_user.id)
+    """Disconnect and remove all connected social accounts for the user."""
+    count = social_account_repo.delete_all_for_user(db, current_user.id)
+    return {"message": f"Successfully disconnected {count} social account(s).", "count": count}
+
+@router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+def disconnect_social_account(
+    account_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Disconnect and delete a connected social account by ID (database ID or account_id string)."""
+    try:
+        # Convert numeric string to int if possible
+        parsed_id = int(account_id) if account_id.isdigit() else account_id
+    except Exception:
+        parsed_id = account_id
+
+    success = social_account_repo.delete(db, parsed_id, current_user.id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Social account not found or access denied"
         )
     return None
+

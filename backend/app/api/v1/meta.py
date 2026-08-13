@@ -218,3 +218,13 @@ def get_meta_account(
             created_at=datetime.now(timezone.utc)
         )
     return meta
+
+@router.delete("/disconnect", status_code=status.HTTP_200_OK)
+def disconnect_meta_accounts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Disconnect all Meta social accounts and deactivate Meta integration for current user."""
+    count = social_account_repo.delete_all_for_user(db, current_user.id)
+    return {"message": "Meta accounts disconnected successfully.", "count": count}
+
