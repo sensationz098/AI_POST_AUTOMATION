@@ -75,8 +75,8 @@ def disconnect_social_account(
 ):
     """Disconnect and delete a connected social account by ID (database ID or account_id string)."""
     try:
-        # Convert numeric string to int if possible
-        parsed_id = int(account_id) if account_id.isdigit() else account_id
+        # Convert numeric string to int only if within standard 32-bit integer bounds
+        parsed_id = int(account_id) if (account_id.isdigit() and int(account_id) <= 2147483647) else account_id
     except Exception:
         parsed_id = account_id
 

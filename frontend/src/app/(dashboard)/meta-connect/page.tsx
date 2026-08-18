@@ -99,9 +99,8 @@ export default function MetaConnectPage() {
       }
     } catch (e: any) {
       console.error('Failed to disconnect social account:', e);
-      // Remove locally as fallback if API call returned non-200 or local account
-      setSocialAccounts((prev) => prev.filter((a) => a.id !== id && a.account_id !== String(id)));
-      setOauthSuccess('Social account disconnected.');
+      const errMsg = e?.response?.data?.detail || 'Failed to disconnect social account. Please try again.';
+      setOauthError(errMsg);
     } finally {
       setDisconnectingId(null);
     }
@@ -125,8 +124,9 @@ export default function MetaConnectPage() {
         localStorage.removeItem('meta_connected_account');
       }
     } catch (e: any) {
-      setSocialAccounts([]);
-      setOauthSuccess('Meta accounts disconnected.');
+      console.error('Failed to disconnect all Meta accounts:', e);
+      const errMsg = e?.response?.data?.detail || 'Failed to disconnect Meta accounts. Please try again.';
+      setOauthError(errMsg);
     } finally {
       setDisconnectingId(null);
     }
