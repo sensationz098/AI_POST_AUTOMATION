@@ -298,9 +298,14 @@ class MetaGraphService:
             "client_id": settings.META_APP_ID or "YOUR_META_APP_ID",
             "redirect_uri": settings.META_OAUTH_REDIRECT_URI,
             "state": state,
-            "scope": "pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,business_management",
             "response_type": "code"
         }
+        if settings.META_CONFIG_ID:
+            params["config_id"] = settings.META_CONFIG_ID
+            params["override_default_response_type"] = "true"
+        else:
+            params["scope"] = "pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,business_management"
+
         return f"https://www.facebook.com/{settings.META_GRAPH_API_VERSION}/dialog/oauth?{urlencode(params)}"
 
     def exchange_code_for_user_token(self, code: str) -> str:
