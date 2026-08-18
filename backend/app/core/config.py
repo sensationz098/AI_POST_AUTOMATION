@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     META_OAUTH_REDIRECT_URI: str = Field(default="http://localhost:8000/api/v1/meta/oauth/callback", env="META_OAUTH_REDIRECT_URI")
     META_MOCK_MODE: bool = Field(default=False, env="META_MOCK_MODE")
     FRONTEND_URL: str = Field(default="http://localhost:3000", env="FRONTEND_URL")
+    META_CONFIG_ID: Optional[str] = Field(default=None, env="META_CONFIG_ID")
     
     # CORS
     BACKEND_CORS_ORIGINS: Union[List[str], str] = Field(
