@@ -83,6 +83,8 @@ export default function StudioPage() {
   }, []);
 
   const activeBrand = brands.find(b => String(b.id) === String(selectedBrandId)) || (brands[0] || null);
+  const fbAccount = socialAccounts.find(a => a.platform === 'facebook');
+  const igAccount = socialAccounts.find(a => a.platform === 'instagram');
 
   // Media File Upload Handler (Image & Video)
   const handleMediaFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -654,33 +656,67 @@ export default function StudioPage() {
                 <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-2">
                   Select Target Channels
                 </label>
-                <div className="flex items-center space-x-3">
-                  <label className="flex items-center space-x-2 cursor-pointer bg-[var(--bg-tertiary)] border border-[var(--border-color)] px-3 py-2 rounded-md">
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Facebook Target Channel Card */}
+                  <label
+                    className={`flex items-center space-x-2.5 cursor-pointer bg-[var(--bg-tertiary)] border px-3.5 py-2 rounded-md transition ${
+                      selectedPlatforms.includes('facebook')
+                        ? 'border-[#1877F2] bg-[#1877F2]/5'
+                        : 'border-[var(--border-color)]'
+                    }`}
+                  >
                     <input
                       type="checkbox"
                       checked={selectedPlatforms.includes('facebook')}
                       onChange={(e) => {
-                        if (e.target.checked) setSelectedPlatforms([...selectedPlatforms, 'facebook']);
-                        else setSelectedPlatforms(selectedPlatforms.filter(p => p !== 'facebook'));
+                        if (e.target.checked) {
+                          if (!selectedPlatforms.includes('facebook')) setSelectedPlatforms([...selectedPlatforms, 'facebook']);
+                        } else {
+                          setSelectedPlatforms(selectedPlatforms.filter(p => p !== 'facebook'));
+                        }
                       }}
-                      className="rounded accent-[var(--accent-color)]"
+                      className="rounded accent-[#1877F2]"
                     />
-                    <Facebook className="w-4 h-4 text-[#1877F2]" />
-                    <span className="font-semibold text-xs text-[var(--text-primary)]">Facebook Page</span>
+                    <Facebook className="w-4 h-4 text-[#1877F2] flex-shrink-0" />
+                    <div>
+                      <span className="font-semibold text-xs text-[var(--text-primary)] block">
+                        {fbAccount?.account_name || activeBrand?.meta_account?.facebook_page_name || activeBrand?.name || 'Facebook Page'}
+                      </span>
+                      <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase block">
+                        Facebook Page
+                      </span>
+                    </div>
                   </label>
 
-                  <label className="flex items-center space-x-2 cursor-pointer bg-[var(--bg-tertiary)] border border-[var(--border-color)] px-3 py-2 rounded-md">
+                  {/* Instagram Target Channel Card */}
+                  <label
+                    className={`flex items-center space-x-2.5 cursor-pointer bg-[var(--bg-tertiary)] border px-3.5 py-2 rounded-md transition ${
+                      selectedPlatforms.includes('instagram')
+                        ? 'border-[#E4405F] bg-[#E4405F]/5'
+                        : 'border-[var(--border-color)]'
+                    }`}
+                  >
                     <input
                       type="checkbox"
                       checked={selectedPlatforms.includes('instagram')}
                       onChange={(e) => {
-                        if (e.target.checked) setSelectedPlatforms([...selectedPlatforms, 'instagram']);
-                        else setSelectedPlatforms(selectedPlatforms.filter(p => p !== 'instagram'));
+                        if (e.target.checked) {
+                          if (!selectedPlatforms.includes('instagram')) setSelectedPlatforms([...selectedPlatforms, 'instagram']);
+                        } else {
+                          setSelectedPlatforms(selectedPlatforms.filter(p => p !== 'instagram'));
+                        }
                       }}
-                      className="rounded accent-[var(--accent-color)]"
+                      className="rounded accent-[#E4405F]"
                     />
-                    <Instagram className="w-4 h-4 text-[#E4405F]" />
-                    <span className="font-semibold text-xs text-[var(--text-primary)]">Instagram Business</span>
+                    <Instagram className="w-4 h-4 text-[#E4405F] flex-shrink-0" />
+                    <div>
+                      <span className="font-semibold text-xs text-[var(--text-primary)] block">
+                        {igAccount?.account_name || (activeBrand?.meta_account?.instagram_username ? `@${activeBrand.meta_account.instagram_username}` : (activeBrand?.name ? `@${activeBrand.name.toLowerCase().replace(/\s+/g, '_')}` : 'Instagram Account'))}
+                      </span>
+                      <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase block">
+                        Instagram Account
+                      </span>
+                    </div>
                   </label>
                 </div>
               </div>

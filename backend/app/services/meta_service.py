@@ -201,9 +201,9 @@ class MetaGraphService:
                 return {
                     "id": page_id,
                     "name": "Connected Facebook Page",
-                    "followers_count": 12500,
-                    "fan_count": 9800,
-                    "category": "Business Page",
+                    "followers_count": 0,
+                    "fan_count": 0,
+                    "category": "Facebook Page",
                     "picture_url": f"https://graph.facebook.com/v19.0/{page_id}/picture?type=large",
                     "link": f"https://facebook.com/{page_id}",
                     "is_sandbox": False

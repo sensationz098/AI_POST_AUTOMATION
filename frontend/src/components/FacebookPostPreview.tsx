@@ -96,7 +96,7 @@ export const FacebookPostPreview: React.FC<Props> = ({
         color: colors.textPrimary,
         borderColor: colors.cardBorder,
       }}
-      className="w-full max-w-lg rounded-lg border shadow-md overflow-hidden font-sans select-none transition-colors duration-200"
+      className="w-full rounded-lg border shadow-md overflow-hidden font-sans select-none transition-colors duration-200"
     >
       {/* FB Post Header */}
       <div className="p-3.5 flex items-center justify-between" style={{ backgroundColor: colors.cardBg }}>
