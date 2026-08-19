@@ -67,7 +67,7 @@ export default function PostSchedulerPage() {
 
   const handlePublishNowById = async (postId: number) => {
     try {
-      await apiClient.post(`/posts/${postId}/publish-now`);
+      await apiClient.post(`/posts/${postId}/publish-now`, {}, { timeout: 60000 });
     } catch (e) {
       // Local state update fallback
     }
