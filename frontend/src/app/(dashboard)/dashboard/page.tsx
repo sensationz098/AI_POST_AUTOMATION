@@ -11,7 +11,8 @@ import {
   RefreshCw,
   Plus,
   Filter,
-  Share2
+  Share2,
+  FileText
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -55,6 +56,7 @@ interface AccountInsight {
   followers_count: number;
   fan_count?: number;
   media_count?: number;
+  posts_count?: number;
   category?: string;
   status: string;
   link?: string;
@@ -115,20 +117,22 @@ export default function AnalyticsDashboardPage() {
     }
   };
 
-  const filteredAccounts = selectedAccountId === 'all'
+  const filteredAccounts: AccountInsight[] = selectedAccountId === 'all'
     ? (data?.accounts_list || socialAccounts.map(a => ({
         id: a.id,
         account_id: a.account_id,
         account_name: a.account_name,
-        platform: a.platform,
+        platform: a.platform as 'facebook' | 'instagram',
         logo_url: a.logo_url,
         followers_count: 0,
+        posts_count: 0,
         status: a.status,
       })))
     : (data?.accounts_list || []).filter(a => String(a.id) === selectedAccountId || a.account_id === selectedAccountId);
 
   const overview = data?.overview;
   const totalFollowersAll = filteredAccounts.reduce((acc, curr) => acc + (curr.followers_count || 0), 0);
+  const totalPostsAll = filteredAccounts.reduce((acc, curr) => acc + (curr.posts_count || curr.media_count || 0), 0);
 
   return (
     <div className="space-y-6 font-sans text-xs">
@@ -180,7 +184,92 @@ export default function AnalyticsDashboardPage() {
         </div>
       </div>
 
-      {/* Hero Metric Cards Grid */}
+      {/* TOP SECTION: Connected Social Channels Cards */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center space-x-2">
+            <Share2 className="w-4 h-4 text-[var(--accent-color)]" />
+            <span>Connected Social Channels ({filteredAccounts.length})</span>
+          </h2>
+          <Link href="/meta-connect" className="btn-tertiary text-xs">
+            Manage Channels →
+          </Link>
+        </div>
+
+        {filteredAccounts.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredAccounts.map((acc) => (
+              <div key={acc.id || acc.account_id} className="pub-card p-4 space-y-3">
+                {/* Account Top Row */}
+                <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <img
+                      src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
+                      alt={acc.account_name}
+                      className="w-10 h-10 rounded object-cover border border-[var(--border-color)] flex-shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-[var(--text-primary)] truncate flex items-center space-x-1.5">
+                        <span>{acc.account_name}</span>
+                        {acc.platform === 'facebook' ? (
+                          <Facebook className="w-3.5 h-3.5 text-[#1877F2] flex-shrink-0" />
+                        ) : (
+                          <Instagram className="w-3.5 h-3.5 text-[#E4405F] flex-shrink-0" />
+                        )}
+                      </h3>
+                      <span className="text-[10px] font-mono text-[var(--text-tertiary)] block truncate">
+                        ID: {acc.account_id}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--success-color)] text-[10px] font-mono font-medium border border-[var(--border-color)]">
+                    Active
+                  </span>
+                </div>
+
+                {/* Followers & Total Posts Stats Grid */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="bg-[var(--bg-tertiary)] p-2.5 rounded border border-[var(--border-color)] space-y-0.5">
+                    <span className="text-[10px] uppercase font-mono text-[var(--text-tertiary)] font-semibold flex items-center space-x-1">
+                      <Users className="w-3 h-3 text-[var(--accent-color)]" />
+                      <span>Followers</span>
+                    </span>
+                    <p className="text-sm font-bold text-[var(--text-primary)] tracking-tight">
+                      {(acc.followers_count || 0).toLocaleString()}
+                    </p>
+                  </div>
+
+                  <div className="bg-[var(--bg-tertiary)] p-2.5 rounded border border-[var(--border-color)] space-y-0.5">
+                    <span className="text-[10px] uppercase font-mono text-[var(--text-tertiary)] font-semibold flex items-center space-x-1">
+                      <FileText className="w-3 h-3 text-[var(--info-color)]" />
+                      <span>Total Posts</span>
+                    </span>
+                    <p className="text-sm font-bold text-[var(--text-primary)] tracking-tight">
+                      {(acc.posts_count || acc.media_count || 0).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="pub-card p-6 text-center space-y-3">
+            <Share2 className="w-8 h-8 text-[var(--text-tertiary)] mx-auto" />
+            <div>
+              <p className="font-semibold text-xs text-[var(--text-primary)]">No Meta Channels Connected</p>
+              <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                Connect your Facebook Page or Instagram Business account to sync followers & post metrics.
+              </p>
+            </div>
+            <Link href="/meta-connect" className="btn-primary text-xs py-2 px-4 inline-flex">
+              Connect Meta Channel
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Metric Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Total Reach */}
         <div className="pub-card p-5 space-y-2">
@@ -225,7 +314,7 @@ export default function AnalyticsDashboardPage() {
             <Layers className="w-4 h-4 text-[var(--accent-color)]" />
           </div>
           <h2 className="text-3xl font-bold text-[var(--text-primary)] tracking-tight">
-            {overview?.published_posts || 0}
+            {overview?.published_posts || totalPostsAll}
           </h2>
           <p className="text-xs text-[var(--text-tertiary)]">{overview?.scheduled_posts || 0} scheduled in queue</p>
         </div>
@@ -276,65 +365,6 @@ export default function AnalyticsDashboardPage() {
             <TrendingUp className="w-8 h-8 text-[var(--text-tertiary)] mb-2" />
             <p className="font-semibold text-xs text-[var(--text-primary)]">No trend data available yet</p>
             <p className="text-[11px] text-[var(--text-tertiary)] mt-1">Publish content via the Studio to start recording audience reach & impressions.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Connected Accounts Section */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center space-x-2">
-            <Share2 className="w-4 h-4 text-[var(--accent-color)]" />
-            <span>Connected Social Channels ({filteredAccounts.length})</span>
-          </h3>
-          <Link href="/meta-connect" className="btn-tertiary text-xs">
-            Manage Channels →
-          </Link>
-        </div>
-
-        {filteredAccounts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredAccounts.map((acc: any) => (
-              <div key={acc.id || acc.account_id} className="pub-card p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3 min-w-0">
-                    <img
-                      src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
-                      alt={acc.account_name}
-                      className="w-8 h-8 rounded object-cover border border-[var(--border-color)] flex-shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <h4 className="text-xs font-semibold text-[var(--text-primary)] truncate flex items-center space-x-1">
-                        <span>{acc.account_name}</span>
-                        {acc.platform === 'facebook' ? (
-                          <Facebook className="w-3.5 h-3.5 text-[#1877F2] flex-shrink-0" />
-                        ) : (
-                          <Instagram className="w-3.5 h-3.5 text-[#E4405F] flex-shrink-0" />
-                        )}
-                      </h4>
-                      <span className="text-[11px] font-mono text-[var(--text-tertiary)]">ID: {acc.account_id}</span>
-                    </div>
-                  </div>
-
-                  <span className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--success-color)] text-[10px] font-mono font-medium border border-[var(--border-color)]">
-                    Active
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="pub-card p-6 text-center space-y-3">
-            <Share2 className="w-8 h-8 text-[var(--text-tertiary)] mx-auto" />
-            <div>
-              <p className="font-semibold text-xs text-[var(--text-primary)]">No Meta Channels Connected</p>
-              <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-                Connect your Facebook Page or Instagram Business account to sync live audience metrics.
-              </p>
-            </div>
-            <Link href="/meta-connect" className="btn-primary text-xs py-2 px-4 inline-flex">
-              Connect Meta Channel
-            </Link>
           </div>
         )}
       </div>

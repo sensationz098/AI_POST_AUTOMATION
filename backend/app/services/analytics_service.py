@@ -11,6 +11,7 @@ from app.schemas.analytics import (
 )
 from app.services.meta_service import meta_service
 from app.models.meta_account import MetaAccount
+from app.models.post import Post
 
 from app.core.security_encryption import decrypt_token
 from fastapi import HTTPException, status
@@ -31,6 +32,11 @@ class AnalyticsService:
             "total_impressions": 0, "avg_engagement_rate": 0.0
         }
 
+        user_published_posts = db.query(Post).filter(
+            Post.user_id == user_id,
+            Post.status == "PUBLISHED"
+        ).count()
+
         accounts_list = []
         total_followers_combined = 0
         total_reach_combined = summary.get("total_reach", 0)
@@ -41,7 +47,7 @@ class AnalyticsService:
             token = decrypt_token(acc.access_token) or acc.access_token
             if acc.platform == "facebook":
                 fb_raw = meta_service.fetch_facebook_page_metrics(page_id=acc.account_id, access_token=token)
-                followers = fb_raw.get("followers_count", 0)
+                followers = fb_raw.get("followers_count", 0) or fb_raw.get("fan_count", 0)
                 total_followers_combined += followers
                 accounts_list.append({
                     "id": acc.id,
@@ -51,6 +57,8 @@ class AnalyticsService:
                     "logo_url": acc.logo_url,
                     "followers_count": followers,
                     "fan_count": fb_raw.get("fan_count", 0),
+                    "posts_count": fb_raw.get("media_count", user_published_posts),
+                    "media_count": fb_raw.get("media_count", user_published_posts),
                     "category": fb_raw.get("category", "Facebook Page"),
                     "status": acc.status,
                     "link": f"https://facebook.com/{acc.account_id}"
@@ -69,7 +77,8 @@ class AnalyticsService:
                     "platform": "instagram",
                     "logo_url": acc.logo_url,
                     "followers_count": followers,
-                    "media_count": ig_raw.get("media_count", 0),
+                    "posts_count": ig_raw.get("media_count", user_published_posts),
+                    "media_count": ig_raw.get("media_count", user_published_posts),
                     "status": acc.status,
                     "link": f"https://instagram.com/{acc.account_name.lstrip('@')}"
                 })
