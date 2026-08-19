@@ -234,11 +234,16 @@ export default function StudioPage() {
     try {
       const endpoint = isScheduled ? '/posts/schedule' : '/posts/publish-now';
       const res = await apiClient.post(endpoint, postPayload);
-      setPublishingMessage(
-        isScheduled
-          ? `✓ Post queued for scheduling on ${new Date(scheduledAt).toLocaleString()}`
-          : '✓ Post published successfully to Meta Graph API!'
-      );
+      
+      if (res.data?.status === 'FAILED' || res.data?.last_error) {
+        setErrorMessage(`Publishing Warning: ${res.data.last_error}`);
+      } else {
+        setPublishingMessage(
+          isScheduled
+            ? `✓ Post queued for scheduling on ${new Date(scheduledAt).toLocaleString()}`
+            : '✓ Post published successfully to Meta Graph API!'
+        );
+      }
     } catch (e: any) {
       console.warn('Backend post publish fallback:', e);
       try {
