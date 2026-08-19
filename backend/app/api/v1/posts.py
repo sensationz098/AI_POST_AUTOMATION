@@ -53,18 +53,28 @@ def get_brand_posts(
 @router.post("/publish-now/", response_model=PostResponse, include_in_schema=False)
 def publish_now_direct(
     post_in: PostCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Create post, initialize PublishingBatch and PublishingJobs for selected target accounts,
-    and trigger non-blocking asynchronous background publishing.
+    Create post, initialize PublishingBatch/Jobs for exact target SocialAccount IDs,
+    and execute synchronous multi-account parallel publishing with timing diagnostics.
     """
+    import time
+    from app.models.social_account import SocialAccount
+    from app.services.publisher_service import publishing_engine
+    from app.repositories.publishing_repository import publishing_repo
+    from app.models.publishing_batch import BatchStatus
+
+    t0 = time.time()
+    logger.info(f"⏱️ [PERF LOG] REQUEST RECEIVED at t=0ms for user_id={current_user.id}")
+
     try:
         target_ids = post_in.target_account_ids or post_in.social_account_ids
         new_post = post_service.create_post(db, current_user.id, post_in)
-        
+        t_created = (time.time() - t0) * 1000
+        logger.info(f"⏱️ [PERF LOG] POST CREATED (id={new_post.id}) at t={t_created:.1f}ms")
+
         batch = post_service.create_and_start_publish_batch(
             db=db,
             post=new_post,
@@ -72,14 +82,35 @@ def publish_now_direct(
             target_account_ids=target_ids
         )
 
-        background_tasks.add_task(
-            run_background_publish_batch,
+        # Retrieve exact selected target social accounts
+        target_accounts = db.query(SocialAccount).filter(
+            SocialAccount.user_id == current_user.id,
+            SocialAccount.id.in_(target_ids) if target_ids else True
+        ).all()
+
+        # Execute parallel batch publishing
+        publishing_engine.execute_batch(
+            db=db,
             batch_id=batch.id,
-            post_id=new_post.id,
-            user_id=current_user.id,
-            caption=new_post.caption,
-            raw_media_url=new_post.image_url
+            post_caption=new_post.caption,
+            raw_media_url=new_post.image_url,
+            accounts=target_accounts,
+            t0=t0
         )
+
+        # Update main Post status based on batch outcome
+        res_batch = publishing_repo.get_batch(db, batch.id)
+        if res_batch.status in [BatchStatus.SUCCESS.value, BatchStatus.PARTIAL_SUCCESS.value]:
+            new_post.status = "PUBLISHED"
+            new_post.published_at = datetime.now(timezone.utc)
+        else:
+            new_post.status = "FAILED"
+            new_post.last_error = f"Multi-account publishing failed on {res_batch.failed_targets} target accounts."
+        db.commit()
+        db.refresh(new_post)
+
+        t_end = (time.time() - t0) * 1000
+        logger.info(f"⏱️ [PERF LOG] RESPONSE SENT at t={t_end:.1f}ms (Total elapsed: {t_end:.1f}ms)")
 
         res = PostResponse.model_validate(new_post)
         res.batch_id = batch.id
