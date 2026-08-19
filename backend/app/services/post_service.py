@@ -26,6 +26,8 @@ class PostService:
         from app.models.brand import BrandProfile
         data = post_in.model_dump()
         data["user_id"] = user_id
+        data.pop("target_account_ids", None)
+        data.pop("social_account_ids", None)
 
         # Ensure brand exists and belongs to current user
         brand_id = data.get("brand_id", 1)
