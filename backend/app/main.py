@@ -53,11 +53,24 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Enforce production-safe restricted CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_origins=["*"] if settings.APP_ENV != "production" else settings.cors_origins,
+    allow_credentials=True if settings.APP_ENV == "production" else False,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Catch-all OPTIONS preflight handler to prevent 405 Method Not Allowed on browser preflight
+@app.options("/{path:path}")
+def options_preflight_handler(path: str):
+    return JSONResponse(
+        status_code=200,
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 # Static files route for local asset cache
 os.makedirs("uploads", exist_ok=True)
