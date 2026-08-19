@@ -19,7 +19,7 @@ export default function StudioPage() {
   const [brands, setBrands] = useState<BrandProfile[]>([]);
   const [selectedBrandId, setSelectedBrandId] = useState<number | string>('1');
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
-  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
+  const [selectedAccountIds, setSelectedAccountIds] = useState<number[]>([]);
 
   // Post Content state
   const [title, setTitle] = useState('');
@@ -73,7 +73,7 @@ export default function StudioPage() {
         const accsRes = await apiClient.get('/social-accounts/');
         if (Array.isArray(accsRes.data) && accsRes.data.length > 0) {
           setSocialAccounts(accsRes.data);
-          setSelectedAccountIds(accsRes.data.map(a => String(a.id)));
+          setSelectedAccountIds(accsRes.data.map(a => a.id));
         }
       } catch (e) {
         console.warn('Backend accounts query:', e);
@@ -225,7 +225,7 @@ export default function StudioPage() {
     setPublishingMessage(null);
     setErrorMessage(null);
 
-    const selectedAccounts = socialAccounts.filter(a => selectedAccountIds.includes(String(a.id)));
+    const selectedAccounts = socialAccounts.filter(a => selectedAccountIds.includes(a.id));
     const targetPlatforms = Array.from(new Set(selectedAccounts.map(a => a.platform)));
 
     const postPayload = {
@@ -238,8 +238,8 @@ export default function StudioPage() {
       image_prompt: topic || title || null,
       image_url: imageUrl || null,
       platforms: targetPlatforms.length > 0 ? targetPlatforms : ['facebook', 'instagram'],
-      target_account_ids: selectedAccountIds.map(Number),
-      social_account_ids: selectedAccountIds.map(Number),
+      target_account_ids: selectedAccountIds,
+      social_account_ids: selectedAccountIds,
       status: isScheduled ? 'SCHEDULED' : 'PUBLISHED',
       scheduled_at: isScheduled && scheduledAt ? new Date(scheduledAt).toISOString() : null,
     };
@@ -250,43 +250,20 @@ export default function StudioPage() {
         setPublishingMessage(`✓ Post queued for scheduling on ${new Date(scheduledAt).toLocaleString()}`);
         setIsPublishing(false);
       } else {
-        setPublishingMessage("Initiating publishing task across target channels...");
+        setPublishingMessage("Publishing across selected target accounts...");
         const res = await apiClient.post('/posts/publish-now', postPayload);
-        const batchId = res.data?.batch_id;
+        const postData = res.data;
 
-        if (batchId) {
-          setPublishingMessage(`Publishing in progress across ${selectedAccountIds.length} target account(s)...`);
-          const pollInterval = setInterval(async () => {
-            try {
-              const batchRes = await apiClient.get(`/posts/batch/${batchId}`);
-              const bData = batchRes.data;
-              if (bData) {
-                if (bData.status === 'PROCESSING' || bData.status === 'QUEUED') {
-                  setPublishingMessage(`Publishing in progress (${bData.successful_targets}/${bData.total_targets} completed)...`);
-                } else if (bData.status === 'SUCCESS') {
-                  clearInterval(pollInterval);
-                  setIsPublishing(false);
-                  setPublishingMessage(`✓ Post published successfully to all ${bData.total_targets} connected target account(s)!`);
-                } else if (bData.status === 'PARTIAL_SUCCESS') {
-                  clearInterval(pollInterval);
-                  setIsPublishing(false);
-                  setPublishingMessage(`✓ Published to ${bData.successful_targets}/${bData.total_targets} target account(s). Some accounts failed.`);
-                } else if (bData.status === 'FAILED') {
-                  clearInterval(pollInterval);
-                  setIsPublishing(false);
-                  const failedJobs = bData.jobs?.filter((j: any) => j.status === 'FAILED') || [];
-                  const firstErr = failedJobs[0]?.error_message || 'Target channels could not be reached.';
-                  setErrorMessage(`Publishing Failed: ${firstErr}`);
-                  setPublishingMessage(null);
-                }
-              }
-            } catch (err) {
-              console.warn('Batch status polling:', err);
-            }
-          }, 2500);
-        } else {
-          setPublishingMessage('✓ Post published successfully!');
+        if (postData?.status === 'PUBLISHED' || postData?.status === 'SUCCESS' || postData?.batch_id) {
           setIsPublishing(false);
+          setPublishingMessage(`✓ Post published successfully across ${selectedAccountIds.length} target account(s)!`);
+        } else if (postData?.last_error) {
+          setIsPublishing(false);
+          setErrorMessage(`Publishing Failed: ${postData.last_error}`);
+          setPublishingMessage(null);
+        } else {
+          setIsPublishing(false);
+          setPublishingMessage('✓ Post published successfully!');
         }
       }
     } catch (e: any) {
@@ -701,7 +678,7 @@ export default function StudioPage() {
                         </span>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {facebookAccounts.map((acc) => {
-                            const isSelected = selectedAccountIds.includes(String(acc.id));
+                            const isSelected = selectedAccountIds.includes(acc.id);
                             return (
                               <label
                                 key={acc.id}
@@ -716,9 +693,9 @@ export default function StudioPage() {
                                   checked={isSelected}
                                   onChange={(e) => {
                                     if (e.target.checked) {
-                                      setSelectedAccountIds((prev) => [...prev, String(acc.id)]);
+                                      setSelectedAccountIds((prev) => [...prev, acc.id]);
                                     } else {
-                                      setSelectedAccountIds((prev) => prev.filter((id) => id !== String(acc.id)));
+                                      setSelectedAccountIds((prev) => prev.filter((id) => id !== acc.id));
                                     }
                                   }}
                                   className="rounded accent-[#1877F2]"
@@ -750,7 +727,7 @@ export default function StudioPage() {
                         </span>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {instagramAccounts.map((acc) => {
-                            const isSelected = selectedAccountIds.includes(String(acc.id));
+                            const isSelected = selectedAccountIds.includes(acc.id);
                             return (
                               <label
                                 key={acc.id}
@@ -765,9 +742,9 @@ export default function StudioPage() {
                                   checked={isSelected}
                                   onChange={(e) => {
                                     if (e.target.checked) {
-                                      setSelectedAccountIds((prev) => [...prev, String(acc.id)]);
+                                      setSelectedAccountIds((prev) => [...prev, acc.id]);
                                     } else {
-                                      setSelectedAccountIds((prev) => prev.filter((id) => id !== String(acc.id)));
+                                      setSelectedAccountIds((prev) => prev.filter((id) => id !== acc.id));
                                     }
                                   }}
                                   className="rounded accent-[#E4405F]"

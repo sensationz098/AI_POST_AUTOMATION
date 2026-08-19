@@ -11,11 +11,10 @@ from app.repositories.publishing_repository import publishing_repo
 from app.repositories.social_account_repository import social_account_repo
 from app.services.meta_service import meta_service
 from app.services.post_service import upload_base64_to_public_https
-
-logger = logging.getLogger(__name__)
-
 from app.core.database import SessionLocal
 from app.core.security_encryption import decrypt_token
+
+logger = logging.getLogger(__name__)
 
 def classify_error(err_str: str) -> tuple[str, str]:
     """Classify technical exceptions into human-readable error codes and messages."""
@@ -79,9 +78,10 @@ class PublishingEngine:
         social_account_id: int,
         caption: str,
         public_media_url: Optional[str],
-        is_video: bool
+        is_video: bool,
+        t0: float
     ) -> Dict[str, Any]:
-        """Execute job in a dedicated thread-local database session."""
+        """Execute job in a dedicated thread-local database session with timing logs."""
         thread_db = SessionLocal()
         try:
             acc = social_account_repo.get_by_id(thread_db, social_account_id)
@@ -96,6 +96,10 @@ class PublishingEngine:
                 publishing_repo.update_job_status(thread_db, job_id, JobStatus.FAILED.value, error_code=code, error_message=msg)
                 return {"job_id": job_id, "status": "FAILED", "error": msg}
 
+            t_pub_start = (time.time() - t0) * 1000
+            platform_name = acc.platform.upper()
+            logger.info(f"⏱️ [PERF LOG] {platform_name} PUBLISH STARTED for target account '{acc.account_name}' (DB ID: {acc.id}, Account ID: {acc.account_id}) at t={t_pub_start:.1f}ms")
+
             try:
                 if acc.platform == "facebook":
                     ext_id = self.fb_publisher.publish(acc, caption, public_media_url, is_video)
@@ -104,11 +108,16 @@ class PublishingEngine:
                 else:
                     raise Exception(f"Unsupported platform: {acc.platform}")
 
+                t_pub_end = (time.time() - t0) * 1000
+                logger.info(f"⏱️ [PERF LOG] {platform_name} PUBLISH COMPLETED for '{acc.account_name}' at t={t_pub_end:.1f}ms (Duration: {t_pub_end - t_pub_start:.1f}ms)")
+
                 publishing_repo.update_job_status(thread_db, job_id, JobStatus.SUCCESS.value, external_post_id=ext_id)
                 return {"job_id": job_id, "status": "SUCCESS", "external_id": ext_id}
             except Exception as e:
                 err_str = str(e)
                 code, msg = classify_error(err_str)
+                t_pub_err = (time.time() - t0) * 1000
+                logger.error(f"⏱️ [PERF LOG] {platform_name} PUBLISH FAILED for '{acc.account_name}' at t={t_pub_err:.1f}ms: {msg}")
                 if code == "TOKEN_EXPIRED":
                     social_account_repo.mark_status(thread_db, acc.id, "TOKEN_EXPIRED")
                 publishing_repo.update_job_status(thread_db, job_id, JobStatus.FAILED.value, error_code=code, error_message=msg)
@@ -116,42 +125,35 @@ class PublishingEngine:
         finally:
             thread_db.close()
 
-    def process_single_job(
-        self,
-        db: Session,
-        job_id: int,
-        account: SocialAccount,
-        caption: str,
-        public_media_url: Optional[str],
-        is_video: bool
-    ) -> Dict[str, Any]:
-        """Execute a single publishing job synchronously."""
-        return self.process_single_job_in_thread(
-            job_id=job_id,
-            social_account_id=account.id,
-            caption=caption,
-            public_media_url=public_media_url,
-            is_video=is_video
-        )
-
     def execute_batch(
         self,
         db: Session,
         batch_id: int,
         post_caption: str,
         raw_media_url: Optional[str],
-        accounts: List[SocialAccount]
+        accounts: List[SocialAccount],
+        t0: Optional[float] = None
     ) -> Dict[str, Any]:
-        """Execute multi-account batch publishing concurrently with thread-isolated DB sessions."""
+        """Execute multi-account batch publishing concurrently with thread-isolated DB sessions & timing logs."""
+        if t0 is None:
+            t0 = time.time()
+
         batch = publishing_repo.get_batch(db, batch_id)
         if not batch:
             raise Exception(f"PublishingBatch ID={batch_id} not found.")
 
         publishing_repo.update_batch_summary(db, batch_id)
 
+        # Stage: Media Processing
+        t_media_start = (time.time() - t0) * 1000
+        logger.info(f"⏱️ [PERF LOG] MEDIA PROCESSING STARTED at t={t_media_start:.1f}ms")
+
         public_media_url = raw_media_url
         if raw_media_url and (raw_media_url.startswith("data:") or raw_media_url.startswith("blob:")):
             public_media_url = upload_base64_to_public_https(raw_media_url) or raw_media_url
+
+        t_media_done = (time.time() - t0) * 1000
+        logger.info(f"⏱️ [PERF LOG] MEDIA PROCESSING COMPLETED at t={t_media_done:.1f}ms (Duration: {t_media_done - t_media_start:.1f}ms)")
 
         raw_url_lower = (raw_media_url or "").lower()
         pub_url_lower = (public_media_url or "").lower()
@@ -174,7 +176,7 @@ class PublishingEngine:
                 if acc:
                     future = executor.submit(
                         self.process_single_job_in_thread,
-                        job.id, acc.id, post_caption, public_media_url, is_video
+                        job.id, acc.id, post_caption, public_media_url, is_video, t0
                     )
                     future_to_job[future] = job.id
 
@@ -194,3 +196,4 @@ class PublishingEngine:
         }
 
 publishing_engine = PublishingEngine()
+
