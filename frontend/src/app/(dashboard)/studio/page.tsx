@@ -243,10 +243,12 @@ export default function StudioPage() {
     };
 
     try {
+      setPublishingMessage("Publishing to social platforms, please wait...");
       const endpoint = isScheduled ? '/posts/schedule' : '/posts/publish-now';
-      const res = await apiClient.post(endpoint, postPayload);
+      const res = await apiClient.post(endpoint, postPayload, { timeout: 60000 });
       
       if (res.data?.status === 'FAILED' || res.data?.last_error) {
+        setPublishingMessage(null);
         setErrorMessage(`Publishing Warning: ${res.data.last_error}`);
       } else {
         setPublishingMessage(
@@ -256,6 +258,7 @@ export default function StudioPage() {
         );
       }
     } catch (e: any) {
+      setPublishingMessage(null);
       console.error('Backend post publish error:', e);
       const detail = e.response?.data?.detail || e.message || 'Failed to publish post. Please check your connected Meta channel & token permissions.';
       setErrorMessage(`Publishing Error: ${detail}`);

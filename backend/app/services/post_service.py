@@ -159,10 +159,7 @@ class PostService:
         post = post_repo.get(db, post_id)
         if not post:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
-        if user_id and post.user_id != user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-
-        # Fetch Meta account owned ONLY by current post user
+        post = self.get_post(db, post_id, user_id)
         meta_acc = brand_repo.get_meta_account(db, post.brand_id)
         if meta_acc and meta_acc.brand and meta_acc.brand.user_id != post.user_id:
             meta_acc = None
@@ -194,6 +191,7 @@ class PostService:
         ig_user_id = ig_acc.account_id if ig_acc else (meta_acc.instagram_account_id if meta_acc else "sandbox")
 
         # Resolve public HTTPS media URL via Cloudinary
+        logger.info("Media processing started")
         public_image_url = post.image_url
         if public_image_url:
             logger.info(f"Received image value prefix: {str(public_image_url)[:100]}")
@@ -201,6 +199,7 @@ class PostService:
                 uploaded_url = upload_base64_to_public_https(public_image_url)
                 if uploaded_url and (uploaded_url.startswith("http://") or uploaded_url.startswith("https://")):
                     public_image_url = uploaded_url
+        logger.info("Cloudinary upload completed")
 
         formatted_caption = f"{post.caption}\n\n{' '.join(post.hashtags or [])}\n\n{post.cta or ''}".strip()
         errors = []
@@ -223,6 +222,7 @@ class PostService:
 
         # 1. Publish to Facebook
         if "facebook" in (post.platforms or ["facebook"]):
+            logger.info("Facebook publishing started")
             if fb_acc or (meta_acc and meta_acc.facebook_page_id):
                 try:
                     res = meta_service.publish_to_facebook_page(
@@ -236,17 +236,21 @@ class PostService:
                     successful_publish = True
                     if res.get("status") == "published_sandbox":
                         is_sandbox_fb = True
+                    logger.info("Facebook publishing completed")
                 except Exception as e:
                     errors.append(f"FB Publish Error: {str(e)}")
+                    logger.error(f"Facebook publishing failed: {e}")
             else:
                 errors.append("FB Publish Notice: No connected Facebook Page account found.")
 
         # 2. Publish to Instagram
         if "instagram" in (post.platforms or ["instagram"]):
+            logger.info("Instagram publishing started")
             if ig_acc or (meta_acc and meta_acc.instagram_account_id):
                 try:
                     if not valid_media_url:
                         errors.append("IG Publish Error: A valid photo/video file or public URL is required for Instagram publishing.")
+                        logger.error("Instagram publishing failed: Missing valid media URL")
                     else:
                         res = meta_service.publish_to_instagram_business(
                             ig_user_id=ig_user_id,
@@ -260,10 +264,14 @@ class PostService:
                         successful_publish = True
                         if res.get("status") == "published_sandbox":
                             is_sandbox_ig = True
+                        logger.info("Instagram publishing completed")
                 except Exception as e:
                     errors.append(f"IG Publish Error: {str(e)}")
+                    logger.error(f"Instagram publishing failed: {e}")
             else:
                 errors.append("IG Publish Notice: No connected Instagram Business account found.")
+
+        logger.info("Publishing completed")
 
         if not successful_publish:
             post.retry_count += 1
