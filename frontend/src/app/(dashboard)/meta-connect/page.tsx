@@ -30,9 +30,7 @@ export default function MetaConnectPage() {
     try {
       const res = await apiClient.get('/social-accounts/');
       if (Array.isArray(res.data)) {
-        const fakeIds = new Set(['109823471029', '17841400928371', '17841400928372', '17841400928373', '109823471030', 'sandbox']);
-        const realAccounts = res.data.filter(a => !fakeIds.has(a.account_id) && !a.account_name?.includes('Apex Innovations Page'));
-        setSocialAccounts(realAccounts);
+        setSocialAccounts(res.data);
       }
     } catch (e) {
       console.error('Failed to load social accounts:', e);
