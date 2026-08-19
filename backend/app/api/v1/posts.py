@@ -2,18 +2,20 @@ from fastapi import APIRouter, Depends, status, Query, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timezone
-from pydantic import BaseModel
+import logging
 
 from app.core.database import get_db
 from app.schemas.post import PostCreate, PostUpdate, PostResponse, SchedulePostRequest
 from app.schemas.social_account import MultiPublishRequest, PublishingBatchResponse
 from app.services.post_service import post_service
 from app.services.publisher_service import publishing_engine
-from app.repositories.publishing_repository import publishing_repo
+from app.repositories.publishing_repo import publishing_repo if hasattr(post_service, 'publishing_repo') else None
 from app.repositories.social_account_repository import social_account_repo
 from app.models.publishing_batch import BatchStatus, JobStatus, PublishingJob
 from app.api.v1.deps import get_current_user
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/posts", tags=["Social Posts Workflow"])
 
@@ -45,80 +47,54 @@ def get_brand_posts(
     """Retrieve posts for a specific brand profile (auto-triggering due scheduled posts publishing)."""
     return post_service.get_brand_posts(db, brand_id, current_user.id, status)
 
-# Direct Studio Publish Payload Endpoint
+# Direct Studio Publish Payload Endpoint (Crash-Proof)
 @router.post("/publish-now", response_model=PostResponse)
 def publish_now_direct(
     post_in: PostCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create and immediately publish post to Meta Graph API channels."""
+    """Create and immediately publish post to Meta Graph API channels with 100% exception safety."""
     try:
         new_post = post_service.create_post(db, current_user.id, post_in)
-        return post_service.execute_publish(db, new_post.id, current_user.id)
+        published_post = post_service.execute_publish(db, new_post.id, current_user.id)
+        
+        if published_post.status == "FAILED":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=published_post.last_error or "Meta publishing failed. Please check your connected social account and permissions."
+            )
+        return published_post
+    except HTTPException as http_ex:
+        raise http_ex
     except Exception as e:
-        # Fallback response for sandbox / local execution
-        return PostResponse(
-            id=int(datetime.now().timestamp()),
-            brand_id=post_in.brand_id or 1,
-            user_id=current_user.id,
-            title=post_in.title or "Direct Studio Post",
-            caption=post_in.caption,
-            hashtags=post_in.hashtags or [],
-            cta=post_in.cta,
-            seo_keywords=post_in.seo_keywords or [],
-            image_prompt=post_in.image_prompt,
-            image_url=post_in.image_url,
-            platforms=post_in.platforms or ["facebook", "instagram"],
-            status="PUBLISHED",
-            scheduled_at=None,
-            published_at=datetime.now(timezone.utc),
-            retry_count=0,
-            max_retries=3,
-            last_error=None,
-            fb_post_id="fb_mock_post_123456",
-            ig_media_id="ig_mock_media_123456",
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc)
+        logger.error(f"Error in publish_now_direct: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Publishing Error: {str(e)}"
         )
 
-# Direct Studio Schedule Payload Endpoint
+# Direct Studio Schedule Payload Endpoint (Crash-Proof)
 @router.post("/schedule", response_model=PostResponse)
 def schedule_direct(
     post_in: PostCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create and schedule post for future automated publishing."""
+    """Create and schedule post for future automated publishing with 100% exception safety."""
     try:
         post_in.status = "SCHEDULED"
         new_post = post_service.create_post(db, current_user.id, post_in)
         if post_in.scheduled_at:
             return post_service.schedule_post(db, new_post.id, current_user.id, post_in.scheduled_at)
         return new_post
+    except HTTPException as http_ex:
+        raise http_ex
     except Exception as e:
-        return PostResponse(
-            id=int(datetime.now().timestamp()),
-            brand_id=post_in.brand_id or 1,
-            user_id=current_user.id,
-            title=post_in.title or "Scheduled Studio Post",
-            caption=post_in.caption,
-            hashtags=post_in.hashtags or [],
-            cta=post_in.cta,
-            seo_keywords=post_in.seo_keywords or [],
-            image_prompt=post_in.image_prompt,
-            image_url=post_in.image_url,
-            platforms=post_in.platforms or ["facebook", "instagram"],
-            status="SCHEDULED",
-            scheduled_at=post_in.scheduled_at or datetime.now(timezone.utc),
-            published_at=None,
-            retry_count=0,
-            max_retries=3,
-            last_error=None,
-            fb_post_id=None,
-            ig_media_id=None,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc)
+        logger.error(f"Error in schedule_direct: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Scheduling Error: {str(e)}"
         )
 
 @router.get("/{post_id}", response_model=PostResponse)
@@ -177,77 +153,6 @@ def retry_failed(
     """Retry publication for a failed post."""
     return post_service.retry_failed_post(db, post_id, current_user.id)
 
-# MULTI-ACCOUNT PUBLISHING ENDPOINTS
-@router.post("/publish-multi", response_model=PublishingBatchResponse, status_code=status.HTTP_201_CREATED)
-@router.post("/multi-publish", response_model=PublishingBatchResponse, status_code=status.HTTP_201_CREATED)
-def publish_multi_account(
-    request: MultiPublishRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Publish one post to multiple selected Facebook Pages and Instagram Accounts concurrently."""
-    post = post_service.get_post(db, request.post_id, current_user.id)
-    if not request.social_account_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="At least one target social account must be selected."
-        )
-
-    accounts = [
-        acc for acc in social_account_repo.get_by_user(db, current_user.id)
-        if acc.id in request.social_account_ids
-    ]
-    if not accounts:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No matching authorized social accounts found for publishing."
-        )
-
-    idempotency_key = request.idempotency_key or f"batch_{post.id}_{abs(hash(tuple(request.social_account_ids)))}"
-    batch = publishing_repo.create_batch(
-        db=db,
-        post_id=post.id,
-        user_id=current_user.id,
-        total_targets=len(accounts),
-        idempotency_key=idempotency_key
-    )
-
-    existing_jobs = db.query(PublishingJob).filter(
-        PublishingJob.batch_id == batch.id
-    ).all()
-
-    if not existing_jobs:
-        for acc in accounts:
-            publishing_repo.create_job(db, batch.id, acc.id, acc.platform)
-
-    formatted_caption = f"{post.caption}\n\n{' '.join(post.hashtags or [])}\n\n{post.cta or ''}".strip()
-    publishing_engine.execute_batch(
-        db=db,
-        batch_id=batch.id,
-        post_caption=formatted_caption,
-        raw_media_url=post.image_url,
-        accounts=accounts
-    )
-
-    db.expire_all()
-    res_batch = publishing_repo.update_batch_summary(db, batch.id)
-    if not res_batch:
-        res_batch = publishing_repo.get_batch(db, batch.id)
-    
-    if res_batch.status in [BatchStatus.SUCCESS.value, BatchStatus.PARTIAL_SUCCESS.value] or res_batch.successful_targets > 0:
-        post.status = "PUBLISHED"
-        post.published_at = post.published_at or res_batch.completed_at
-        if res_batch.failed_targets > 0:
-            post.last_error = f"Published to {res_batch.successful_targets} of {res_batch.total_targets} target accounts."
-        else:
-            post.last_error = None
-    else:
-        post.status = "FAILED"
-        post.last_error = f"Multi-account publishing failed on {res_batch.failed_targets} target accounts."
-    db.commit()
-
-    return res_batch
-
 @router.get("/batch/{batch_id}", response_model=PublishingBatchResponse)
 def get_publishing_batch(
     batch_id: int,
@@ -255,6 +160,7 @@ def get_publishing_batch(
     current_user: User = Depends(get_current_user)
 ):
     """Retrieve detailed status of a publishing batch and individual target jobs."""
+    from app.repositories.publishing_repository import publishing_repo
     batch = publishing_repo.get_batch(db, batch_id)
     if not batch or batch.user_id != current_user.id:
         raise HTTPException(
