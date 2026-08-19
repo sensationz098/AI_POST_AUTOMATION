@@ -195,8 +195,12 @@ class PostService:
 
         # Resolve public HTTPS media URL via Cloudinary
         public_image_url = post.image_url
-        if public_image_url and (public_image_url.startswith("data:") or public_image_url.startswith("blob:")):
-            public_image_url = upload_base64_to_public_https(public_image_url) or public_image_url
+        if public_image_url:
+            logger.info(f"Received image value prefix: {str(public_image_url)[:100]}")
+            if public_image_url.startswith("data:") or public_image_url.startswith("blob:") or not (public_image_url.startswith("http://") or public_image_url.startswith("https://")):
+                uploaded_url = upload_base64_to_public_https(public_image_url)
+                if uploaded_url and (uploaded_url.startswith("http://") or uploaded_url.startswith("https://")):
+                    public_image_url = uploaded_url
 
         formatted_caption = f"{post.caption}\n\n{' '.join(post.hashtags or [])}\n\n{post.cta or ''}".strip()
         errors = []
@@ -214,6 +218,9 @@ class PostService:
         is_sandbox_fb = False
         is_sandbox_ig = False
 
+        # Validate that media URL is a valid public HTTP/HTTPS URL before attempting Graph API calls
+        valid_media_url = public_image_url if (public_image_url and (public_image_url.startswith("http://") or public_image_url.startswith("https://"))) else None
+
         # 1. Publish to Facebook
         if "facebook" in (post.platforms or ["facebook"]):
             if fb_acc or (meta_acc and meta_acc.facebook_page_id):
@@ -222,7 +229,7 @@ class PostService:
                         page_id=fb_page_id,
                         access_token=fb_token or "sandbox_token",
                         message=formatted_caption,
-                        image_url=public_image_url or post.image_url,
+                        image_url=valid_media_url,
                         is_video=is_video
                     )
                     post.fb_post_id = res.get("id")
@@ -238,15 +245,14 @@ class PostService:
         if "instagram" in (post.platforms or ["instagram"]):
             if ig_acc or (meta_acc and meta_acc.instagram_account_id):
                 try:
-                    ig_url = public_image_url
-                    if not ig_url or ig_url.startswith("data:") or ig_url.startswith("blob:"):
+                    if not valid_media_url:
                         errors.append("IG Publish Error: A valid photo/video file or public URL is required for Instagram publishing.")
                     else:
                         res = meta_service.publish_to_instagram_business(
                             ig_user_id=ig_user_id,
                             access_token=ig_token or "sandbox_token",
                             caption=formatted_caption,
-                            image_url=ig_url,
+                            image_url=valid_media_url,
                             is_video=is_video
                         )
                         post.ig_container_id = res.get("container_id")

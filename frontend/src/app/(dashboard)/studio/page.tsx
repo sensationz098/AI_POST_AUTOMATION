@@ -93,8 +93,15 @@ export default function StudioPage() {
       setMediaFile(file);
       const isVid = file.type.startsWith('video/');
       setMediaType(isVid ? 'video' : 'image');
-      const url = URL.createObjectURL(file);
-      setImageUrl(url);
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Data = reader.result as string;
+        console.log("MEDIA TYPE:", typeof base64Data);
+        console.log("MEDIA PREFIX:", typeof base64Data === "string" ? base64Data.substring(0, 100) : base64Data);
+        setImageUrl(base64Data);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -217,6 +224,9 @@ export default function StudioPage() {
     setIsPublishing(true);
     setPublishingMessage(null);
     setErrorMessage(null);
+
+    console.log("MEDIA TYPE:", typeof imageUrl);
+    console.log("MEDIA PREFIX:", typeof imageUrl === "string" ? imageUrl.substring(0, 100) : imageUrl);
 
     const postPayload = {
       brand_id: Number(selectedBrandId) || 1,
