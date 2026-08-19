@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 import { ThemeProvider } from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
-  title: 'SocialAI Pro - Facebook & Instagram AI Automation Platform',
-  description: 'Production-Ready AI Content Generation & Social Media Automation Platform for Facebook & Instagram Meta Graph API.',
+  title: 'Sensationz – Professional Social Media Automation & AI Publishing Platform',
+  description: 'Editorial-grade AI content generation and multi-destination social media automation platform for Facebook & Instagram.',
 };
 
 export default function RootLayout({
@@ -17,11 +17,15 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
       </head>
-      <body className="bg-[#090D16] text-slate-100 min-h-screen antialiased">
+      <body className="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen antialiased font-sans selection:bg-[var(--accent-color)] selection:text-white transition-colors duration-150">
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
 }
+
