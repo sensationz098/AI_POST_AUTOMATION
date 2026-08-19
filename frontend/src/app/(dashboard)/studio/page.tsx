@@ -219,16 +219,17 @@ export default function StudioPage() {
     setErrorMessage(null);
 
     const postPayload = {
-      title: title.trim() || topic.trim() || 'Social AI Post',
-      caption,
-      hashtags,
-      cta,
-      image_url: imageUrl,
-      audio_url: audioUrl,
-      platforms: selectedPlatforms,
-      scheduled_at: isScheduled ? scheduledAt : null,
-      status: isScheduled ? 'SCHEDULED' : 'PUBLISHED',
       brand_id: Number(selectedBrandId) || 1,
+      title: title.trim() || topic.trim() || 'Social AI Post',
+      caption: caption,
+      hashtags: hashtags || [],
+      cta: cta || null,
+      seo_keywords: [],
+      image_prompt: topic || title || null,
+      image_url: imageUrl || null,
+      platforms: selectedPlatforms,
+      status: isScheduled ? 'SCHEDULED' : 'PUBLISHED',
+      scheduled_at: isScheduled && scheduledAt ? new Date(scheduledAt).toISOString() : null,
     };
 
     try {
