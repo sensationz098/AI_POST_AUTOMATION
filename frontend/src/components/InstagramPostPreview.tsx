@@ -76,7 +76,7 @@ export const InstagramPostPreview: React.FC<Props> = ({
         color: colors.textPrimary,
         borderColor: colors.cardBorder,
       }}
-      className="w-full max-w-sm rounded-2xl border shadow-xl overflow-hidden font-sans select-none transition-colors duration-200"
+      className="w-full rounded-2xl border shadow-xl overflow-hidden font-sans select-none transition-colors duration-200"
     >
       {/* IG Header */}
       <div className="p-3 flex items-center justify-between border-b" style={{ backgroundColor: colors.cardBg, borderColor: colors.cardBorder }}>
