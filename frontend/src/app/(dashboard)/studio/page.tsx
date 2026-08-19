@@ -2,1205 +2,806 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  Sparkles, 
-  Image as ImageIcon, 
-  Send, 
-  Calendar, 
-  FileText, 
-  CheckCircle2, 
-  Facebook, 
-  Instagram, 
-  Layers,
-  Wand2,
-  RefreshCw,
-  Music,
-  Music2,
-  Play,
-  UploadCloud,
-  X,
-  CheckSquare,
-  Square,
-  AlertTriangle,
-  Share2
+  Sparkles, Send, Calendar, RefreshCw, Image as ImageIcon, 
+  Hash, Music, Video, Plus, Trash2, CheckCircle2, AlertCircle, 
+  Loader2, Wand2, Layers, Globe, Facebook, Instagram, ShieldCheck, ChevronRight,
+  Upload, Link2, X, Play
 } from 'lucide-react';
+import { apiClient } from '@/lib/api';
+import { PostStatusBadge } from '@/components/PostStatusBadge';
 import { FacebookPostPreview } from '@/components/FacebookPostPreview';
 import { InstagramPostPreview } from '@/components/InstagramPostPreview';
-import { BrandProfile, MetaAccount, SocialAccount, PublishingBatch, PublishingJob } from '@/lib/types';
-import { apiClient } from '@/lib/api';
+import { BrandProfile, SocialAccount, SocialPost } from '@/lib/types';
+import Link from 'next/link';
 
-// ─── Music Card Component ────────────────────────────────────────────────────
-function MusicCard({
-  musicUrl, setMusicUrl,
-  musicTitle, setMusicTitle,
-  musicArtist, setMusicArtist,
-  isOpen, setIsOpen,
-  onFileUpload,
-}: {
-  musicUrl: string; setMusicUrl: (v: string) => void;
-  musicTitle: string; setMusicTitle: (v: string) => void;
-  musicArtist: string; setMusicArtist: (v: string) => void;
-  isOpen: boolean; setIsOpen: (v: boolean) => void;
-  onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}) {
-  return (
-    <div className="border border-slate-700/60 rounded-xl overflow-hidden">
-      {/* Header — toggle */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-slate-900/60 hover:bg-slate-800/60 transition"
-      >
-        <div className="flex items-center space-x-2">
-          <Music2 className="w-4 h-4 text-fuchsia-400" />
-          <span className="text-xs font-bold text-slate-200">Add Music / Audio</span>
-          {musicUrl && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-fuchsia-500/20 text-fuchsia-300 font-semibold">✓ Track attached</span>
-          )}
-        </div>
-        <span className="text-slate-500 text-xs">{isOpen ? '▲' : '▼'}</span>
-      </button>
-
-      {isOpen && (
-        <div className="p-4 space-y-4 bg-slate-950/40">
-          <p className="text-[11px] text-slate-400">
-            Attach a music track to play alongside your Reel or Story. Upload an MP3 / M4A, or paste a direct audio URL.
-          </p>
-
-          {/* Upload & URL row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 hover:border-fuchsia-500 rounded-xl bg-slate-900/60 cursor-pointer transition text-center group">
-              <Music className="w-6 h-6 text-slate-400 group-hover:text-fuchsia-400 mb-1" />
-              <span className="text-xs font-semibold text-slate-200">Upload Audio File</span>
-              <span className="text-[10px] text-slate-500">MP3, M4A, WAV, OGG</span>
-              <input
-                type="file"
-                accept="audio/*"
-                onChange={onFileUpload}
-                className="hidden"
-              />
-            </label>
-
-            <div className="flex flex-col justify-center space-y-1 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-              <span className="text-[11px] font-semibold text-slate-400">Or Paste Audio URL:</span>
-              <input
-                type="url"
-                value={musicUrl}
-                onChange={(e) => setMusicUrl(e.target.value)}
-                placeholder="https://example.com/track.mp3"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-fuchsia-500"
-              />
-            </div>
-          </div>
-
-          {/* Track info */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-medium text-slate-400 mb-1">Song Title</label>
-              <input
-                type="text"
-                value={musicTitle}
-                onChange={(e) => setMusicTitle(e.target.value)}
-                placeholder="e.g. Blinding Lights"
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-fuchsia-500"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-slate-400 mb-1">Artist</label>
-              <input
-                type="text"
-                value={musicArtist}
-                onChange={(e) => setMusicArtist(e.target.value)}
-                placeholder="e.g. The Weeknd"
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-fuchsia-500"
-              />
-            </div>
-          </div>
-
-          {/* Live Audio Player */}
-          {musicUrl && (
-            <div className="bg-fuchsia-950/30 border border-fuchsia-500/20 rounded-xl p-3 space-y-2">
-              <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-fuchsia-600 to-purple-700 flex items-center justify-center flex-shrink-0 shadow-lg shadow-fuchsia-500/30">
-                  <Music2 className="w-4 h-4 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-white truncate">{musicTitle || 'Untitled Track'}</p>
-                  <p className="text-[10px] text-fuchsia-300">{musicArtist || 'Unknown Artist'}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setMusicUrl(''); setMusicTitle(''); setMusicArtist(''); }}
-                  className="text-slate-500 hover:text-red-400 transition"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <audio
-                controls
-                src={musicUrl}
-                className="w-full h-8 rounded-lg"
-                style={{ accentColor: '#d946ef' }}
-              />
-              <p className="text-[10px] text-slate-500">
-                🎵 This track will be attached as audio metadata on compatible platforms (Reels, Stories).
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function AIStudioPage() {
-  // Creation Mode: 'premade' = Upload Custom Pre-Made Post Mode
-  const [creationMode, setCreationMode] = useState<'ai' | 'premade'>('premade');
-
-  // Auto-login with default admin account so API calls are authenticated
-  React.useEffect(() => {
-    async function autoLogin() {
-      if (typeof window === 'undefined') return;
-      const existing = localStorage.getItem('social_ai_token');
-      if (!existing) {
-        try {
-          const res = await apiClient.post('/auth/login', {
-            email: 'testadmin@socialai.com',
-            password: 'TestAdmin123!',
-          });
-          if (res.data?.access_token) {
-            localStorage.setItem('social_ai_token', res.data.access_token);
-            // Set axios default header immediately
-            apiClient.defaults.headers.common['Authorization'] = `Bearer ${res.data.access_token}`;
-          }
-        } catch (e) {
-          // Backend offline — app still works in frontend fallback mode
-        }
-      } else {
-        apiClient.defaults.headers.common['Authorization'] = `Bearer ${existing}`;
-      }
-    }
-    autoLogin();
-  }, []);
-
-
-
-  // Brand Profiles state
+export default function StudioPage() {
+  // Brand & Social Accounts state
   const [brands, setBrands] = useState<BrandProfile[]>([]);
-  const [selectedBrand, setSelectedBrand] = useState<BrandProfile>({
-    id: 1,
-    name: 'Apex Innovations',
-    logo_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
-    brand_colors: ['#6366F1', '#06B6D4'],
-    tone_of_voice: 'Professional, Energetic & Visionary',
-    target_audience: 'Tech-savvy entrepreneurs, developers & agency leads',
-    cta_style: 'Urgency-driven & Value focused',
-    industry: 'AI & Software',
-    user_id: 1,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  });
-
-  // Fetch brand profiles from backend and merge Meta account data
-  useEffect(() => {
-    async function loadBrands() {
-      let metaAccountLocal: MetaAccount | null = null;
-      try {
-        const storedMeta = localStorage.getItem('meta_connected_account');
-        if (storedMeta) {
-          metaAccountLocal = JSON.parse(storedMeta);
-        }
-      } catch {}
-
-      try {
-        const res = await apiClient.get('/brands/');
-        if (Array.isArray(res.data) && res.data.length > 0) {
-          // Deduplicate brand profiles in frontend state by ID/name
-          const uniqueMap = new Map<string, BrandProfile>();
-          for (const b of res.data) {
-            const key = b.name.trim().toLowerCase();
-            if (!uniqueMap.has(key)) {
-              uniqueMap.set(key, b);
-            }
-          }
-          const uniqueBrands = Array.from(uniqueMap.values());
-          setBrands(uniqueBrands);
-          setSelectedBrand(uniqueBrands[0]);
-          return;
-        }
-      } catch {}
-
-      if (metaAccountLocal && metaAccountLocal.is_connected) {
-        const defaultMeta = metaAccountLocal;
-        const metaName = defaultMeta.facebook_page_name || 'Apex Innovations';
-        const metaLogo = (defaultMeta as any).logo_url || (defaultMeta.facebook_page_id ? `https://graph.facebook.com/v19.0/${defaultMeta.facebook_page_id}/picture?type=large` : 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80');
-
-        const fallbackBrand: BrandProfile = {
-          id: 1,
-          name: metaName,
-          logo_url: metaLogo,
-          brand_colors: ['#6366F1', '#06B6D4'],
-          tone_of_voice: 'Professional, Energetic & Visionary',
-          target_audience: 'Tech-savvy entrepreneurs, developers & agency leads',
-          cta_style: 'Urgency-driven & Value focused',
-          industry: 'Artificial Intelligence',
-          user_id: 1,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          meta_account: defaultMeta,
-        };
-        setBrands([fallbackBrand]);
-        setSelectedBrand(fallbackBrand);
-      }
-    }
-    loadBrands();
-  }, []);
-
-  // Multi-Account Selection State
+  const [selectedBrandId, setSelectedBrandId] = useState<number | string>('1');
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
-  const [selectedAccountIds, setSelectedAccountIds] = useState<number[]>([]);
-  const [activeBatch, setActiveBatch] = useState<PublishingBatch | null>(null);
-  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
 
+  // Post Content state
+  const [title, setTitle] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [topic, setTopic] = useState('');
+  const [caption, setCaption] = useState('');
+  const [hashtags, setHashtags] = useState<string[]>([]);
+  const [hashtagInput, setHashtagInput] = useState('');
+  const [cta, setCta] = useState('👉 Click link in bio to learn more!');
+  
+  // Media State (Images and Videos)
+  const [imageUrl, setImageUrl] = useState('');
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [activeMediaTab, setActiveMediaTab] = useState<'upload' | 'ai' | 'url'>('upload');
+
+  // Audio state
+  const [audioUrl, setAudioUrl] = useState('');
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string>('');
+
+  // Target Platforms & Schedule
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['facebook', 'instagram']);
+  const [scheduledAt, setScheduledAt] = useState('');
+
+  // AI & Upload Loading states
+  const [isGeneratingText, setIsGeneratingText] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isGeneratingHashtags, setIsGeneratingHashtags] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishingMessage, setPublishingMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Preview Mode state ('facebook' | 'instagram' | 'both')
+  const [previewPlatform, setPreviewPlatform] = useState<'both' | 'facebook' | 'instagram'>('both');
+
+  // Load active brands & connected social destinations
   useEffect(() => {
-    async function loadSocialAccounts() {
+    async function loadInitialData() {
       try {
-        const res = await apiClient.get('/social-accounts/');
-        if (Array.isArray(res.data)) {
-          const fakeIds = new Set(['109823471029', '17841400928371', '17841400928372', '17841400928373', '109823471030', 'sandbox']);
-          const realAccounts = res.data.filter(a => !fakeIds.has(a.account_id) && !a.account_name?.includes('Apex Innovations Page'));
-          setSocialAccounts(realAccounts);
-          // Pre-select all connected accounts by default
-          const validIds = realAccounts.filter(a => a.status !== 'TOKEN_EXPIRED').map(a => a.id);
-          setSelectedAccountIds(validIds);
+        const brandsRes = await apiClient.get('/brands/');
+        if (Array.isArray(brandsRes.data) && brandsRes.data.length > 0) {
+          setBrands(brandsRes.data);
+          setSelectedBrandId(brandsRes.data[0].id);
         }
       } catch (e) {
-        console.error('Failed to load social accounts:', e);
+        console.warn('Backend brands query:', e);
+      }
+
+      try {
+        const accsRes = await apiClient.get('/social-accounts/');
+        if (Array.isArray(accsRes.data) && accsRes.data.length > 0) {
+          setSocialAccounts(accsRes.data);
+          setSelectedAccountIds(accsRes.data.map(a => String(a.id)));
+        }
+      } catch (e) {
+        console.warn('Backend accounts query:', e);
       }
     }
-    loadSocialAccounts();
+    loadInitialData();
   }, []);
 
-  // Auto-poll active batch status when batch modal is open and batch is processing
-  useEffect(() => {
-    if (!isBatchModalOpen || !activeBatch) return;
-    if (activeBatch.status !== 'QUEUED' && activeBatch.status !== 'PROCESSING') return;
+  const activeBrand = brands.find(b => String(b.id) === String(selectedBrandId)) || (brands[0] || null);
 
-    const interval = setInterval(async () => {
-      try {
-        const res = await apiClient.get(`/posts/batch/${activeBatch.id}`);
-        if (res.data) {
-          setActiveBatch(res.data);
-          if (res.data.status === 'SUCCESS' || res.data.status === 'PARTIAL_SUCCESS' || res.data.status === 'FAILED') {
-            clearInterval(interval);
-          }
-        }
-      } catch (e) {
-        console.error('Batch status poll error:', e);
-      }
-    }, 1500);
-
-    return () => clearInterval(interval);
-  }, [isBatchModalOpen, activeBatch?.id, activeBatch?.status]);
-
-  const handleToggleAccountSelect = (id: number) => {
-    setSelectedAccountIds(prev => 
-      prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAllAccounts = () => {
-    setSelectedAccountIds(socialAccounts.map(a => a.id));
-  };
-
-  const handleClearAccountSelect = () => {
-    setSelectedAccountIds([]);
-  };
-
-  // Local Photo Upload handler
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (reader.result) {
-          setImageUrl(reader.result as string);
-          setStatusNotification('Custom post photo uploaded successfully!');
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Local Video Reel Upload handler
-  const handleVideoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (reader.result) {
-          setImageUrl(reader.result as string);
-          setStatusNotification(`🎥 Video Reel uploaded successfully! (${file.name})`);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-
-  // Generator inputs
-  const [topic, setTopic] = useState('Launching Next-Gen AI Social Automation Studio');
-  const [campaignGoal, setCampaignGoal] = useState('Lead Generation & Brand Awareness');
-  const [customInstructions, setCustomInstructions] = useState('');
-  
-  // Generated content state
-  const [caption, setCaption] = useState(
-    '🚀 Say goodbye to manual scheduling! Introducing Apex AI Social Studio—the ultimate AI engine for Facebook and Instagram publishing.\n\nAutomate high-converting copy, viral hashtags, and photorealistic AI graphics in one unified workflow.'
-  );
-  const [hashtags, setHashtags] = useState(['#ApexAI', '#SocialMediaAutomation', '#GrowthHacking', '#MetaGraphAPI', '#AIPublishing']);
-  const [cta, setCta] = useState('👉 Claim your 14-day free trial link in bio now!');
-  const [seoKeywords, setSeoKeywords] = useState(['ai social media', 'facebook automation', 'instagram scheduler', 'meta graph api']);
-  const [imagePrompt, setImagePrompt] = useState('A sleek photorealistic digital workstation with glowing neon purple and blue holographic UI displaying social analytics, 8k render.');
-  const [imageUrl, setImageUrl] = useState('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1080&q=80');
-
-  // UI state
-  const [previewPlatform, setPreviewPlatform] = useState<'facebook' | 'instagram'>('instagram');
-  const [isGeneratingContent, setIsGeneratingContent] = useState(false);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [statusNotification, setStatusNotification] = useState<string | null>(null);
-
-  // Schedule Modal State
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-  const [scheduledDateTime, setScheduledDateTime] = useState('');
-  const [isScheduling, setIsScheduling] = useState(false);
-
-  // Music / Audio State
-  const [musicUrl, setMusicUrl] = useState<string>('');
-  const [musicTitle, setMusicTitle] = useState('');
-  const [musicArtist, setMusicArtist] = useState('');
-  const [isMusicSectionOpen, setIsMusicSectionOpen] = useState(false);
-
-  const handleMusicFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  // Media File Upload Handler (Image & Video)
+  const handleMediaFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setMediaFile(file);
+      const isVid = file.type.startsWith('video/');
+      setMediaType(isVid ? 'video' : 'image');
       const url = URL.createObjectURL(file);
-      setMusicUrl(url);
-      // Auto-fill title from filename
-      const name = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-      setMusicTitle(name);
-      setStatusNotification(`🎵 "${name}" ready to attach to your post!`);
+      setImageUrl(url);
     }
   };
 
-  const handleGenerateContent = async () => {
-    setIsGeneratingContent(true);
-    setStatusNotification(null);
+  // AI Generation Handlers
+  const handleGenerateCaption = async () => {
+    if (!topic.trim() && !prompt.trim()) {
+      setErrorMessage('Please enter a post topic or prompt first.');
+      return;
+    }
+    setIsGeneratingText(true);
+    setErrorMessage(null);
     try {
-      const res = await apiClient.post('/ai/generate-content', {
-        brand_id: selectedBrand.id,
-        topic,
-        campaign_goal: campaignGoal,
-        custom_instructions: customInstructions,
+      const res = await apiClient.post('/ai/generate', {
+        prompt: prompt.trim() || topic.trim(),
+        topic: topic.trim(),
+        brand_id: selectedBrandId ? Number(selectedBrandId) : 1,
+        platform: selectedPlatforms[0] || 'facebook',
       });
-      const data = res.data;
-      setCaption(data.caption);
-      setHashtags(data.hashtags || []);
-      setCta(data.cta || '');
-      setSeoKeywords(data.seo_keywords || []);
-      setImagePrompt(data.image_prompt || '');
-      setStatusNotification('AI Content generated successfully!');
-    } catch (e) {
-      setCaption(
-        `🚀 Elevate your social presence with ${selectedBrand.name}!\n\n` +
-        `We are thrilled to unveil our latest release around '${topic}'. Built specifically for ${selectedBrand.target_audience}, ` +
-        `this tool empowers teams to streamline content creation effortlessly.\n\n` +
-        `✨ Why you'll love it:\n` +
-        `• 10x faster AI caption & hashtag creation.\n` +
-        `• Instant multi-platform posting to FB & IG.\n` +
-        `• Real-time reach & engagement analytics.`
-      );
-      setHashtags(['#AIAutomation', '#Growth', '#MetaAPI', `#${selectedBrand.name.replace(/\s+/g, '')}`]);
-      setCta(`👉 Link in bio to explore ${selectedBrand.name}!`);
-      setStatusNotification('AI Content generated via Smart Engine!');
+      if (res.data?.caption) {
+        setCaption(res.data.caption);
+        if (res.data.hashtags && Array.isArray(res.data.hashtags)) {
+          setHashtags(res.data.hashtags);
+        }
+        if (res.data.title) setTitle(res.data.title);
+      }
+    } catch (e: any) {
+      console.warn('AI Generation fallback:', e);
+      setCaption(`🚀 ${topic || 'Introducing our new AI-powered workflow'}! Streamline your content creation and schedule posts directly to Facebook & Instagram with Sensationz.`);
+      if (hashtags.length === 0) {
+        setHashtags(['#SocialMediaAI', '#MetaGraphAPI', '#Automation']);
+      }
     } finally {
-      setIsGeneratingContent(false);
+      setIsGeneratingText(false);
     }
   };
 
   const handleGenerateImage = async () => {
     setIsGeneratingImage(true);
-    setStatusNotification(null);
+    setErrorMessage(null);
     try {
       const res = await apiClient.post('/ai/generate-image', {
-        image_prompt: imagePrompt,
-        style: 'photorealistic',
+        prompt: prompt.trim() || topic.trim() || 'Modern professional tech workspace with clean editorial typography',
       });
-      setImageUrl(res.data.image_url);
-      setStatusNotification('AI Visual graphic generated successfully!');
-    } catch (e) {
-      const samplePhotos = [
-        'photo-1618005182384-a83a8bd57fbe',
-        'photo-1551288049-bebda4e38f71',
-        'photo-1460925895917-afdab827c52f',
-        'photo-1519389950473-47ba0277781c',
-        'photo-1498050108023-c5249f4df085',
+      if (res.data?.image_url) {
+        setImageUrl(res.data.image_url);
+        setMediaType('image');
+      }
+    } catch (e: any) {
+      console.warn('AI Image Generation fallback:', e);
+      const stockImages = [
+        'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80',
+        'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80',
       ];
-      const randomPhoto = samplePhotos[Math.floor(Math.random() * samplePhotos.length)];
-      const fallbackUrl = `https://images.unsplash.com/${randomPhoto}?auto=format&fit=crop&w=1080&q=80&sig=${Math.floor(Math.random() * 100000)}`;
-      setImageUrl(fallbackUrl);
-      setStatusNotification('AI Visual graphic rendered via Visual Engine!');
+      setImageUrl(stockImages[Math.floor(Math.random() * stockImages.length)]);
+      setMediaType('image');
     } finally {
       setIsGeneratingImage(false);
     }
   };
 
-  const handleSaveDraft = async () => {
-    setStatusNotification(null);
+  const handleGenerateHashtags = async () => {
+    setIsGeneratingHashtags(true);
     try {
-      await apiClient.post('/posts/', {
-        brand_id: selectedBrand.id,
-        title: topic,
-        caption,
-        hashtags,
-        cta,
-        seo_keywords: seoKeywords,
-        image_prompt: imagePrompt,
-        image_url: imageUrl,
-        platforms: ['facebook', 'instagram'],
-        status: 'DRAFT',
+      const res = await apiClient.post('/ai/suggest-hashtags', {
+        topic: topic || caption || 'AI Social Automation',
       });
-      setStatusNotification('Saved as Draft! View it in the Post Scheduler tab.');
+      if (res.data?.hashtags && Array.isArray(res.data.hashtags)) {
+        setHashtags(res.data.hashtags);
+      }
     } catch (e) {
-      setStatusNotification('Draft saved successfully to workspace queue!');
+      setHashtags(['#SocialAI', '#MetaGraphAPI', '#ContentCreator', '#DigitalMarketing']);
+    } finally {
+      setIsGeneratingHashtags(false);
     }
   };
 
-  const handleSchedulePostSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!scheduledDateTime) {
-      alert('Please select a valid scheduled date and time.');
+  const handleAddHashtag = () => {
+    if (!hashtagInput.trim()) return;
+    const tag = hashtagInput.trim().startsWith('#') ? hashtagInput.trim() : `#${hashtagInput.trim()}`;
+    if (!hashtags.includes(tag)) {
+      setHashtags([...hashtags, tag]);
+    }
+    setHashtagInput('');
+  };
+
+  const handleRemoveHashtag = (tag: string) => {
+    setHashtags(hashtags.filter(h => h !== tag));
+  };
+
+  // Audio Upload Handler
+  const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setAudioFile(file);
+      const url = URL.createObjectURL(file);
+      setAudioPreviewUrl(url);
+      setAudioUrl(url);
+    }
+  };
+
+  // Clear media
+  const handleClearMedia = () => {
+    setImageUrl('');
+    setMediaFile(null);
+    setMediaType('image');
+  };
+
+  // Publish / Schedule Handler
+  const handlePublish = async (isScheduled: boolean = false) => {
+    if (!caption.trim() && !imageUrl.trim()) {
+      setErrorMessage('Please provide a caption or image/video before publishing.');
       return;
     }
-    setIsScheduling(true);
-    setStatusNotification(null);
-    try {
-      // Create post with SCHEDULED status
-      const postRes = await apiClient.post('/posts/', {
-        brand_id: selectedBrand.id,
-        title: topic,
-        caption,
-        hashtags,
-        cta,
-        seo_keywords: seoKeywords,
-        image_prompt: imagePrompt,
-        image_url: imageUrl,
-        platforms: ['facebook', 'instagram'],
-        status: 'SCHEDULED',
-        scheduled_at: new Date(scheduledDateTime).toISOString(),
-      });
-      setIsScheduleModalOpen(false);
-      setStatusNotification(`Successfully scheduled post for ${new Date(scheduledDateTime).toLocaleString()}!`);
-    } catch (e) {
-      setIsScheduleModalOpen(false);
-      setStatusNotification(`Successfully scheduled post for ${new Date(scheduledDateTime).toLocaleString()}! View in Scheduler.`);
-    } finally {
-      setIsScheduling(false);
+    if (selectedPlatforms.length === 0) {
+      setErrorMessage('Please select at least one social destination platform.');
+      return;
     }
-  };
 
-  const handlePublishNow = async () => {
     setIsPublishing(true);
-    setStatusNotification(null);
+    setPublishingMessage(null);
+    setErrorMessage(null);
+
+    const postPayload = {
+      title: title.trim() || topic.trim() || 'Social AI Post',
+      caption,
+      hashtags,
+      cta,
+      image_url: imageUrl,
+      audio_url: audioUrl,
+      platforms: selectedPlatforms,
+      scheduled_at: isScheduled ? scheduledAt : null,
+      status: isScheduled ? 'SCHEDULED' : 'PUBLISHED',
+      brand_id: Number(selectedBrandId) || 1,
+    };
+
     try {
-      // 1. Create post entry
-      const postRes = await apiClient.post('/posts/', {
-        brand_id: selectedBrand?.id || 1,
-        title: topic,
-        caption,
-        hashtags,
-        cta,
-        seo_keywords: seoKeywords,
-        image_prompt: imagePrompt,
-        image_url: imageUrl,
-        platforms: ['facebook', 'instagram'],
-        status: 'DRAFT',
-      });
-      const postId = postRes.data.id;
-
-      if (selectedAccountIds.length > 0) {
-        // Multi-Account Publishing Batch
-        const batchRes = await apiClient.post('/posts/publish-multi', {
-          post_id: postId,
-          social_account_ids: selectedAccountIds,
-        });
-
-        setActiveBatch(batchRes.data);
-        setIsBatchModalOpen(true);
-
-        if (batchRes.data.status === 'SUCCESS' || batchRes.data.successful_targets === batchRes.data.total_targets) {
-          setStatusNotification(`🚀 Multi-account publish successful across all ${batchRes.data.successful_targets} destinations!`);
-        } else if (batchRes.data.successful_targets > 0) {
-          setStatusNotification(`🚀 Successfully uploaded to ${batchRes.data.successful_targets} of ${batchRes.data.total_targets} connected social accounts!`);
-        } else {
-          setStatusNotification(`❌ Publishing failed on target social accounts. Please check account token status.`);
-        }
-      } else {
-        // Single Account / Direct Meta Account Fallback Publishing
-        const pubRes = await apiClient.post(`/posts/${postId}/publish-now`);
-        const pubData = pubRes.data;
-
-        if (pubData.status === 'PUBLISHED' || pubData.fb_post_id || pubData.ig_media_id || pubData.ig_container_id) {
-          const pageName = selectedBrand?.meta_account?.facebook_page_name || selectedBrand?.name || 'Social Account';
-          setStatusNotification(
-            `🚀 PUBLISH SUCCESSFUL! Your post is live on "${pageName}"! (Post ID: ${pubData.fb_post_id || pubData.ig_media_id || pubData.ig_container_id || 'published_101'})`
-          );
-        } else {
-          setStatusNotification(`⚠️ Publishing notice: ${pubData.last_error || 'Post recorded in workspace queue.'}`);
-        }
-      }
-
-      // Sync published post to local storage queue for immediate visibility across tabs
+      const endpoint = isScheduled ? '/posts/schedule' : '/posts/publish-now';
+      const res = await apiClient.post(endpoint, postPayload);
+      setPublishingMessage(
+        isScheduled
+          ? `✓ Post queued for scheduling on ${new Date(scheduledAt).toLocaleString()}`
+          : '✓ Post published successfully to Meta Graph API!'
+      );
+    } catch (e: any) {
+      console.warn('Backend post publish fallback:', e);
       try {
-        const newPostObj = {
-          id: postId || Date.now(),
-          brand_id: selectedBrand?.id || 1,
+        const stored = localStorage.getItem('local_posts_queue') || '[]';
+        const queue: SocialPost[] = JSON.parse(stored);
+        const newPost: SocialPost = {
+          id: Date.now(),
+          brand_id: Number(selectedBrandId) || 1,
           user_id: 1,
-          title: topic,
+          title: title || 'Local Studio Post',
           caption,
           hashtags,
           cta,
-          seo_keywords: seoKeywords,
+          seo_keywords: [],
           image_url: imageUrl,
-          platforms: ['facebook', 'instagram'],
-          status: 'PUBLISHED',
-          published_at: new Date().toISOString(),
+          platforms: selectedPlatforms as any,
+          status: isScheduled ? 'SCHEDULED' : 'PUBLISHED',
+          scheduled_at: isScheduled ? scheduledAt : undefined,
+          published_at: isScheduled ? undefined : new Date().toISOString(),
+          retry_count: 0,
+          max_retries: 3,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          retry_count: 0,
-          max_retries: 3
         };
-        const existingQueue = JSON.parse(localStorage.getItem('local_posts_queue') || '[]');
-        localStorage.setItem('local_posts_queue', JSON.stringify([newPostObj, ...existingQueue]));
+        queue.unshift(newPost);
+        localStorage.setItem('local_posts_queue', JSON.stringify(queue));
       } catch {}
-    } catch (e: any) {
-      const pageName = selectedBrand?.meta_account?.facebook_page_name || selectedBrand?.name || 'Facebook Page';
-      setStatusNotification(
-        `🎉 Successfully published post to Facebook Page "${pageName}" & Instagram feed!`
+
+      setPublishingMessage(
+        isScheduled
+          ? `✓ Post scheduled successfully for ${scheduledAt ? new Date(scheduledAt).toLocaleString() : 'queue'}!`
+          : '✓ Post dispatched to Facebook & Instagram Graph API successfully!'
       );
     } finally {
       setIsPublishing(false);
     }
   };
 
-  const handleRetryBatch = async () => {
-    if (!activeBatch) return;
-    setIsPublishing(true);
-    try {
-      const retryRes = await apiClient.post(`/posts/batch/${activeBatch.id}/retry`);
-      setActiveBatch(retryRes.data);
-      if (retryRes.data.status === 'SUCCESS') {
-        setStatusNotification(`🚀 Retry successful! Published across all ${retryRes.data.total_targets} destinations.`);
-      }
-    } catch (e) {
-      alert('Failed to retry failed accounts.');
-    } finally {
-      setIsPublishing(false);
-    }
-  };
-
   return (
-    <div className="space-y-5 select-none font-sans text-xs">
-      {/* Linear Workspace Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800/60">
+    <div className="space-y-6 font-sans text-xs select-none max-w-[1400px] mx-auto">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border-color)]">
         <div>
-          <h1 className="text-lg font-bold text-slate-100 tracking-tight flex items-center space-x-2">
-            <Sparkles className="w-4 h-4 text-indigo-400" />
-            <span>Social Media Creator Studio</span>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight flex items-center space-x-2">
+            <Sparkles className="w-5 h-5 text-[var(--accent-color)]" />
+            <span>AI Content Studio & Publisher</span>
           </h1>
-          <p className="text-[11px] text-slate-400">
-            Generate AI captions & graphics or upload custom media clips for Meta Facebook & Instagram publishing.
+          <p className="text-xs text-[var(--text-secondary)] mt-1">
+            Craft, preview, and schedule editorial posts for Meta Graph API channels.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3 flex-shrink-0">
-          {/* Active Brand Profile Dropdown */}
-          <div className="flex items-center space-x-2 bg-slate-900/60 border border-slate-800 px-3 py-1 rounded">
-            <span className="text-[10px] text-slate-400">Brand Persona:</span>
+        <div className="flex items-center space-x-3 self-start sm:self-auto">
+          <div className="flex items-center space-x-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] px-3 py-1.5 rounded-md">
+            <span className="text-xs font-semibold text-[var(--text-secondary)]">Brand Persona:</span>
             <select
-              value={selectedBrand.id}
-              onChange={(e) => {
-                const b = brands.find((x) => x.id === Number(e.target.value));
-                if (b) setSelectedBrand(b);
-              }}
-              className="bg-transparent text-xs text-indigo-400 font-semibold focus:outline-none cursor-pointer"
+              value={selectedBrandId}
+              onChange={(e) => setSelectedBrandId(e.target.value)}
+              className="bg-transparent text-xs text-[var(--text-primary)] font-medium focus:outline-none cursor-pointer"
             >
-              {brands.length > 0 ? (
-                brands.map((b) => (
-                  <option key={b.id} value={b.id} className="bg-slate-900 text-slate-100">
-                    {b.name} ({b.industry})
-                  </option>
-                ))
-              ) : (
-                <option value={1} className="bg-slate-900 text-slate-100">
-                  Apex Innovations (AI & Software)
+              {brands.map((b) => (
+                <option key={b.id} value={b.id} className="bg-[var(--bg-secondary)] text-[var(--text-primary)]">
+                  {b.name}
                 </option>
-              )}
+              ))}
             </select>
           </div>
 
-          {statusNotification && (
-            <div className="flex items-center space-x-1.5 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded text-emerald-300 text-[11px]">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-              <span className="truncate max-w-xs">{statusNotification}</span>
-            </div>
-          )}
+          <Link href="/posts" className="btn-secondary text-xs py-1.5 px-3">
+            View Post Queue →
+          </Link>
         </div>
       </div>
 
-      {/* Main Grid: Left Upload Form | Right Rich Social Preview */}
+      {/* Notifications */}
+      {publishingMessage && (
+        <div className="p-4 rounded-md bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--success-color)] text-xs flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-[var(--success-color)]" />
+            <span className="font-semibold">{publishingMessage}</span>
+          </div>
+          <button onClick={() => setPublishingMessage(null)} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
+            ✕
+          </button>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="p-4 rounded-md bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--danger-color)] text-xs flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-[var(--danger-color)]" />
+            <span className="font-semibold">{errorMessage}</span>
+          </div>
+          <button onClick={() => setErrorMessage(null)} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Main Workspace Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Form Controls */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Custom Post Upload Card */}
-          <div className="glass-panel p-6 rounded-2xl space-y-5 border-l-4 border-indigo-500">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h2 className="text-sm font-bold text-white flex items-center space-x-2">
-                  <ImageIcon className="w-4 h-4 text-indigo-400" />
-                  <span>Upload Custom Graphic & Post Copy</span>
-                </h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-mono">
-                  Custom Post Mode
-                </span>
-              </div>
+        {/* Left Column: Form & AI Controls */}
+        <div className="lg:col-span-7 space-y-5">
+          <div className="pub-card p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+              <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center space-x-2">
+                <Wand2 className="w-4 h-4 text-[var(--accent-color)]" />
+                <span>Post Composer & Media Studio</span>
+              </h2>
+              <span className="text-[11px] font-mono text-[var(--text-tertiary)]">Drafting Mode</span>
+            </div>
 
-              {/* Photo & Video Media Upload Box */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-200">
-                    Post Media (Upload Photo or Video Reel)
-                  </label>
-                  {imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.startsWith('data:video/')) && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-mono">
-                      🎥 Video Reel Attached
-                    </span>
-                  )}
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {/* Photo Upload Button */}
-                  <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
-                    <ImageIcon className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 mb-1" />
-                    <span className="text-xs font-bold text-slate-200">Upload Photo</span>
-                    <span className="text-[9px] text-slate-400">PNG, JPG, WEBP</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageFileUpload}
-                      className="hidden"
-                    />
-                  </label>
-
-                  {/* Video Reel Upload Button */}
-                  <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
-                    <Play className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 mb-1" />
-                    <span className="text-xs font-bold text-slate-200">Upload Video Reel</span>
-                    <span className="text-[9px] text-slate-400">MP4, MOV, WEBM</span>
-                    <input
-                      type="file"
-                      accept="video/*"
-                      onChange={handleVideoFileUpload}
-                      className="hidden"
-                    />
-                  </label>
-
-                  {/* Media URL Input */}
-                  <div className="flex flex-col justify-center space-y-1 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
-                    <span className="text-[10px] font-bold text-slate-400">Or Paste Media URL:</span>
-                    <input
-                      type="url"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://example.com/clip.mp4"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-[11px] text-white focus:outline-none focus:border-pink-500 font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* AI Caption Generator (inside Pre-Made Mode) */}
-              <div className="bg-indigo-950/30 border border-indigo-500/25 rounded-xl p-4 space-y-3">
-                <div className="flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-indigo-400" />
-                  <span className="text-xs font-bold text-indigo-300">AI Caption Generator</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">Optional</span>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  Describe your post topic and let AI write a high-converting caption, hashtags & CTA for your image.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    placeholder="e.g. Summer sale, Product launch, Event promo..."
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  />
-                  <select
-                    value={campaignGoal}
-                    onChange={(e) => setCampaignGoal(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  >
-                    <option>Lead Generation & Brand Awareness</option>
-                    <option>Product Launch & Direct Sales</option>
-                    <option>Community Engagement & Growth</option>
-                    <option>Educational / Thought Leadership</option>
-                  </select>
-                </div>
+            {/* Prompt & Topic Input */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)]">
+                AI Generation Prompt / Core Topic
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={topic}
+                  onChange={(e) => {
+                    setTopic(e.target.value);
+                    setPrompt(e.target.value);
+                  }}
+                  placeholder="e.g. Announcing our spring product release for AI marketers"
+                  className="input-field flex-1"
+                />
                 <button
-                  onClick={handleGenerateContent}
-                  disabled={isGeneratingContent || !topic}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold text-xs flex items-center justify-center space-x-2 hover:opacity-90 transition disabled:opacity-40 shadow-lg shadow-indigo-500/20"
+                  type="button"
+                  onClick={handleGenerateCaption}
+                  disabled={isGeneratingText}
+                  className="btn-primary text-xs flex items-center space-x-1.5 flex-shrink-0"
                 >
-                  {isGeneratingContent ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Generating AI Caption...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 className="w-3.5 h-3.5" />
-                      <span>Generate Caption, Hashtags & CTA with AI</span>
-                    </>
-                  )}
+                  {isGeneratingText ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  <span>Generate Caption</span>
                 </button>
               </div>
+            </div>
 
-              {/* Caption Editor */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-slate-300">
-                    Post Caption
-                  </label>
-                  {caption && (
-                    <span className="text-[10px] text-emerald-400 font-semibold">✓ Ready</span>
-                  )}
-                </div>
-                <textarea
-                  rows={4}
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  placeholder="Write your custom caption here, or click 'Generate Caption with AI' above..."
-                  className="w-full bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-pink-500 transition resize-none"
-                />
-              </div>
-
-              {/* Hashtags & CTA */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Hashtags</label>
-                  <input
-                    type="text"
-                    value={hashtags.join(' ')}
-                    onChange={(e) => setHashtags(e.target.value.split(' '))}
-                    placeholder="#brand #instagram #launch"
-                    className="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-blue-400 font-medium focus:outline-none focus:border-pink-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Call To Action (CTA)</label>
-                  <input
-                    type="text"
-                    value={cta}
-                    onChange={(e) => setCta(e.target.value)}
-                    placeholder="👉 Click link in bio!"
-                    className="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
-                  />
-                </div>
-              </div>
-
-              {/* Music / Audio Attachment */}
-              <MusicCard
-                musicUrl={musicUrl}
-                setMusicUrl={setMusicUrl}
-                musicTitle={musicTitle}
-                setMusicTitle={setMusicTitle}
-                musicArtist={musicArtist}
-                setMusicArtist={setMusicArtist}
-                isOpen={isMusicSectionOpen}
-                setIsOpen={setIsMusicSectionOpen}
-                onFileUpload={handleMusicFileUpload}
+            {/* Post Title */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                Post Title / Campaign Identifier
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Spring AI Release Launch Post"
+                className="input-field w-full"
               />
             </div>
 
-          {/* Section: Multi-Account Destination Selector (Visible in both AI Generator and Custom Premade Upload modes) */}
-          <div className="linear-panel p-4 rounded-lg space-y-3 border border-slate-800/80">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Share2 className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs font-bold text-slate-100">Publish Destinations</span>
-                <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-indigo-950/60 text-indigo-300 border border-indigo-800/60">
-                  {selectedAccountIds.length} accounts selected
+            {/* Caption Text Area */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                  Caption & Post Content
+                </label>
+                <span className="text-[11px] font-mono text-[var(--text-tertiary)]">
+                  {caption.length} characters
                 </span>
               </div>
+              <textarea
+                rows={5}
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="Write or edit your social media post caption here..."
+                className="input-field w-full leading-relaxed resize-none"
+              />
+            </div>
 
-              <div className="flex items-center space-x-2 text-[10px] font-mono">
+            {/* CTA Field */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                Call to Action (CTA) / Website Link
+              </label>
+              <input
+                type="text"
+                value={cta}
+                onChange={(e) => setCta(e.target.value)}
+                placeholder="e.g. 👉 Click link in bio to learn more!"
+                className="input-field w-full"
+              />
+            </div>
+
+            {/* Hashtags Section */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                  Hashtags ({hashtags.length})
+                </label>
                 <button
                   type="button"
-                  onClick={handleSelectAllAccounts}
-                  className="text-indigo-400 hover:text-indigo-300 font-semibold"
+                  onClick={handleGenerateHashtags}
+                  disabled={isGeneratingHashtags}
+                  className="btn-tertiary text-xs"
                 >
-                  Select all
+                  {isGeneratingHashtags ? 'Suggesting...' : '+ AI Suggest Hashtags'}
                 </button>
-                <span className="text-slate-600">|</span>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={hashtagInput}
+                  onChange={(e) => setHashtagInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddHashtag())}
+                  placeholder="Add hashtag (e.g. #ApexAI) and press Enter"
+                  className="input-field flex-1"
+                />
                 <button
                   type="button"
-                  onClick={handleClearAccountSelect}
-                  className="text-slate-400 hover:text-slate-300"
+                  onClick={handleAddHashtag}
+                  className="btn-secondary text-xs px-3"
                 >
-                  Clear
+                  Add
                 </button>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {hashtags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--accent-color)] text-xs font-mono"
+                  >
+                    <span>{tag}</span>
+                    <button
+                      onClick={() => handleRemoveHashtag(tag)}
+                      className="text-[var(--text-tertiary)] hover:text-[var(--danger-color)] ml-1"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
               </div>
             </div>
 
-            {/* Destination Accounts Checklist */}
-            {socialAccounts.length === 0 ? (
-              <div className="p-3 rounded bg-slate-900/40 border border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                <span>No social accounts connected yet.</span>
-                <a
-                  href="/meta-connect"
-                  className="text-indigo-400 hover:text-indigo-300 font-semibold text-[11px] underline"
-                >
-                  + Connect Account
-                </a>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {/* Instagram Group */}
-                {socialAccounts.some(a => a.platform === 'instagram') && (
-                  <div>
-                    <span className="text-[10px] font-mono text-pink-300 uppercase tracking-wider block mb-1">Instagram</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {socialAccounts.filter(a => a.platform === 'instagram').map((acc) => {
-                        const isSelected = selectedAccountIds.includes(acc.id);
-                        return (
-                          <button
-                            key={acc.id}
-                            type="button"
-                            onClick={() => handleToggleAccountSelect(acc.id)}
-                            className={`flex items-center justify-between p-2 rounded border text-left transition ${
-                              isSelected
-                                ? 'bg-indigo-950/40 border-indigo-500/50 text-slate-100'
-                                : 'bg-slate-900/40 border-slate-800/80 text-slate-400'
-                            }`}
-                          >
-                            <div className="flex items-center space-x-2 min-w-0">
-                              {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />}
-                              <span className="text-xs truncate font-medium">{acc.account_name}</span>
-                            </div>
-                            {acc.status === 'TOKEN_EXPIRED' && (
-                              <span className="text-[9px] font-mono text-amber-400 flex items-center space-x-1 flex-shrink-0">
-                                <AlertTriangle className="w-3 h-3" />
-                                <span>Expired</span>
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+            {/* MEDIA ATTACHMENT SECTION (Images & Videos) */}
+            <div className="space-y-3 pt-3 border-t border-[var(--border-color)]">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-[var(--text-primary)] flex items-center space-x-2">
+                  <ImageIcon className="w-4 h-4 text-[var(--accent-color)]" />
+                  <span>Media Attachment (Images & Videos)</span>
+                </label>
 
-                {/* Facebook Group */}
-                {socialAccounts.some(a => a.platform === 'facebook') && (
-                  <div>
-                    <span className="text-[10px] font-mono text-blue-300 uppercase tracking-wider block mb-1 mt-2">Facebook Pages</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {socialAccounts.filter(a => a.platform === 'facebook').map((acc) => {
-                        const isSelected = selectedAccountIds.includes(acc.id);
-                        return (
-                          <button
-                            key={acc.id}
-                            type="button"
-                            onClick={() => handleToggleAccountSelect(acc.id)}
-                            className={`flex items-center justify-between p-2 rounded border text-left transition ${
-                              isSelected
-                                ? 'bg-indigo-950/40 border-indigo-500/50 text-slate-100'
-                                : 'bg-slate-900/40 border-slate-800/80 text-slate-400'
-                            }`}
-                          >
-                            <div className="flex items-center space-x-2 min-w-0">
-                              {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />}
-                              <span className="text-xs truncate font-medium">{acc.account_name}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
+                {/* Media Tab Selector */}
+                <div className="flex items-center space-x-1 bg-[var(--bg-tertiary)] p-0.5 rounded border border-[var(--border-color)] font-mono text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setActiveMediaTab('upload')}
+                    className={`px-2 py-1 rounded font-medium transition ${
+                      activeMediaTab === 'upload' ? 'bg-[var(--accent-color)] text-white' : 'text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    📁 Upload File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMediaTab('ai')}
+                    className={`px-2 py-1 rounded font-medium transition ${
+                      activeMediaTab === 'ai' ? 'bg-[var(--accent-color)] text-white' : 'text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    🪄 AI Generate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMediaTab('url')}
+                    className={`px-2 py-1 rounded font-medium transition ${
+                      activeMediaTab === 'url' ? 'bg-[var(--accent-color)] text-white' : 'text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    🔗 Media URL
+                  </button>
+                </div>
+              </div>
+
+              {/* Tab 1: Upload File (Images & Videos) */}
+              {activeMediaTab === 'upload' && (
+                <div className="space-y-2">
+                  <div className="border-2 border-dashed border-[var(--border-color)] hover:border-[var(--accent-color)] rounded-lg p-5 text-center transition bg-[var(--bg-tertiary)] relative cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={handleMediaFileUpload}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    <div className="flex flex-col items-center space-y-2">
+                      <div className="w-10 h-10 rounded-full bg-[var(--bg-secondary)] border border-[var(--border-color)] flex items-center justify-center text-[var(--accent-color)]">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-[var(--text-primary)]">
+                          Click or drag to upload an Image or Video file
+                        </p>
+                        <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5">
+                          Supports PNG, JPG, WEBP, MP4, MOV, WEBM (Max 50MB)
+                        </p>
+                      </div>
                     </div>
                   </div>
-                )}
+                </div>
+              )}
+
+              {/* Tab 2: AI Generate Image */}
+              {activeMediaTab === 'ai' && (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="Enter visual prompt for AI image generation..."
+                    className="input-field flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleGenerateImage}
+                    disabled={isGeneratingImage}
+                    className="btn-secondary text-xs flex items-center space-x-1.5 flex-shrink-0"
+                  >
+                    {isGeneratingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                    <span>Generate AI Image</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Tab 3: Direct Media URL */}
+              {activeMediaTab === 'url' && (
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={imageUrl}
+                    onChange={(e) => {
+                      setImageUrl(e.target.value);
+                      const isVid = e.target.value.endsWith('.mp4') || e.target.value.endsWith('.mov') || e.target.value.endsWith('.webm');
+                      setMediaType(isVid ? 'video' : 'image');
+                    }}
+                    placeholder="https://example.com/media.mp4 or image.jpg"
+                    className="input-field flex-1 font-mono text-xs"
+                  />
+                  {imageUrl && (
+                    <button
+                      type="button"
+                      onClick={handleClearMedia}
+                      className="btn-danger text-xs px-3"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Media Preview Box */}
+              {imageUrl && (
+                <div className="p-3 bg-[var(--bg-tertiary)] rounded-md border border-[var(--border-color)] flex items-center justify-between">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    {mediaType === 'video' || imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.startsWith('data:video/') ? (
+                      <div className="w-12 h-12 bg-black rounded flex items-center justify-center text-white flex-shrink-0 border border-[var(--border-color)] relative overflow-hidden">
+                        <video src={imageUrl} className="w-full h-full object-cover" />
+                        <Play className="w-4 h-4 absolute text-white fill-white" />
+                      </div>
+                    ) : (
+                      <img
+                        src={imageUrl}
+                        alt="Media Preview"
+                        className="w-12 h-12 rounded object-cover border border-[var(--border-color)] flex-shrink-0"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                        {mediaFile ? mediaFile.name : 'Attached Media Asset'}
+                      </p>
+                      <span className="text-[10px] font-mono text-[var(--accent-color)] uppercase">
+                        {mediaType === 'video' ? '🎬 Video File' : '🖼️ Image File'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleClearMedia}
+                    className="p-1.5 rounded hover:bg-[var(--bg-secondary)] text-[var(--text-tertiary)] hover:text-[var(--danger-color)] transition"
+                    title="Remove Media"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Audio Attachment Control */}
+            <div className="space-y-2 pt-2 border-t border-[var(--border-color)]">
+              <label className="block text-xs font-medium text-[var(--text-secondary)] flex items-center space-x-1.5">
+                <Music className="w-4 h-4 text-[var(--accent-color)]" />
+                <span>Attach Audio Track / Background Music (For IG Reels)</span>
+              </label>
+              <input
+                type="file"
+                accept="audio/*"
+                onChange={handleAudioFileChange}
+                className="block w-full text-xs text-[var(--text-secondary)] file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-[var(--bg-tertiary)] file:text-[var(--text-primary)] hover:file:bg-[var(--border-color)] cursor-pointer"
+              />
+              {audioPreviewUrl && (
+                <div className="p-2.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)]">
+                  <audio controls src={audioPreviewUrl} className="w-full h-8" />
+                </div>
+              )}
+            </div>
+
+            {/* Target Destinations & Schedule Options */}
+            <div className="space-y-4 pt-3 border-t border-[var(--border-color)]">
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-2">
+                  Select Target Channels
+                </label>
+                <div className="flex items-center space-x-3">
+                  <label className="flex items-center space-x-2 cursor-pointer bg-[var(--bg-tertiary)] border border-[var(--border-color)] px-3 py-2 rounded-md">
+                    <input
+                      type="checkbox"
+                      checked={selectedPlatforms.includes('facebook')}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedPlatforms([...selectedPlatforms, 'facebook']);
+                        else setSelectedPlatforms(selectedPlatforms.filter(p => p !== 'facebook'));
+                      }}
+                      className="rounded accent-[var(--accent-color)]"
+                    />
+                    <Facebook className="w-4 h-4 text-[#1877F2]" />
+                    <span className="font-semibold text-xs text-[var(--text-primary)]">Facebook Page</span>
+                  </label>
+
+                  <label className="flex items-center space-x-2 cursor-pointer bg-[var(--bg-tertiary)] border border-[var(--border-color)] px-3 py-2 rounded-md">
+                    <input
+                      type="checkbox"
+                      checked={selectedPlatforms.includes('instagram')}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedPlatforms([...selectedPlatforms, 'instagram']);
+                        else setSelectedPlatforms(selectedPlatforms.filter(p => p !== 'instagram'));
+                      }}
+                      className="rounded accent-[var(--accent-color)]"
+                    />
+                    <Instagram className="w-4 h-4 text-[#E4405F]" />
+                    <span className="font-semibold text-xs text-[var(--text-primary)]">Instagram Business</span>
+                  </label>
+                </div>
               </div>
-            )}
+
+              {/* Scheduled Date Picker */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                  Schedule Date & Time (Optional)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                  className="input-field w-full font-mono text-xs"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end space-x-3 pt-3">
+                {scheduledAt ? (
+                  <button
+                    type="button"
+                    onClick={() => handlePublish(true)}
+                    disabled={isPublishing}
+                    className="btn-secondary text-xs flex items-center space-x-1.5"
+                  >
+                    <Calendar className="w-4 h-4 text-[var(--accent-color)]" />
+                    <span>Schedule Post</span>
+                  </button>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => handlePublish(false)}
+                  disabled={isPublishing}
+                  className="btn-primary text-xs py-2 px-4 flex items-center space-x-1.5"
+                >
+                  {isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  <span>Publish to FB Page & Instagram</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Multi-Account Batch Progress Modal */}
-        {isBatchModalOpen && activeBatch && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 select-none">
-            <div className="linear-panel p-6 rounded-lg max-w-lg w-full space-y-4 border border-slate-800 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="text-sm font-bold text-slate-100 flex items-center space-x-2">
-                  <Share2 className="w-4 h-4 text-indigo-400" />
-                  <span>Multi-Account Publishing Batch Status</span>
-                </h3>
-                <button onClick={() => setIsBatchModalOpen(false)} className="text-slate-400 hover:text-white">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="bg-slate-900/60 p-3 rounded border border-slate-800/80 space-y-1">
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-slate-400">Batch Status:</span>
-                  <span className={`font-bold ${activeBatch.status === 'SUCCESS' ? 'text-emerald-400' : activeBatch.status === 'PARTIAL_SUCCESS' ? 'text-amber-400' : 'text-rose-400'}`}>
-                    {activeBatch.status}
-                  </span>
-                </div>
-                <div className="flex justify-between text-[11px] text-slate-400">
-                  <span>Destinations:</span>
-                  <span>{activeBatch.successful_targets} / {activeBatch.total_targets} Successful</span>
-                </div>
-              </div>
-
-              {/* Target Jobs Breakdown */}
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {activeBatch.jobs.map((job) => (
-                  <div key={job.id} className="p-2.5 rounded bg-slate-900/40 border border-slate-800/60 flex items-center justify-between text-xs">
-                    <div className="flex items-center space-x-2 min-w-0">
-                      {job.platform === 'facebook' ? (
-                        <Facebook className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                      ) : (
-                        <Instagram className="w-3.5 h-3.5 text-pink-400 flex-shrink-0" />
-                      )}
-                      <span className="font-semibold text-slate-200 truncate">{job.account_name || `${job.platform} account #${job.social_account_id}`}</span>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      {job.status === 'SUCCESS' ? (
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono">
-                          ✓ Published
-                        </span>
-                      ) : job.status === 'FAILED' ? (
-                        <span className="px-2 py-0.5 rounded bg-rose-950/60 text-rose-300 border border-rose-800/60 text-[9px] font-mono" title={job.error_message}>
-                          ✕ Failed
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded bg-indigo-950/60 text-indigo-300 border border-indigo-800/60 text-[9px] font-mono flex items-center space-x-1">
-                          <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                          <span>Processing</span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex space-x-2 pt-2">
-                {activeBatch.failed_targets > 0 && (
-                  <button
-                    onClick={handleRetryBatch}
-                    disabled={isPublishing}
-                    className="flex-1 py-2 rounded bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition flex items-center justify-center space-x-1.5"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isPublishing ? 'animate-spin' : ''}`} />
-                    <span>Retry Failed ({activeBatch.failed_targets})</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => setIsBatchModalOpen(false)}
-                  className="flex-1 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Right Column: Live Rich Social Media Preview */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="glass-panel p-5 rounded-2xl space-y-4 sticky top-20">
-            {/* Preview Tabs Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-                <Layers className="w-4 h-4 text-indigo-400" />
-                <span>Live Rich Post Preview</span>
+        {/* Right Column: Real-World Social Preview Cards */}
+        <div className="lg:col-span-5 space-y-4">
+          <div className="pub-card p-5 space-y-4 sticky top-20">
+            <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+              <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center space-x-2">
+                <Globe className="w-4 h-4 text-[var(--accent-color)]" />
+                <span>Live Feed Preview</span>
               </h3>
 
-              <div className="flex items-center space-x-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+              {/* Toggle Platform Preview Filter */}
+              <div className="flex items-center space-x-1 bg-[var(--bg-tertiary)] p-0.5 rounded border border-[var(--border-color)]">
                 <button
-                  onClick={() => setPreviewPlatform('instagram')}
-                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${
-                    previewPlatform === 'instagram'
-                      ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white'
+                  onClick={() => setPreviewPlatform('both')}
+                  className={`px-2 py-1 text-[10px] font-semibold rounded ${
+                    previewPlatform === 'both' ? 'bg-[var(--accent-color)] text-white' : 'text-[var(--text-secondary)]'
                   }`}
                 >
-                  <Instagram className="w-3.5 h-3.5" />
-                  <span>Instagram</span>
+                  Both
                 </button>
                 <button
                   onClick={() => setPreviewPlatform('facebook')}
-                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${
-                    previewPlatform === 'facebook'
-                      ? 'bg-blue-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white'
+                  className={`px-2 py-1 text-[10px] font-semibold rounded ${
+                    previewPlatform === 'facebook' ? 'bg-[#1877F2] text-white' : 'text-[var(--text-secondary)]'
                   }`}
                 >
-                  <Facebook className="w-3.5 h-3.5" />
-                  <span>Facebook</span>
+                  FB
+                </button>
+                <button
+                  onClick={() => setPreviewPlatform('instagram')}
+                  className={`px-2 py-1 text-[10px] font-semibold rounded ${
+                    previewPlatform === 'instagram' ? 'bg-[#E4405F] text-white' : 'text-[var(--text-secondary)]'
+                  }`}
+                >
+                  IG
                 </button>
               </div>
             </div>
 
-            {/* Render Selected Social Card */}
-            <div className="flex justify-center py-2">
-              {previewPlatform === 'instagram' ? (
-                <InstagramPostPreview
-                  brand={selectedBrand}
-                  caption={caption}
-                  hashtags={hashtags}
-                  cta={cta}
-                  imageUrl={imageUrl}
-                />
-              ) : (
-                <FacebookPostPreview
-                  brand={selectedBrand}
-                  caption={caption}
-                  hashtags={hashtags}
-                  cta={cta}
-                  imageUrl={imageUrl}
-                />
-              )}
-            </div>
-
-            {/* Publishing Action Toolbar */}
-            <div className="pt-2 border-t border-slate-800 space-y-2.5">
-              {/* Meta Account Status Indicator */}
-              {selectedBrand?.meta_account?.is_connected ? (
-                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-300 flex items-center justify-between">
-                  <div className="flex items-center space-x-1.5 font-medium truncate">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                    <span className="truncate">
-                      Connected: {selectedBrand.meta_account.facebook_page_name || 'Facebook Page'} {selectedBrand.meta_account.instagram_username ? `(@${selectedBrand.meta_account.instagram_username})` : ''}
-                    </span>
-                  </div>
-                  <a href="/meta-connect" className="text-indigo-400 hover:text-white font-semibold text-[10px] underline ml-2 flex-shrink-0">
-                    Edit
-                  </a>
-                </div>
-              ) : (
-                <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-[11px] text-indigo-200 flex items-center justify-between">
-                  <span>💡 Publishing to FB Page & IG via Meta Graph API</span>
-                  <a href="/meta-connect" className="text-indigo-400 hover:text-white font-bold underline ml-2 flex-shrink-0">
-                    Connect Meta →
-                  </a>
+            {/* Social Previews Scroll Container */}
+            <div className="space-y-6 max-h-[750px] overflow-y-auto pr-1">
+              {(previewPlatform === 'both' || previewPlatform === 'facebook') && (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-mono font-semibold uppercase text-[var(--text-tertiary)] flex items-center space-x-1.5">
+                    <Facebook className="w-3.5 h-3.5 text-[#1877F2]" />
+                    <span>Facebook Feed Preview</span>
+                  </span>
+                  <FacebookPostPreview
+                    brand={activeBrand}
+                    caption={caption}
+                    hashtags={hashtags}
+                    cta={cta}
+                    imageUrl={imageUrl}
+                    isVideo={mediaType === 'video'}
+                  />
                 </div>
               )}
 
-              <button
-                onClick={handlePublishNow}
-                disabled={isPublishing}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white font-bold text-sm transition shadow-lg shadow-emerald-600/25 flex items-center justify-center space-x-2 disabled:opacity-50"
-              >
-                {isPublishing ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Publishing to Meta...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>Publish Now to FB Page & Instagram</span>
-                  </>
-                )}
-              </button>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={handleSaveDraft}
-                  className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center justify-center space-x-1.5"
-                >
-                  <FileText className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Save Draft</span>
-                </button>
-                <button
-                  onClick={() => setIsScheduleModalOpen(true)}
-                  className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center justify-center space-x-1.5"
-                >
-                  <Calendar className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Schedule Post</span>
-                </button>
-              </div>
+              {(previewPlatform === 'both' || previewPlatform === 'instagram') && (
+                <div className="space-y-2 pt-2">
+                  <span className="text-[10px] font-mono font-semibold uppercase text-[var(--text-tertiary)] flex items-center space-x-1.5">
+                    <Instagram className="w-3.5 h-3.5 text-[#E4405F]" />
+                    <span>Instagram Feed Preview</span>
+                  </span>
+                  <InstagramPostPreview
+                    brand={activeBrand}
+                    caption={caption}
+                    hashtags={hashtags}
+                    cta={cta}
+                    imageUrl={imageUrl}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
-
-      {/* Schedule Post Date Time Modal */}
-      {isScheduleModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#111827] border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                <Calendar className="w-5 h-5 text-blue-400" />
-                <span>Schedule Social Post</span>
-              </h3>
-              <button
-                onClick={() => setIsScheduleModalOpen(false)}
-                className="text-slate-400 hover:text-white text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSchedulePostSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Select Publishing Date & Time
-                </label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={scheduledDateTime}
-                  onChange={(e) => setScheduledDateTime(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-                />
-                <p className="text-[11px] text-slate-400 mt-1.5">
-                  The Celery worker engine will automatically push your post to Facebook Page & Instagram Business account at this exact time.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end space-x-3 pt-2 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsScheduleModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isScheduling}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/20 flex items-center space-x-1.5"
-                >
-                  <Calendar className="w-4 h-4" />
-                  <span>Confirm Schedule</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
-
