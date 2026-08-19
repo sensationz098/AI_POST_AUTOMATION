@@ -245,38 +245,9 @@ export default function StudioPage() {
         );
       }
     } catch (e: any) {
-      console.warn('Backend post publish fallback:', e);
-      try {
-        const stored = localStorage.getItem('local_posts_queue') || '[]';
-        const queue: SocialPost[] = JSON.parse(stored);
-        const newPost: SocialPost = {
-          id: Date.now(),
-          brand_id: Number(selectedBrandId) || 1,
-          user_id: 1,
-          title: title || 'Local Studio Post',
-          caption,
-          hashtags,
-          cta,
-          seo_keywords: [],
-          image_url: imageUrl,
-          platforms: selectedPlatforms as any,
-          status: isScheduled ? 'SCHEDULED' : 'PUBLISHED',
-          scheduled_at: isScheduled ? scheduledAt : undefined,
-          published_at: isScheduled ? undefined : new Date().toISOString(),
-          retry_count: 0,
-          max_retries: 3,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        queue.unshift(newPost);
-        localStorage.setItem('local_posts_queue', JSON.stringify(queue));
-      } catch {}
-
-      setPublishingMessage(
-        isScheduled
-          ? `✓ Post scheduled successfully for ${scheduledAt ? new Date(scheduledAt).toLocaleString() : 'queue'}!`
-          : '✓ Post dispatched to Facebook & Instagram Graph API successfully!'
-      );
+      console.error('Backend post publish error:', e);
+      const detail = e.response?.data?.detail || e.message || 'Failed to publish post. Please check your connected Meta channel & token permissions.';
+      setErrorMessage(`Publishing Error: ${detail}`);
     } finally {
       setIsPublishing(false);
     }
