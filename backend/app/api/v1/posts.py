@@ -8,8 +8,6 @@ from app.core.database import get_db
 from app.schemas.post import PostCreate, PostUpdate, PostResponse, SchedulePostRequest
 from app.schemas.social_account import MultiPublishRequest, PublishingBatchResponse
 from app.services.post_service import post_service
-from app.services.publisher_service import publishing_engine
-from app.repositories.publishing_repo import publishing_repo if hasattr(post_service, 'publishing_repo') else None
 from app.repositories.social_account_repository import social_account_repo
 from app.models.publishing_batch import BatchStatus, JobStatus, PublishingJob
 from app.api.v1.deps import get_current_user
@@ -20,6 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/posts", tags=["Social Posts Workflow"])
 
 @router.post("/", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PostResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 def create_post(
     post_in: PostCreate,
     db: Session = Depends(get_db),
@@ -29,6 +28,7 @@ def create_post(
     return post_service.create_post(db, current_user.id, post_in)
 
 @router.get("/", response_model=List[PostResponse])
+@router.get("", response_model=List[PostResponse], include_in_schema=False)
 def get_user_posts(
     status: Optional[str] = Query(None, description="Filter by status: DRAFT, APPROVED, SCHEDULED, PUBLISHED, FAILED"),
     db: Session = Depends(get_db),
@@ -38,6 +38,7 @@ def get_user_posts(
     return post_service.get_user_posts(db, current_user.id, status)
 
 @router.get("/brand/{brand_id}", response_model=List[PostResponse])
+@router.get("/brand/{brand_id}/", response_model=List[PostResponse], include_in_schema=False)
 def get_brand_posts(
     brand_id: int,
     status: Optional[str] = Query(None, description="Filter by status: DRAFT, APPROVED, SCHEDULED, PUBLISHED, FAILED"),
@@ -47,8 +48,9 @@ def get_brand_posts(
     """Retrieve posts for a specific brand profile (auto-triggering due scheduled posts publishing)."""
     return post_service.get_brand_posts(db, brand_id, current_user.id, status)
 
-# Direct Studio Publish Payload Endpoint (Crash-Proof)
+# Direct Studio Publish Payload Endpoint (Handles both /publish-now and /publish-now/)
 @router.post("/publish-now", response_model=PostResponse)
+@router.post("/publish-now/", response_model=PostResponse, include_in_schema=False)
 def publish_now_direct(
     post_in: PostCreate,
     db: Session = Depends(get_db),
@@ -74,8 +76,9 @@ def publish_now_direct(
             detail=f"Publishing Error: {str(e)}"
         )
 
-# Direct Studio Schedule Payload Endpoint (Crash-Proof)
+# Direct Studio Schedule Payload Endpoint (Handles both /schedule and /schedule/)
 @router.post("/schedule", response_model=PostResponse)
+@router.post("/schedule/", response_model=PostResponse, include_in_schema=False)
 def schedule_direct(
     post_in: PostCreate,
     db: Session = Depends(get_db),
@@ -117,6 +120,7 @@ def update_post(
     return post_service.update_post(db, post_id, current_user.id, post_in)
 
 @router.post("/{post_id}/approve", response_model=PostResponse)
+@router.post("/{post_id}/approve/", response_model=PostResponse, include_in_schema=False)
 def approve_post(
     post_id: int,
     db: Session = Depends(get_db),
@@ -126,6 +130,7 @@ def approve_post(
     return post_service.approve_post(db, post_id, current_user.id)
 
 @router.post("/{post_id}/schedule", response_model=PostResponse)
+@router.post("/{post_id}/schedule/", response_model=PostResponse, include_in_schema=False)
 def schedule_post_by_id(
     post_id: int,
     request: SchedulePostRequest,
@@ -136,6 +141,7 @@ def schedule_post_by_id(
     return post_service.schedule_post(db, post_id, current_user.id, request.scheduled_at)
 
 @router.post("/{post_id}/publish-now", response_model=PostResponse)
+@router.post("/{post_id}/publish-now/", response_model=PostResponse, include_in_schema=False)
 def publish_now_by_id(
     post_id: int,
     db: Session = Depends(get_db),
@@ -145,6 +151,7 @@ def publish_now_by_id(
     return post_service.execute_publish(db, post_id, current_user.id)
 
 @router.post("/{post_id}/retry", response_model=PostResponse)
+@router.post("/{post_id}/retry/", response_model=PostResponse, include_in_schema=False)
 def retry_failed(
     post_id: int,
     db: Session = Depends(get_db),

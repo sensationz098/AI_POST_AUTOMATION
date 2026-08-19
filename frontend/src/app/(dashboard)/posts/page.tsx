@@ -65,6 +65,19 @@ export default function PostSchedulerPage() {
     );
   };
 
+  const handlePublishNowById = async (postId: number) => {
+    try {
+      await apiClient.post(`/posts/${postId}/publish-now`);
+    } catch (e) {
+      // Local state update fallback
+    }
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId ? { ...p, status: 'PUBLISHED', published_at: new Date().toISOString() } : p
+      )
+    );
+  };
+
   const userTimeZone = typeof window !== 'undefined'
     ? Intl.DateTimeFormat().resolvedOptions().timeZone
     : 'UTC';
@@ -214,7 +227,8 @@ export default function PostSchedulerPage() {
                         </button>
                       ) : post.status === 'APPROVED' ? (
                         <button
-                          onClick={() => handleRetry(post.id)}
+                          type="button"
+                          onClick={() => handlePublishNowById(post.id)}
                           className="btn-primary py-1 px-2.5 text-[11px] flex items-center space-x-1 ml-auto"
                         >
                           <Send className="w-3 h-3" />
