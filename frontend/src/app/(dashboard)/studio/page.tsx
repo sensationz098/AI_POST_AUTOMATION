@@ -250,16 +250,48 @@ export default function StudioPage() {
         setPublishingMessage(`✓ Post queued for scheduling on ${new Date(scheduledAt).toLocaleString()}`);
         setIsPublishing(false);
       } else {
-        setPublishingMessage("Publishing across selected target accounts...");
-        const res = await apiClient.post('/posts/publish-now', postPayload);
-        const postData = res.data;
+        setPublishingMessage("Creating post entry...");
+        // 1. Create post entry in DB
+        const createPostPayload = {
+          brand_id: Number(selectedBrandId) || 1,
+          title: title.trim() || topic.trim() || 'Social AI Post',
+          caption: caption,
+          hashtags: hashtags || [],
+          cta: cta || null,
+          seo_keywords: [],
+          image_prompt: topic || title || null,
+          image_url: imageUrl || null,
+          platforms: targetPlatforms.length > 0 ? targetPlatforms : ['facebook', 'instagram'],
+          status: 'DRAFT'
+        };
+        const postRes = await apiClient.post('/posts/', createPostPayload);
+        const createdPost = postRes.data;
 
-        if (postData?.status === 'PUBLISHED' || postData?.status === 'SUCCESS' || postData?.batch_id) {
+        if (!createdPost || !createdPost.id) {
+          throw new Error('Failed to create post record in database.');
+        }
+
+        setPublishingMessage(`Publishing across ${selectedAccountIds.length} target account(s)...`);
+
+        // 2. Call restored multi-publish endpoint from commit 214742c
+        const multiPublishPayload = {
+          post_id: createdPost.id,
+          social_account_ids: selectedAccountIds
+        };
+        const publishRes = await apiClient.post('/posts/publish-multi', multiPublishPayload);
+        const batchData = publishRes.data;
+
+        if (batchData?.status === 'SUCCESS' || batchData?.successful_targets === batchData?.total_targets) {
           setIsPublishing(false);
-          setPublishingMessage(`✓ Post published successfully across ${selectedAccountIds.length} target account(s)!`);
-        } else if (postData?.last_error) {
+          setPublishingMessage(`✓ Post published successfully across all ${batchData.total_targets} connected target account(s)!`);
+        } else if (batchData?.status === 'PARTIAL_SUCCESS' || (batchData?.successful_targets || 0) > 0) {
           setIsPublishing(false);
-          setErrorMessage(`Publishing Failed: ${postData.last_error}`);
+          setPublishingMessage(`✓ Published to ${batchData.successful_targets}/${batchData.total_targets} target account(s). Some accounts failed.`);
+        } else if (batchData?.status === 'FAILED') {
+          setIsPublishing(false);
+          const failedJobs = batchData.jobs?.filter((j: any) => j.status === 'FAILED') || [];
+          const firstErr = failedJobs[0]?.error_message || 'Target channels could not be reached.';
+          setErrorMessage(`Publishing Failed: ${firstErr}`);
           setPublishingMessage(null);
         } else {
           setIsPublishing(false);
