@@ -312,6 +312,56 @@ class PostService:
         )
         return post
 
+    def create_and_start_publish_batch(
+        self,
+        db: Session,
+        post: Post,
+        user_id: int,
+        target_account_ids: Optional[List[int]] = None
+    ):
+        """Create a PublishingBatch and PublishingJobs for specific selected target social accounts."""
+        from app.models.social_account import SocialAccount
+        from app.repositories.publishing_repository import publishing_repo
+
+        query = db.query(SocialAccount).filter(
+            SocialAccount.user_id == user_id,
+            SocialAccount.status == "CONNECTED"
+        )
+        if target_account_ids and len(target_account_ids) > 0:
+            target_accounts = query.filter(SocialAccount.id.in_(target_account_ids)).all()
+        else:
+            target_accounts = query.all()
+
+        if not target_accounts:
+            post.status = PostStatus.FAILED.value
+            post.last_error = "No connected social accounts found for selected destinations."
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No connected social accounts found for the selected targets. Please connect your Facebook Page or Instagram account."
+            )
+
+        batch = publishing_repo.create_batch(
+            db=db,
+            post_id=post.id,
+            user_id=user_id,
+            total_targets=len(target_accounts)
+        )
+
+        for acc in target_accounts:
+            publishing_repo.create_job(
+                db=db,
+                batch_id=batch.id,
+                social_account_id=acc.id,
+                platform=acc.platform
+            )
+
+        post.status = "PUBLISHING"
+        db.commit()
+        db.refresh(post)
+
+        return batch
+
     def retry_failed_post(self, db: Session, post_id: int, user_id: int) -> Post:
         post = self.get_post(db, post_id, user_id)
         if post.status != PostStatus.FAILED.value:
@@ -348,3 +398,86 @@ class PostService:
             return []
 
 post_service = PostService()
+
+def run_background_publish_batch(batch_id: int, post_id: int, user_id: int, caption: str, raw_media_url: Optional[str]):
+    """
+    Background worker task executed asynchronously outside the HTTP request.
+    Uses its own isolated SessionLocal() to process batch jobs reliably.
+    """
+    from app.core.database import SessionLocal
+    from app.repositories.publishing_repository import publishing_repo
+    from app.models.publishing_batch import BatchStatus, PublishingJob
+    from app.models.social_account import SocialAccount
+    from app.services.publisher_service import publishing_engine
+    from app.repositories.post_repository import post_repo
+
+    logger.info(f"Background publishing started for Batch #{batch_id}, Post #{post_id}")
+    bg_db = SessionLocal()
+    try:
+        batch = publishing_repo.get_batch(bg_db, batch_id)
+        if not batch:
+            logger.error(f"Background worker: Batch #{batch_id} not found.")
+            return
+
+        batch.status = BatchStatus.PROCESSING.value
+        bg_db.commit()
+
+        post = post_repo.get(bg_db, post_id)
+
+        # Process media asset ONCE via Cloudinary CDN
+        logger.info(f"Batch #{batch_id}: Processing media asset once for all target jobs.")
+        public_media_url = raw_media_url
+        if raw_media_url and (raw_media_url.startswith("data:") or raw_media_url.startswith("blob:") or not (raw_media_url.startswith("http://") or raw_media_url.startswith("https://"))):
+            uploaded_url = upload_base64_to_public_https(raw_media_url)
+            if uploaded_url and (uploaded_url.startswith("http://") or uploaded_url.startswith("https://")):
+                public_media_url = uploaded_url
+                logger.info(f"Batch #{batch_id}: Cloudinary upload completed once: {public_media_url}")
+                if post:
+                    post.image_url = public_media_url
+                    bg_db.commit()
+
+        # Retrieve jobs and target accounts
+        jobs = bg_db.query(PublishingJob).filter(PublishingJob.batch_id == batch_id).all()
+        account_ids = [j.social_account_id for j in jobs]
+        target_accounts = bg_db.query(SocialAccount).filter(
+            SocialAccount.id.in_(account_ids),
+            SocialAccount.user_id == user_id
+        ).all()
+
+        for j in jobs:
+            acc = next((a for a in target_accounts if a.id == j.social_account_id), None)
+            acc_name = acc.account_name if acc else f"ID #{j.social_account_id}"
+            logger.info(f"Batch #{batch_id} - Job #{j.id}: Target {j.platform.upper()} account '{acc_name}' (SocialAccount ID: {j.social_account_id})")
+
+        # Execute batch using publishing engine
+        publishing_engine.execute_batch(
+            db=bg_db,
+            batch_id=batch_id,
+            post_caption=caption,
+            raw_media_url=public_media_url,
+            accounts=target_accounts
+        )
+
+        # Final summary update
+        updated_batch = publishing_repo.get_batch(bg_db, batch_id)
+        if post and updated_batch:
+            if updated_batch.status == BatchStatus.SUCCESS.value:
+                post.status = PostStatus.PUBLISHED.value
+                post.published_at = datetime.now(timezone.utc)
+                post.last_error = None
+            elif updated_batch.status == BatchStatus.PARTIAL_SUCCESS.value:
+                post.status = PostStatus.PUBLISHED.value
+                post.published_at = datetime.now(timezone.utc)
+                post.last_error = f"Partially published: {updated_batch.successful_targets}/{updated_batch.total_targets} accounts succeeded."
+            else:
+                post.status = PostStatus.FAILED.value
+                failed_job_errors = [j.error_message for j in updated_batch.jobs if j.error_message]
+                post.last_error = " | ".join(failed_job_errors) or "All target accounts failed to publish."
+            
+            bg_db.commit()
+            logger.info(f"Background publishing completed for Batch #{batch_id}. Final status: {updated_batch.status}.")
+
+    except Exception as e:
+        logger.error(f"Fatal exception in background publishing worker: {e}", exc_info=True)
+    finally:
+        bg_db.close()

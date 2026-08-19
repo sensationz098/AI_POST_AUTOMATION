@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Query, HTTPException
+from fastapi import APIRouter, Depends, status, Query, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -7,7 +7,7 @@ import logging
 from app.core.database import get_db
 from app.schemas.post import PostCreate, PostUpdate, PostResponse, SchedulePostRequest
 from app.schemas.social_account import MultiPublishRequest, PublishingBatchResponse
-from app.services.post_service import post_service
+from app.services.post_service import post_service, run_background_publish_batch
 from app.repositories.social_account_repository import social_account_repo
 from app.models.publishing_batch import BatchStatus, JobStatus, PublishingJob
 from app.api.v1.deps import get_current_user
@@ -53,20 +53,37 @@ def get_brand_posts(
 @router.post("/publish-now/", response_model=PostResponse, include_in_schema=False)
 def publish_now_direct(
     post_in: PostCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create and immediately publish post to Meta Graph API channels with 100% exception safety."""
+    """
+    Create post, initialize PublishingBatch and PublishingJobs for selected target accounts,
+    and trigger non-blocking asynchronous background publishing.
+    """
     try:
+        target_ids = post_in.target_account_ids or post_in.social_account_ids
         new_post = post_service.create_post(db, current_user.id, post_in)
-        published_post = post_service.execute_publish(db, new_post.id, current_user.id)
         
-        if published_post.status == "FAILED":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=published_post.last_error or "Meta publishing failed. Please check your connected social account and permissions."
-            )
-        return published_post
+        batch = post_service.create_and_start_publish_batch(
+            db=db,
+            post=new_post,
+            user_id=current_user.id,
+            target_account_ids=target_ids
+        )
+
+        background_tasks.add_task(
+            run_background_publish_batch,
+            batch_id=batch.id,
+            post_id=new_post.id,
+            user_id=current_user.id,
+            caption=new_post.caption,
+            raw_media_url=new_post.image_url
+        )
+
+        res = PostResponse.model_validate(new_post)
+        res.batch_id = batch.id
+        return res
     except HTTPException as http_ex:
         raise http_ex
     except Exception as e:
@@ -144,11 +161,30 @@ def schedule_post_by_id(
 @router.post("/{post_id}/publish-now/", response_model=PostResponse, include_in_schema=False)
 def publish_now_by_id(
     post_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Immediately trigger Meta Graph API publishing for existing post."""
-    return post_service.execute_publish(db, post_id, current_user.id)
+    """Immediately trigger background Meta Graph API publishing for existing post."""
+    post = post_service.get_post(db, post_id, current_user.id)
+    batch = post_service.create_and_start_publish_batch(
+        db=db,
+        post=post,
+        user_id=current_user.id
+    )
+
+    background_tasks.add_task(
+        run_background_publish_batch,
+        batch_id=batch.id,
+        post_id=post.id,
+        user_id=current_user.id,
+        caption=post.caption,
+        raw_media_url=post.image_url
+    )
+
+    res = PostResponse.model_validate(post)
+    res.batch_id = batch.id
+    return res
 
 @router.post("/{post_id}/retry", response_model=PostResponse)
 @router.post("/{post_id}/retry/", response_model=PostResponse, include_in_schema=False)

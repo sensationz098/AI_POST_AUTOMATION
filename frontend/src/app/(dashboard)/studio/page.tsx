@@ -83,8 +83,8 @@ export default function StudioPage() {
   }, []);
 
   const activeBrand = brands.find(b => String(b.id) === String(selectedBrandId)) || (brands[0] || null);
-  const fbAccount = socialAccounts.find(a => a.platform === 'facebook');
-  const igAccount = socialAccounts.find(a => a.platform === 'instagram');
+  const facebookAccounts = socialAccounts.filter(a => a.platform === 'facebook');
+  const instagramAccounts = socialAccounts.filter(a => a.platform === 'instagram');
 
   // Media File Upload Handler (Image & Video)
   const handleMediaFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -210,14 +210,14 @@ export default function StudioPage() {
     setMediaType('image');
   };
 
-  // Publish / Schedule Handler
+  // Publish / Schedule Handler with instant background task dispatch & batch polling
   const handlePublish = async (isScheduled: boolean = false) => {
     if (!caption.trim() && !imageUrl.trim()) {
       setErrorMessage('Please provide a caption or image/video before publishing.');
       return;
     }
-    if (selectedPlatforms.length === 0) {
-      setErrorMessage('Please select at least one social destination platform.');
+    if (selectedAccountIds.length === 0 && !isScheduled) {
+      setErrorMessage('Please select at least one target social destination account.');
       return;
     }
 
@@ -225,8 +225,8 @@ export default function StudioPage() {
     setPublishingMessage(null);
     setErrorMessage(null);
 
-    console.log("MEDIA TYPE:", typeof imageUrl);
-    console.log("MEDIA PREFIX:", typeof imageUrl === "string" ? imageUrl.substring(0, 100) : imageUrl);
+    const selectedAccounts = socialAccounts.filter(a => selectedAccountIds.includes(String(a.id)));
+    const targetPlatforms = Array.from(new Set(selectedAccounts.map(a => a.platform)));
 
     const postPayload = {
       brand_id: Number(selectedBrandId) || 1,
@@ -237,33 +237,64 @@ export default function StudioPage() {
       seo_keywords: [],
       image_prompt: topic || title || null,
       image_url: imageUrl || null,
-      platforms: selectedPlatforms,
+      platforms: targetPlatforms.length > 0 ? targetPlatforms : ['facebook', 'instagram'],
+      target_account_ids: selectedAccountIds.map(Number),
+      social_account_ids: selectedAccountIds.map(Number),
       status: isScheduled ? 'SCHEDULED' : 'PUBLISHED',
       scheduled_at: isScheduled && scheduledAt ? new Date(scheduledAt).toISOString() : null,
     };
 
     try {
-      setPublishingMessage("Publishing to social platforms, please wait...");
-      const endpoint = isScheduled ? '/posts/schedule' : '/posts/publish-now';
-      const res = await apiClient.post(endpoint, postPayload, { timeout: 60000 });
-      
-      if (res.data?.status === 'FAILED' || res.data?.last_error) {
-        setPublishingMessage(null);
-        setErrorMessage(`Publishing Warning: ${res.data.last_error}`);
+      if (isScheduled) {
+        await apiClient.post('/posts/schedule', postPayload);
+        setPublishingMessage(`✓ Post queued for scheduling on ${new Date(scheduledAt).toLocaleString()}`);
+        setIsPublishing(false);
       } else {
-        setPublishingMessage(
-          isScheduled
-            ? `✓ Post queued for scheduling on ${new Date(scheduledAt).toLocaleString()}`
-            : '✓ Post published successfully to Meta Graph API!'
-        );
+        setPublishingMessage("Initiating publishing task across target channels...");
+        const res = await apiClient.post('/posts/publish-now', postPayload);
+        const batchId = res.data?.batch_id;
+
+        if (batchId) {
+          setPublishingMessage(`Publishing in progress across ${selectedAccountIds.length} target account(s)...`);
+          const pollInterval = setInterval(async () => {
+            try {
+              const batchRes = await apiClient.get(`/posts/batch/${batchId}`);
+              const bData = batchRes.data;
+              if (bData) {
+                if (bData.status === 'PROCESSING' || bData.status === 'QUEUED') {
+                  setPublishingMessage(`Publishing in progress (${bData.successful_targets}/${bData.total_targets} completed)...`);
+                } else if (bData.status === 'SUCCESS') {
+                  clearInterval(pollInterval);
+                  setIsPublishing(false);
+                  setPublishingMessage(`✓ Post published successfully to all ${bData.total_targets} connected target account(s)!`);
+                } else if (bData.status === 'PARTIAL_SUCCESS') {
+                  clearInterval(pollInterval);
+                  setIsPublishing(false);
+                  setPublishingMessage(`✓ Published to ${bData.successful_targets}/${bData.total_targets} target account(s). Some accounts failed.`);
+                } else if (bData.status === 'FAILED') {
+                  clearInterval(pollInterval);
+                  setIsPublishing(false);
+                  const failedJobs = bData.jobs?.filter((j: any) => j.status === 'FAILED') || [];
+                  const firstErr = failedJobs[0]?.error_message || 'Target channels could not be reached.';
+                  setErrorMessage(`Publishing Failed: ${firstErr}`);
+                  setPublishingMessage(null);
+                }
+              }
+            } catch (err) {
+              console.warn('Batch status polling:', err);
+            }
+          }, 2500);
+        } else {
+          setPublishingMessage('✓ Post published successfully!');
+          setIsPublishing(false);
+        }
       }
     } catch (e: any) {
+      setIsPublishing(false);
       setPublishingMessage(null);
       console.error('Backend post publish error:', e);
       const detail = e.response?.data?.detail || e.message || 'Failed to publish post. Please check your connected Meta channel & token permissions.';
       setErrorMessage(`Publishing Error: ${detail}`);
-    } finally {
-      setIsPublishing(false);
     }
   };
 
@@ -643,72 +674,123 @@ export default function StudioPage() {
             {/* Target Destinations & Schedule Options */}
             <div className="space-y-4 pt-3 border-t border-[var(--border-color)]">
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-2">
-                  Select Target Channels
-                </label>
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Facebook Target Channel Card */}
-                  <label
-                    className={`flex items-center space-x-2.5 cursor-pointer bg-[var(--bg-tertiary)] border px-3.5 py-2 rounded-md transition ${
-                      selectedPlatforms.includes('facebook')
-                        ? 'border-[#1877F2] bg-[#1877F2]/5'
-                        : 'border-[var(--border-color)]'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedPlatforms.includes('facebook')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          if (!selectedPlatforms.includes('facebook')) setSelectedPlatforms([...selectedPlatforms, 'facebook']);
-                        } else {
-                          setSelectedPlatforms(selectedPlatforms.filter(p => p !== 'facebook'));
-                        }
-                      }}
-                      className="rounded accent-[#1877F2]"
-                    />
-                    <Facebook className="w-4 h-4 text-[#1877F2] flex-shrink-0" />
-                    <div>
-                      <span className="font-semibold text-xs text-[var(--text-primary)] block">
-                        {fbAccount?.account_name || activeBrand?.meta_account?.facebook_page_name || activeBrand?.name || 'Facebook Page'}
-                      </span>
-                      <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase block">
-                        Facebook Page
-                      </span>
-                    </div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)]">
+                    Select Target Social Accounts ({selectedAccountIds.length} selected)
                   </label>
-
-                  {/* Instagram Target Channel Card */}
-                  <label
-                    className={`flex items-center space-x-2.5 cursor-pointer bg-[var(--bg-tertiary)] border px-3.5 py-2 rounded-md transition ${
-                      selectedPlatforms.includes('instagram')
-                        ? 'border-[#E4405F] bg-[#E4405F]/5'
-                        : 'border-[var(--border-color)]'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedPlatforms.includes('instagram')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          if (!selectedPlatforms.includes('instagram')) setSelectedPlatforms([...selectedPlatforms, 'instagram']);
-                        } else {
-                          setSelectedPlatforms(selectedPlatforms.filter(p => p !== 'instagram'));
-                        }
-                      }}
-                      className="rounded accent-[#E4405F]"
-                    />
-                    <Instagram className="w-4 h-4 text-[#E4405F] flex-shrink-0" />
-                    <div>
-                      <span className="font-semibold text-xs text-[var(--text-primary)] block">
-                        {igAccount?.account_name || (activeBrand?.meta_account?.instagram_username ? `@${activeBrand.meta_account.instagram_username}` : (activeBrand?.name ? `@${activeBrand.name.toLowerCase().replace(/\s+/g, '_')}` : 'Instagram Account'))}
-                      </span>
-                      <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase block">
-                        Instagram Account
-                      </span>
-                    </div>
-                  </label>
+                  <Link href="/meta-connect" className="text-[11px] text-[var(--accent-color)] hover:underline font-medium">
+                    Manage Connections →
+                  </Link>
                 </div>
+
+                {socialAccounts.length === 0 ? (
+                  <div className="p-3.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-xs text-[var(--text-secondary)] flex items-center justify-between">
+                    <span>No connected Facebook Pages or Instagram accounts found.</span>
+                    <Link href="/meta-connect" className="btn-primary text-xs py-1 px-2.5">
+                      Connect Meta Accounts
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Facebook Pages Section */}
+                    {facebookAccounts.length > 0 && (
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-mono font-semibold uppercase text-[var(--text-tertiary)] flex items-center space-x-1.5">
+                          <Facebook className="w-3.5 h-3.5 text-[#1877F2]" />
+                          <span>Connected Facebook Pages ({facebookAccounts.length})</span>
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {facebookAccounts.map((acc) => {
+                            const isSelected = selectedAccountIds.includes(String(acc.id));
+                            return (
+                              <label
+                                key={acc.id}
+                                className={`flex items-center space-x-2.5 cursor-pointer bg-[var(--bg-tertiary)] border p-2.5 rounded-md transition ${
+                                  isSelected
+                                    ? 'border-[#1877F2] bg-[#1877F2]/10 shadow-sm'
+                                    : 'border-[var(--border-color)] opacity-70 hover:opacity-100'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedAccountIds((prev) => [...prev, String(acc.id)]);
+                                    } else {
+                                      setSelectedAccountIds((prev) => prev.filter((id) => id !== String(acc.id)));
+                                    }
+                                  }}
+                                  className="rounded accent-[#1877F2]"
+                                />
+                                {acc.logo_url && (
+                                  <img src={acc.logo_url} alt={acc.account_name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <span className="font-semibold text-xs text-[var(--text-primary)] block truncate">
+                                    {acc.account_name}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase block truncate">
+                                    Page ID: {acc.account_id}
+                                  </span>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Instagram Accounts Section */}
+                    {instagramAccounts.length > 0 && (
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-mono font-semibold uppercase text-[var(--text-tertiary)] flex items-center space-x-1.5">
+                          <Instagram className="w-3.5 h-3.5 text-[#E4405F]" />
+                          <span>Connected Instagram Accounts ({instagramAccounts.length})</span>
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {instagramAccounts.map((acc) => {
+                            const isSelected = selectedAccountIds.includes(String(acc.id));
+                            return (
+                              <label
+                                key={acc.id}
+                                className={`flex items-center space-x-2.5 cursor-pointer bg-[var(--bg-tertiary)] border p-2.5 rounded-md transition ${
+                                  isSelected
+                                    ? 'border-[#E4405F] bg-[#E4405F]/10 shadow-sm'
+                                    : 'border-[var(--border-color)] opacity-70 hover:opacity-100'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedAccountIds((prev) => [...prev, String(acc.id)]);
+                                    } else {
+                                      setSelectedAccountIds((prev) => prev.filter((id) => id !== String(acc.id)));
+                                    }
+                                  }}
+                                  className="rounded accent-[#E4405F]"
+                                />
+                                {acc.logo_url && (
+                                  <img src={acc.logo_url} alt={acc.account_name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <span className="font-semibold text-xs text-[var(--text-primary)] block truncate">
+                                    {acc.account_name.startsWith('@') ? acc.account_name : `@${acc.account_name}`}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase block truncate">
+                                    IG ID: {acc.account_id}
+                                  </span>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Scheduled Date Picker */}
