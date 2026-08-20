@@ -11,42 +11,46 @@ interface Props {
 export const PostStatusBadge: React.FC<Props> = ({ status }) => {
   const normalized = (status || 'DRAFT').toUpperCase() as PostStatus;
 
-  const configs: Record<string, { label: string; styleClass: string; icon: any }> = {
+  const configs = {
     DRAFT: {
-      label: 'DRAFT',
-      styleClass: 'bg-[var(--bg-tertiary)] text-[var(--warning-color)] border-[var(--border-color)]',
+      label: 'Draft',
+      bg: 'bg-slate-900/60 border-slate-700/80 text-slate-300',
+      dot: 'bg-slate-400',
       icon: FileEdit,
     },
     APPROVED: {
-      label: 'APPROVED',
-      styleClass: 'bg-[var(--bg-tertiary)] text-[var(--accent-color)] border-[var(--border-color)]',
+      label: 'Approved',
+      bg: 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300',
+      dot: 'bg-emerald-400',
       icon: CheckCircle,
     },
     SCHEDULED: {
-      label: 'SCHEDULED',
-      styleClass: 'bg-[var(--bg-tertiary)] text-[var(--accent-color)] border-[var(--border-color)]',
+      label: 'Scheduled',
+      bg: 'bg-sky-950/40 border-sky-800/60 text-sky-300',
+      dot: 'bg-sky-400',
       icon: Clock,
     },
     PUBLISHED: {
-      label: 'PUBLISHED',
-      styleClass: 'bg-[var(--bg-tertiary)] text-[var(--success-color)] border-[var(--border-color)]',
+      label: 'Published',
+      bg: 'bg-indigo-950/40 border-indigo-800/60 text-indigo-300',
+      dot: 'bg-indigo-400',
       icon: Send,
     },
     FAILED: {
-      label: 'FAILED',
-      styleClass: 'bg-[var(--bg-tertiary)] text-[var(--danger-color)] border-[var(--border-color)]',
+      label: 'Failed',
+      bg: 'bg-rose-950/40 border-rose-800/60 text-rose-300',
+      dot: 'bg-rose-400',
       icon: AlertTriangle,
     },
   };
 
   const config = configs[normalized] || configs.DRAFT;
-  const Icon = config.icon;
 
   return (
     <span
-      className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono font-medium border ${config.styleClass}`}
+      className={`inline-flex items-center space-x-1.5 px-2 py-0.5 rounded text-[11px] font-mono font-medium border ${config.bg}`}
     >
-      <Icon className="w-3 h-3 flex-shrink-0" />
+      <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
       <span>{config.label}</span>
     </span>
   );

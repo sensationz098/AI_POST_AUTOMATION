@@ -18,42 +18,13 @@ def get_connected_social_accounts(
     current_user: User = Depends(get_current_user)
 ):
     """Retrieve list of connected Facebook Pages & Instagram accounts (excluding sensitive access tokens)."""
-    from app.models.brand import BrandProfile
-    from app.models.meta_account import MetaAccount
-
-    # Auto-sync any linked MetaAccount entries into SocialAccount table
-    user_brands = db.query(BrandProfile).filter(BrandProfile.user_id == current_user.id).all()
-    for brand in user_brands:
-        meta = db.query(MetaAccount).filter(MetaAccount.brand_id == brand.id, MetaAccount.is_connected == True).first()
-        if meta:
-            if meta.facebook_page_id:
-                social_account_repo.create_or_update(
-                    db=db,
-                    user_id=current_user.id,
-                    platform="facebook",
-                    account_id=meta.facebook_page_id,
-                    account_name=meta.facebook_page_name or brand.name or "Facebook Page",
-                    access_token=meta.access_token or "page_access_token",
-                    brand_id=brand.id,
-                    logo_url=meta.logo_url or brand.logo_url
-                )
-            if meta.instagram_account_id or meta.instagram_username:
-                ig_handle = meta.instagram_username or "instagram_account"
-                if not ig_handle.startswith("@"):
-                    ig_handle = f"@{ig_handle}"
-                social_account_repo.create_or_update(
-                    db=db,
-                    user_id=current_user.id,
-                    platform="instagram",
-                    account_id=meta.instagram_account_id or "ig_account",
-                    account_name=ig_handle,
-                    access_token=meta.access_token or "page_access_token",
-                    brand_id=brand.id,
-                    logo_url=meta.logo_url or brand.logo_url
-                )
-
     accounts = social_account_repo.get_by_user(db, current_user.id)
-    return accounts
+    fake_ids = {"109823471029", "17841400928371", "17841400928372", "17841400928373", "109823471030", "sandbox"}
+    real_accounts = [
+        a for a in accounts
+        if a.account_id not in fake_ids and not (a.access_token and ("sandbox" in a.access_token or "mock" in a.access_token))
+    ]
+    return real_accounts
 
 @router.post("/connect", response_model=SocialAccountResponse, status_code=status.HTTP_201_CREATED)
 def connect_social_account(

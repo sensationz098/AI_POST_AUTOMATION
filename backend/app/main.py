@@ -1,20 +1,12 @@
 import os
 import logging
-import traceback
-from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import engine, Base
 import app.models  # Register all models with SQLAlchemy Base
-
-# Auto-create DB tables if they don't exist
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception as e:
-    logging.warning(f"Database table auto-creation warning: {e}")
 
 # Import API routers
 from app.api.v1.auth import router as auth_router
@@ -36,41 +28,14 @@ app = FastAPI(
     description="Production-Ready AI Social Media Automation Platform for Facebook & Instagram API."
 )
 
-# Global unhandled exception handler to prevent 500 server crash
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled server error on {request.method} {request.url}: {exc}")
-    logger.error(traceback.format_exc())
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "detail": str(exc) or "Internal Server Error",
-            "path": str(request.url.path),
-            "status": 500
-        }
-    )
-
 # Enforce production-safe restricted CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.APP_ENV != "production" else settings.cors_origins,
-    allow_credentials=True if settings.APP_ENV == "production" else False,
-    allow_methods=["*"],
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
-# Catch-all OPTIONS preflight handler to prevent 405 Method Not Allowed on browser preflight
-@app.options("/{path:path}")
-def options_preflight_handler(path: str):
-    return JSONResponse(
-        status_code=200,
-        content={"message": "OK"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
 
 # Static files route for local asset cache
 os.makedirs("uploads", exist_ok=True)

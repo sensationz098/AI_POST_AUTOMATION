@@ -7,8 +7,6 @@ from app.repositories.publishing_repository import publishing_repo
 from app.services.post_service import post_service
 from app.services.publisher_service import publishing_engine
 
-from app.models.publishing_batch import BatchStatus, JobStatus
-
 logger = logging.getLogger(__name__)
 
 @celery_app.task(name="app.tasks.publish_task.execute_batch_publishing_task")
@@ -24,8 +22,6 @@ def execute_batch_publishing_task(batch_id: int):
         post = post_repo.get(db, batch.post_id)
         if not post:
             logger.error(f"Celery Task Error: Post ID={batch.post_id} not found.")
-            batch.status = BatchStatus.FAILED.value
-            publishing_repo.update_batch_summary(db, batch_id)
             return {"status": "POST_NOT_FOUND"}
 
         formatted_caption = f"{post.caption}\n\n{' '.join(post.hashtags or [])}\n\n{post.cta or ''}".strip()
@@ -46,48 +42,9 @@ def execute_batch_publishing_task(batch_id: int):
             raw_media_url=post.image_url,
             accounts=accounts
         )
-
-        # Refresh & update final batch summary
-        res_batch = publishing_repo.update_batch_summary(db, batch_id)
-        if not res_batch:
-            res_batch = publishing_repo.get_batch(db, batch_id)
-
-        # Update main Post status based on batch outcome
-        if res_batch:
-            if res_batch.status in [BatchStatus.SUCCESS.value, BatchStatus.PARTIAL_SUCCESS.value] or res_batch.successful_targets > 0:
-                post.status = "PUBLISHED"
-                post.published_at = post.published_at or res_batch.completed_at or datetime.now(timezone.utc)
-                if res_batch.failed_targets > 0:
-                    post.last_error = f"Published to {res_batch.successful_targets} of {res_batch.total_targets} target accounts."
-                else:
-                    post.last_error = None
-            else:
-                post.status = "FAILED"
-                failed_job_errors = [j.error_message for j in res_batch.jobs if j.error_message]
-                post.last_error = " | ".join(failed_job_errors) or f"Multi-account publishing failed on {res_batch.failed_targets} target accounts."
-            db.commit()
-
         return {"status": "SUCCESS", "batch_id": batch_id}
     except Exception as e:
-        logger.error(f"Celery Async Worker Error executing batch ID={batch_id}: {e}", exc_info=True)
-        try:
-            db.rollback()
-            # Safety update: ensure batch does not stay stuck in PROCESSING / QUEUED
-            batch = publishing_repo.get_batch(db, batch_id)
-            if batch:
-                batch.status = BatchStatus.FAILED.value
-                batch.completed_at = datetime.now(timezone.utc)
-                for job in batch.jobs:
-                    if job.status in [JobStatus.QUEUED.value, JobStatus.PROCESSING.value]:
-                        job.status = JobStatus.FAILED.value
-                        job.error_message = f"Celery worker exception: {str(e)}"
-                post = post_repo.get(db, batch.post_id)
-                if post:
-                    post.status = "FAILED"
-                    post.last_error = f"Celery worker error: {str(e)}"
-                db.commit()
-        except Exception as rollback_err:
-            logger.error(f"Failed to update failed state in Celery task rollback: {rollback_err}")
+        logger.error(f"Celery Async Worker Error executing batch ID={batch_id}: {e}")
         return {"status": "ERROR", "error": str(e)}
     finally:
         db.close()
