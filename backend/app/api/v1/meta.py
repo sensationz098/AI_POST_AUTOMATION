@@ -188,35 +188,6 @@ def connect_meta_account(
         "last_synced_at": datetime.now(timezone.utc)
     }
     meta_acc = brand_repo.create_or_update_meta(db, target_brand.id, data)
-
-    # Sync connected accounts into social_accounts table as independent social accounts
-    if request.facebook_page_id:
-        social_account_repo.create_or_update(
-            db=db,
-            user_id=current_user.id,
-            platform="facebook",
-            account_id=request.facebook_page_id,
-            account_name=request.facebook_page_name or "Facebook Page",
-            access_token=request.access_token,
-            brand_id=target_brand.id,
-            logo_url=brand_logo_url
-        )
-
-    if request.instagram_account_id or request.instagram_username:
-        ig_name = request.instagram_username or "instagram_account"
-        if not ig_name.startswith("@"):
-            ig_name = f"@{ig_name}"
-        social_account_repo.create_or_update(
-            db=db,
-            user_id=current_user.id,
-            platform="instagram",
-            account_id=request.instagram_account_id or "ig_account",
-            account_name=ig_name,
-            access_token=request.access_token,
-            brand_id=target_brand.id,
-            logo_url=brand_logo_url
-        )
-
     return meta_acc
 
 @router.get("/account/{brand_id}", response_model=MetaAccountResponse)

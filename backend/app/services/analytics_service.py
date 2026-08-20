@@ -11,7 +11,6 @@ from app.schemas.analytics import (
 )
 from app.services.meta_service import meta_service
 from app.models.meta_account import MetaAccount
-from app.models.post import Post
 
 from app.core.security_encryption import decrypt_token
 from fastapi import HTTPException, status
@@ -32,35 +31,18 @@ class AnalyticsService:
             "total_impressions": 0, "avg_engagement_rate": 0.0
         }
 
-        user_published_posts = db.query(Post).filter(
-            Post.user_id == user_id,
-            Post.status == "PUBLISHED"
-        ).count()
-
         accounts_list = []
         total_followers_combined = 0
         total_reach_combined = summary.get("total_reach", 0)
         total_impressions_combined = summary.get("total_impressions", 0)
         has_live_meta = False
 
-        db_dirty = False
         for acc in real_accounts:
             token = decrypt_token(acc.access_token) or acc.access_token
             if acc.platform == "facebook":
                 fb_raw = meta_service.fetch_facebook_page_metrics(page_id=acc.account_id, access_token=token)
-                followers = fb_raw.get("followers_count", 0) or fb_raw.get("fan_count", 0)
+                followers = fb_raw.get("followers_count", 0)
                 total_followers_combined += followers
-
-                # Update database record if Meta returned new page name or picture
-                live_name = fb_raw.get("name")
-                live_picture = fb_raw.get("picture_url")
-                if live_name and live_name not in ["Connected Facebook Page", "Apex Innovations Page (Sandbox)"] and live_name != acc.account_name:
-                    acc.account_name = live_name
-                    db_dirty = True
-                if live_picture and live_picture != acc.logo_url:
-                    acc.logo_url = live_picture
-                    db_dirty = True
-
                 accounts_list.append({
                     "id": acc.id,
                     "account_id": acc.account_id,
@@ -69,8 +51,6 @@ class AnalyticsService:
                     "logo_url": acc.logo_url,
                     "followers_count": followers,
                     "fan_count": fb_raw.get("fan_count", 0),
-                    "posts_count": fb_raw.get("media_count", user_published_posts),
-                    "media_count": fb_raw.get("media_count", user_published_posts),
                     "category": fb_raw.get("category", "Facebook Page"),
                     "status": acc.status,
                     "link": f"https://facebook.com/{acc.account_id}"
@@ -82,19 +62,6 @@ class AnalyticsService:
                 ig_raw = meta_service.fetch_instagram_account_metrics(ig_user_id=acc.account_id, access_token=token)
                 followers = ig_raw.get("followers_count", 0)
                 total_followers_combined += followers
-
-                # Update database record if Meta returned handle or profile pic
-                live_username = ig_raw.get("username")
-                live_pic = ig_raw.get("profile_picture_url")
-                if live_username and live_username != "instagram_account":
-                    formatted_handle = f"@{live_username.lstrip('@')}"
-                    if formatted_handle != acc.account_name:
-                        acc.account_name = formatted_handle
-                        db_dirty = True
-                if live_pic and live_pic != acc.logo_url:
-                    acc.logo_url = live_pic
-                    db_dirty = True
-
                 accounts_list.append({
                     "id": acc.id,
                     "account_id": acc.account_id,
@@ -102,19 +69,12 @@ class AnalyticsService:
                     "platform": "instagram",
                     "logo_url": acc.logo_url,
                     "followers_count": followers,
-                    "posts_count": ig_raw.get("media_count", user_published_posts),
-                    "media_count": ig_raw.get("media_count", user_published_posts),
+                    "media_count": ig_raw.get("media_count", 0),
                     "status": acc.status,
                     "link": f"https://instagram.com/{acc.account_name.lstrip('@')}"
                 })
                 if not ig_raw.get("is_sandbox"):
                     has_live_meta = True
-
-        if db_dirty:
-            try:
-                db.commit()
-            except Exception as e:
-                db.rollback()
 
         summary["total_reach"] = total_reach_combined
         summary["total_impressions"] = total_impressions_combined

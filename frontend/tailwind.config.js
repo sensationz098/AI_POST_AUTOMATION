@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  darkMode: ['class', '[data-theme="dark"]'],
+  darkMode: 'class',
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -9,31 +9,26 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bgPrimary: 'var(--bg-primary)',
-        bgSecondary: 'var(--bg-secondary)',
-        bgTertiary: 'var(--bg-tertiary)',
-        textPrimary: 'var(--text-primary)',
-        textSecondary: 'var(--text-secondary)',
-        textTertiary: 'var(--text-tertiary)',
-        borderColor: 'var(--border-color)',
-        accent: 'var(--accent-color)',
-        accentHover: 'var(--accent-hover)',
-        success: 'var(--success-color)',
-        warning: 'var(--warning-color)',
-        danger: 'var(--danger-color)',
-        info: 'var(--info-color)',
+        brand: {
+          50: '#EEF2FF',
+          100: '#E0E7FF',
+          500: '#6366F1',
+          600: '#4F46E5',
+          700: '#4338CA',
+          900: '#312E81',
+        },
+        dark: {
+          bg: '#0B0F17',
+          card: '#111827',
+          border: '#1F2937',
+          hover: '#1E293B',
+        }
       },
-      fontFamily: {
-        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-        mono: ['"IBM Plex Mono"', 'Courier New', 'monospace'],
-      },
-      borderRadius: {
-        btn: '6px',
-        card: '8px',
-        modal: '12px',
-      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        'glass-gradient': 'linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%)',
+      }
     },
   },
   plugins: [],
-};
-
+}

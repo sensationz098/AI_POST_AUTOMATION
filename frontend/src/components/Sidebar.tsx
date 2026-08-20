@@ -12,9 +12,10 @@ import {
   ShieldCheck, 
   Bot,
   Zap,
+  Activity,
+  ChevronRight,
   Sun,
-  Moon,
-  ChevronRight
+  Moon
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -23,6 +24,7 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: string;
+  isMeta?: boolean;
 }
 
 interface NavGroup {
@@ -42,8 +44,8 @@ const navGroups: NavGroup[] = [
   {
     title: 'Social & Brands',
     items: [
-      { name: 'Brand Studio', href: '/brands', icon: Layers },
-      { name: 'Meta Accounts', href: '/meta-connect', icon: Share2 },
+      { name: 'Brand Profiles', href: '/brands', icon: Layers },
+      { name: 'Meta Accounts', href: '/meta-connect', icon: Share2, isMeta: true },
     ],
   },
   {
@@ -59,24 +61,26 @@ export const Sidebar = () => {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <aside className="w-60 bg-[var(--bg-secondary)] border-r border-[var(--border-color)] flex flex-col justify-between p-3 select-none text-xs font-sans transition-colors duration-150">
-      <div className="space-y-6">
-        {/* Sensationz App Brand Header */}
-        <Link href="/dashboard" className="flex items-center space-x-3 px-3 py-3 rounded-lg hover:bg-[var(--bg-tertiary)] transition group">
-          <div className="w-8 h-8 rounded-md bg-[var(--accent-color)] flex items-center justify-center text-white font-bold shadow-sm flex-shrink-0">
-            <Bot className="w-4.5 h-4.5 text-white" />
+    <aside className="w-60 bg-[#0B0F17] border-r border-slate-800/60 flex flex-col justify-between p-3 select-none text-xs font-sans">
+      <div className="space-y-5">
+        {/* Workspace Brand Header */}
+        <Link href="/dashboard" className="flex items-center space-x-2.5 px-2 py-2.5 rounded-lg hover:bg-slate-800/40 transition group">
+          <div className="w-7 h-7 rounded-md bg-indigo-600 flex items-center justify-center text-white font-bold shadow-sm group-hover:bg-indigo-500 transition">
+            <Bot className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-sm text-[var(--text-primary)] truncate tracking-tight">Sensationz</h1>
-            <p className="text-[11px] text-[var(--text-secondary)] truncate">Publishing Platform</p>
+            <div className="flex items-center justify-between">
+              <h1 className="font-bold text-xs text-slate-100 truncate tracking-tight">SocialAI Workspace</h1>
+            </div>
+            <p className="text-[10px] text-slate-400 truncate">Enterprise Meta Suite</p>
           </div>
         </Link>
 
         {/* Navigation Group Tree */}
-        <div className="space-y-5">
+        <div className="space-y-4">
           {navGroups.map((group) => (
-            <div key={group.title} className="space-y-1">
-              <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+            <div key={group.title} className="space-y-0.5">
+              <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 {group.title}
               </div>
               <nav className="space-y-0.5">
@@ -87,23 +91,23 @@ export const Sidebar = () => {
                     <Link
                       key={item.name}
                       href={item.href}
-                      className={`flex items-center justify-between px-3 py-2 rounded-md font-medium transition-colors duration-150 ${
+                      className={`flex items-center justify-between px-2.5 py-1.5 rounded-md font-medium transition-colors duration-150 group ${
                         isActive
-                          ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)] font-semibold border-l-2 border-[var(--accent-color)] pl-2.5'
-                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                          ? 'bg-indigo-500/10 text-indigo-400 font-semibold border-l-2 border-indigo-500 pl-2'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                       }`}
                     >
-                      <div className="flex items-center space-x-2.5 truncate">
-                        <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-[var(--accent-color)]' : 'text-[var(--text-tertiary)]'}`} />
-                        <span className="truncate text-xs">{item.name}</span>
+                      <div className="flex items-center space-x-2 truncate">
+                        <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-indigo-400' : 'text-slate-400 group-hover:text-slate-300'}`} />
+                        <span className="truncate">{item.name}</span>
                       </div>
 
                       {item.badge ? (
-                        <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--accent-color)] border border-[var(--border-color)]">
+                        <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                           {item.badge}
                         </span>
                       ) : isActive ? (
-                        <ChevronRight className="w-3.5 h-3.5 text-[var(--accent-color)]" />
+                        <ChevronRight className="w-3 h-3 text-indigo-400" />
                       ) : null}
                     </Link>
                   );
@@ -115,30 +119,30 @@ export const Sidebar = () => {
       </div>
 
       {/* Footer Controls: Theme Toggle & Engine Status */}
-      <div className="space-y-2 pt-3 border-t border-[var(--border-color)]">
+      <div className="space-y-2 pt-3 border-t border-slate-800/60">
         <button
           onClick={toggleTheme}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-md bg-[var(--bg-tertiary)] border border-[var(--border-color)] hover:border-[var(--text-tertiary)] text-[var(--text-primary)] transition text-xs font-medium"
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 text-slate-300 transition text-[11px] font-medium"
         >
           <div className="flex items-center space-x-2">
             {theme === 'dark' ? (
-              <Sun className="w-4 h-4 text-[var(--warning-color)]" />
+              <Sun className="w-3.5 h-3.5 text-amber-400" />
             ) : (
-              <Moon className="w-4 h-4 text-[var(--accent-color)]" />
+              <Moon className="w-3.5 h-3.5 text-indigo-400" />
             )}
             <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
           </div>
-          <span className="text-[10px] font-mono uppercase text-[var(--text-tertiary)]">
+          <span className="text-[9px] font-mono uppercase text-slate-400">
             {theme}
           </span>
         </button>
 
-        <div className="px-3 py-2 rounded-md bg-[var(--bg-tertiary)] border border-[var(--border-color)] flex items-center justify-between">
+        <div className="px-2.5 py-2 rounded-md bg-slate-900/40 border border-slate-800/60 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-[var(--success-color)]" />
-            <span className="text-[11px] font-medium text-[var(--text-secondary)]">Meta Engine Active</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[10px] font-medium text-slate-300">Celery Beat Active</span>
           </div>
-          <Zap className="w-3.5 h-3.5 text-[var(--warning-color)]" />
+          <Zap className="w-3 h-3 text-amber-400" />
         </div>
       </div>
     </aside>

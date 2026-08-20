@@ -3,20 +3,24 @@
 import React, { useState, useEffect } from 'react';
 import {
   Share2, CheckCircle2, Facebook, Instagram, ShieldCheck,
-  AlertCircle, Loader2, Unlink, Key, ArrowRight
+  ChevronRight, ExternalLink, RefreshCw, AlertCircle,
+  Loader2, Unlink, Link2, Edit3, Sparkles, Key, Lock, ArrowRight
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { SocialAccount } from '@/lib/types';
 
 export default function MetaConnectPage() {
+  // Connected Accounts State
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [disconnectingId, setDisconnectingId] = useState<number | string | 'all' | null>(null);
 
+  // OAuth State
   const [isOAuthStarting, setIsOAuthStarting] = useState(false);
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [oauthSuccess, setOauthSuccess] = useState<string | null>(null);
 
+  // Optional Advanced Developer Manual Mode toggle
   const [showManualMode, setShowManualMode] = useState(false);
   const [manualToken, setManualToken] = useState('');
   const [manualPageId, setManualPageId] = useState('');
@@ -25,12 +29,15 @@ export default function MetaConnectPage() {
   const [manualIgUsername, setManualIgUsername] = useState('');
   const [isSavingManual, setIsSavingManual] = useState(false);
 
+  // Fetch connected multi-destination social accounts
   const fetchSocialAccounts = async () => {
     setIsLoadingAccounts(true);
     try {
       const res = await apiClient.get('/social-accounts/');
       if (Array.isArray(res.data)) {
-        setSocialAccounts(res.data);
+        const fakeIds = new Set(['109823471029', '17841400928371', '17841400928372', '17841400928373', '109823471030', 'sandbox']);
+        const realAccounts = res.data.filter(a => !fakeIds.has(a.account_id) && !a.account_name?.includes('Apex Innovations Page'));
+        setSocialAccounts(realAccounts);
       }
     } catch (e) {
       console.error('Failed to load social accounts:', e);
@@ -42,6 +49,7 @@ export default function MetaConnectPage() {
   useEffect(() => {
     fetchSocialAccounts();
 
+    // Check OAuth return params
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
       if (searchParams.get('connected') === 'true') {
@@ -54,6 +62,7 @@ export default function MetaConnectPage() {
     }
   }, []);
 
+  // Initiate Real Meta OAuth Flow - Uses authenticated API call to retrieve Meta Authorization Dialog URL
   const handleConnectMetaOAuth = async () => {
     setIsOAuthStarting(true);
     setOauthError(null);
@@ -75,6 +84,7 @@ export default function MetaConnectPage() {
     }
   };
 
+  // Disconnect a single social account
   const handleDisconnectAccount = async (id: number | string) => {
     if (!confirm('Are you sure you want to disconnect this social account?')) return;
     setDisconnectingId(id);
@@ -96,6 +106,7 @@ export default function MetaConnectPage() {
     }
   };
 
+  // Disconnect all Meta accounts
   const handleDisconnectAll = async () => {
     if (!confirm('Are you sure you want to disconnect all Meta connected accounts?')) return;
     setDisconnectingId('all');
@@ -121,6 +132,7 @@ export default function MetaConnectPage() {
     }
   };
 
+  // Developer Manual Entry Handler
   const handleSaveManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualPageId.trim() || !manualToken.trim()) {
@@ -134,6 +146,7 @@ export default function MetaConnectPage() {
     const token = manualToken.trim();
 
     try {
+      // Register Facebook Social Account
       await apiClient.post('/social-accounts/connect', {
         brand_id: 1,
         platform: 'facebook',
@@ -143,6 +156,7 @@ export default function MetaConnectPage() {
         logo_url: logoUrl,
       });
 
+      // Register Instagram Social Account if provided
       if (manualIgId.trim() || manualIgUsername.trim()) {
         await apiClient.post('/social-accounts/connect', {
           brand_id: 1,
@@ -173,20 +187,20 @@ export default function MetaConnectPage() {
   const igAccounts = socialAccounts.filter(a => a.platform === 'instagram');
 
   return (
-    <div className="space-y-6 max-w-4xl font-sans text-xs select-none">
-      {/* Header Banner */}
-      <div className="pub-card p-6 space-y-4">
+    <div className="space-y-8 max-w-4xl select-none font-sans text-xs">
+      {/* SaaS Linear Header Banner */}
+      <div className="linear-panel p-6 rounded-2xl space-y-4 border border-slate-800 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center space-x-3.5">
-            <div className="w-10 h-10 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)] flex items-center justify-center text-[var(--accent-color)] flex-shrink-0">
-              <Share2 className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 shadow-sm flex-shrink-0">
+              <Share2 className="w-5 h-5 text-indigo-400" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">
-                Connect Meta Channels
+              <h1 className="text-lg font-bold text-slate-100 tracking-tight">
+                Connect Meta Accounts
               </h1>
-              <p className="text-xs text-[var(--text-secondary)] mt-1">
-                Authorize your Facebook Pages & Instagram Professional accounts via official Meta Graph API.
+              <p className="text-xs text-slate-400 mt-1">
+                Authorize your Facebook Pages & Instagram Professional accounts seamlessly through Meta.
               </p>
             </div>
           </div>
@@ -196,121 +210,128 @@ export default function MetaConnectPage() {
               <button
                 onClick={handleDisconnectAll}
                 disabled={disconnectingId === 'all'}
-                className="btn-danger text-xs py-2 px-3 space-x-1.5"
+                className="px-4 py-3 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-200 hover:text-white font-bold text-xs transition flex items-center space-x-2 shadow-lg disabled:opacity-50"
               >
                 {disconnectingId === 'all' ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
                 ) : (
-                  <Unlink className="w-3.5 h-3.5" />
+                  <Unlink className="w-4 h-4 text-rose-400" />
                 )}
-                <span>Disconnect All</span>
+                <span>Disconnect Meta</span>
               </button>
             )}
 
+            {/* Primary Meta OAuth Connect Button */}
             <button
               onClick={handleConnectMetaOAuth}
               disabled={isOAuthStarting}
-              className="btn-primary text-xs py-2 px-4 space-x-2"
+              className="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition flex items-center space-x-2.5 shadow-lg shadow-indigo-500/25 disabled:opacity-50"
             >
               {isOAuthStarting ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <Facebook className="w-3.5 h-3.5" />
+                <Facebook className="w-4 h-4 text-white fill-white" />
               )}
               <span>Connect with Meta</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight className="w-3.5 h-3.5 text-blue-200" />
             </button>
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 text-[11px] text-[var(--text-secondary)] bg-[var(--bg-tertiary)] p-3 rounded-md border border-[var(--border-color)]">
-          <ShieldCheck className="w-4 h-4 text-[var(--success-color)] flex-shrink-0" />
+        {/* Security Assurance Disclaimer */}
+        <div className="flex items-center space-x-2 text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/60">
+          <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
           <span>
-            Token Security: Access tokens remain encrypted server-side and are never stored in localStorage or exposed to the client.
+            Strict Token Security: No passwords requested. Access tokens remain server-side and are never exposed to the frontend.
           </span>
         </div>
       </div>
 
-      {/* Notifications */}
+      {/* Notification Alerts */}
       {oauthSuccess && (
-        <div className="p-4 rounded-md bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--success-color)] text-xs flex items-center space-x-3">
-          <CheckCircle2 className="w-5 h-5 text-[var(--success-color)] flex-shrink-0" />
+        <div className="bg-emerald-950/50 border border-emerald-800/80 rounded-xl p-4 text-xs text-emerald-200 flex items-center space-x-3">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
           <span className="font-medium">{oauthSuccess}</span>
         </div>
       )}
 
       {oauthError && (
-        <div className="p-4 rounded-md bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--danger-color)] text-xs flex items-center space-x-3">
-          <AlertCircle className="w-5 h-5 text-[var(--danger-color)] flex-shrink-0" />
+        <div className="bg-rose-950/50 border border-rose-800/80 rounded-xl p-4 text-xs text-rose-200 flex items-center space-x-3">
+          <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
           <span className="font-medium">{oauthError}</span>
         </div>
       )}
 
-      {/* Connected Accounts */}
-      <div className="space-y-4">
+      {/* Connected Social Destinations Breakdown */}
+      <div className="space-y-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center space-x-2">
-            <Share2 className="w-4 h-4 text-[var(--accent-color)]" />
-            <span>Connected Channels ({socialAccounts.length})</span>
+          <h2 className="text-sm font-bold text-slate-100 flex items-center space-x-2">
+            <Share2 className="w-4 h-4 text-indigo-400" />
+            <span>Connected Social Accounts ({socialAccounts.length})</span>
           </h2>
 
           <button
             onClick={() => setShowManualMode(!showManualMode)}
-            className="btn-tertiary text-xs font-mono"
+            className="text-[10px] font-mono text-slate-400 hover:text-indigo-300 flex items-center space-x-1"
           >
-            <Key className="w-3.5 h-3.5 mr-1" />
+            <Key className="w-3 h-3" />
             <span>{showManualMode ? 'Hide Developer Direct Entry' : 'Developer Direct Entry'}</span>
           </button>
         </div>
 
         {isLoadingAccounts ? (
-          <div className="pub-card p-8 text-center space-y-2">
-            <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-color)] mx-auto" />
-            <p className="text-xs text-[var(--text-secondary)]">Loading connected Meta channels...</p>
+          <div className="linear-panel p-8 rounded-xl text-center space-y-2 border border-slate-800">
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-400 mx-auto" />
+            <p className="text-xs text-slate-400">Loading connected Meta accounts...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {/* Facebook Pages */}
-            <div className="pub-card p-5 space-y-3">
-              <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-2.5">
-                <span className="font-bold text-xs text-[var(--text-primary)] flex items-center space-x-2">
-                  <Facebook className="w-4 h-4 text-[#1877F2]" />
+          <div className="grid grid-cols-1 gap-5">
+            {/* Facebook Pages Card */}
+            <div className="linear-panel p-5 rounded-xl space-y-3 border border-slate-800">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                <span className="font-bold text-xs text-blue-300 flex items-center space-x-2">
+                  <Facebook className="w-4 h-4 text-blue-400 fill-blue-400/20" />
                   <span>Facebook Pages ({fbPages.length})</span>
                 </span>
-                <span className="text-[11px] font-mono text-[var(--text-tertiary)]">FB Publishing Target</span>
+                <span className="text-[10px] font-mono text-slate-400">Target for FB Posts</span>
               </div>
 
               {fbPages.length === 0 ? (
-                <div className="p-4 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--text-secondary)] text-xs text-center">
-                  No Facebook Pages connected. Click <strong>"Connect with Meta"</strong> above to sync.
+                <div className="p-4 rounded bg-slate-900/40 border border-slate-800 text-slate-400 text-xs text-center">
+                  No Facebook Pages connected yet. Click <strong>"Connect with Meta"</strong> above to discover your pages.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {fbPages.map((acc) => (
-                    <div key={acc.id} className="bg-[var(--bg-tertiary)] p-3 rounded-md border border-[var(--border-color)] flex items-center justify-between">
+                    <div key={acc.id} className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
                       <div className="flex items-center space-x-3 min-w-0">
                         <img
                           src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
                           alt={acc.account_name}
-                          className="w-8 h-8 rounded object-cover border border-[var(--border-color)] flex-shrink-0"
+                          className="w-8 h-8 rounded-lg object-cover border border-slate-700 flex-shrink-0"
                         />
                         <div className="min-w-0">
-                          <h4 className="text-xs font-semibold text-[var(--text-primary)] truncate">{acc.account_name}</h4>
-                          <span className="text-[10px] font-mono text-[var(--text-tertiary)]">ID: {acc.account_id}</span>
+                          <h4 className="text-xs font-semibold text-slate-100 truncate">{acc.account_name}</h4>
+                          <span className="text-[10px] font-mono text-slate-400">ID: {acc.account_id}</span>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-2 flex-shrink-0">
-                        <span className="px-2 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--success-color)] border border-[var(--border-color)] text-[10px] font-mono">
-                          Connected
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono">
+                          ● Connected
                         </span>
                         <button
                           onClick={() => handleDisconnectAccount(acc.id)}
                           disabled={disconnectingId === acc.id || disconnectingId === 'all'}
-                          className="btn-danger py-1 px-2 text-[11px]"
+                          className="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-white transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
                           title="Disconnect Account"
                         >
-                          <Unlink className="w-3 h-3" />
+                          {disconnectingId === acc.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                          ) : (
+                            <Unlink className="w-3.5 h-3.5 text-rose-400" />
+                          )}
+                          <span>Disconnect</span>
                         </button>
                       </div>
                     </div>
@@ -319,47 +340,52 @@ export default function MetaConnectPage() {
               )}
             </div>
 
-            {/* Instagram Accounts */}
-            <div className="pub-card p-5 space-y-3">
-              <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-2.5">
-                <span className="font-bold text-xs text-[var(--text-primary)] flex items-center space-x-2">
-                  <Instagram className="w-4 h-4 text-[#E4405F]" />
-                  <span>Instagram Accounts ({igAccounts.length})</span>
+            {/* Instagram Professional Accounts Card */}
+            <div className="linear-panel p-5 rounded-xl space-y-3 border border-slate-800">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                <span className="font-bold text-xs text-indigo-300 flex items-center space-x-2">
+                  <Instagram className="w-4 h-4 text-indigo-400" />
+                  <span>Instagram Professional Accounts ({igAccounts.length})</span>
                 </span>
-                <span className="text-[11px] font-mono text-[var(--text-tertiary)]">IG Reels & Feed Target</span>
+                <span className="text-[10px] font-mono text-slate-400">Target for IG Reels & Feed</span>
               </div>
 
               {igAccounts.length === 0 ? (
-                <div className="p-4 rounded bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--text-secondary)] text-xs text-center">
-                  No Instagram accounts connected yet. Link an IG Business profile to your Facebook Page to auto-discover via Meta.
+                <div className="p-4 rounded bg-slate-900/40 border border-slate-800 text-slate-400 text-xs text-center">
+                  No Instagram Professional accounts connected yet. Link an IG Business account to your Facebook Page to auto-discover it via Meta.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {igAccounts.map((acc) => (
-                    <div key={acc.id} className="bg-[var(--bg-tertiary)] p-3 rounded-md border border-[var(--border-color)] flex items-center justify-between">
+                    <div key={acc.id} className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
                       <div className="flex items-center space-x-3 min-w-0">
                         <img
                           src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
                           alt={acc.account_name}
-                          className="w-8 h-8 rounded object-cover border border-[var(--border-color)] flex-shrink-0"
+                          className="w-8 h-8 rounded-lg object-cover border border-slate-700 flex-shrink-0"
                         />
                         <div className="min-w-0">
-                          <h4 className="text-xs font-semibold text-[var(--text-primary)] truncate">{acc.account_name}</h4>
-                          <span className="text-[10px] font-mono text-[var(--text-tertiary)]">ID: {acc.account_id}</span>
+                          <h4 className="text-xs font-semibold text-slate-100 truncate">{acc.account_name}</h4>
+                          <span className="text-[10px] font-mono text-slate-400">ID: {acc.account_id}</span>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-2 flex-shrink-0">
-                        <span className="px-2 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--success-color)] border border-[var(--border-color)] text-[10px] font-mono">
-                          Connected
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono">
+                          ● Connected
                         </span>
                         <button
                           onClick={() => handleDisconnectAccount(acc.id)}
                           disabled={disconnectingId === acc.id || disconnectingId === 'all'}
-                          className="btn-danger py-1 px-2 text-[11px]"
+                          className="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-white transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
                           title="Disconnect Account"
                         >
-                          <Unlink className="w-3 h-3" />
+                          {disconnectingId === acc.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                          ) : (
+                            <Unlink className="w-3.5 h-3.5 text-rose-400" />
+                          )}
+                          <span>Disconnect</span>
                         </button>
                       </div>
                     </div>
@@ -368,95 +394,99 @@ export default function MetaConnectPage() {
               )}
             </div>
           </div>
+
         )}
       </div>
 
-      {/* Manual Entry Form */}
+      {/* Developer Direct Entry Modal Form */}
       {showManualMode && (
-        <form onSubmit={handleSaveManual} className="pub-card p-6 space-y-4">
-          <div className="flex items-center space-x-2 border-b border-[var(--border-color)] pb-3">
-            <Key className="w-4 h-4 text-[var(--accent-color)]" />
-            <h3 className="text-sm font-bold text-[var(--text-primary)]">Developer Manual Entry</h3>
+        <form onSubmit={handleSaveManual} className="linear-panel p-6 rounded-2xl space-y-4 border border-indigo-500/30">
+          <div className="flex items-center space-x-2">
+            <Key className="w-4 h-4 text-indigo-400" />
+            <h3 className="text-xs font-bold text-slate-100">Developer Direct Entry (Manual Token Mode)</h3>
           </div>
+          <p className="text-[11px] text-slate-400">
+            For local testing or Graph API Explorer tokens. Enter custom Page ID, Access Token, and Instagram ID manually.
+          </p>
 
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
-                Access Token *
+              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                Access Token (User or Page Token) <span className="text-rose-400">*</span>
               </label>
               <textarea
                 rows={2}
                 required
                 value={manualToken}
                 onChange={(e) => setManualToken(e.target.value)}
-                placeholder="EAABwz1XkREYBA..."
-                className="input-field w-full font-mono text-xs resize-none"
+                placeholder="EAABwz1XkREYBAIJlLUXdAZBfq..."
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-indigo-300 font-mono focus:outline-none focus:border-indigo-500 resize-none"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Facebook Page ID *</label>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Facebook Page ID *</label>
                 <input
                   type="text"
                   required
                   value={manualPageId}
                   onChange={(e) => setManualPageId(e.target.value)}
                   placeholder="e.g. 109823471029481"
-                  className="input-field w-full"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Facebook Page Name</label>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Facebook Page Name</label>
                 <input
                   type="text"
                   value={manualPageName}
                   onChange={(e) => setManualPageName(e.target.value)}
                   placeholder="e.g. Apex Innovations Page"
-                  className="input-field w-full"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Instagram Account ID</label>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Instagram Business Account ID</label>
                 <input
                   type="text"
                   value={manualIgId}
                   onChange={(e) => setManualIgId(e.target.value)}
                   placeholder="e.g. 17841400928371902"
-                  className="input-field w-full"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Instagram Username</label>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Instagram Username</label>
                 <input
                   type="text"
                   value={manualIgUsername}
                   onChange={(e) => setManualIgUsername(e.target.value)}
                   placeholder="e.g. apex_innovations"
-                  className="input-field w-full"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
           </div>
 
-          <div className="flex space-x-2 pt-2 border-t border-[var(--border-color)]">
+          <div className="flex space-x-2 pt-2">
             <button
               type="submit"
               disabled={isSavingManual}
-              className="btn-primary text-xs flex items-center space-x-1.5"
+              className="py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition flex items-center space-x-2 disabled:opacity-50"
             >
-              {isSavingManual ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-              <span>Save Developer Token</span>
+              {isSavingManual ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+              <span>Save Developer Credentials</span>
             </button>
             <button
               type="button"
               onClick={() => setShowManualMode(false)}
-              className="btn-secondary text-xs"
+              className="py-2.5 px-4 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
             >
               Cancel
             </button>

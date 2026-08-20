@@ -12,8 +12,6 @@ class PostCreate(BaseModel):
     image_prompt: Optional[str] = None
     image_url: Optional[str] = None
     platforms: List[str] = Field(default_factory=lambda: ["facebook", "instagram"])
-    target_account_ids: Optional[List[int]] = Field(default=None, description="Selected SocialAccount database IDs")
-    social_account_ids: Optional[List[int]] = Field(default=None, description="Selected SocialAccount database IDs")
     status: Optional[str] = "DRAFT"
     scheduled_at: Optional[datetime] = None
 
@@ -25,8 +23,6 @@ class PostUpdate(BaseModel):
     seo_keywords: Optional[List[str]] = None
     image_url: Optional[str] = None
     platforms: Optional[List[str]] = None
-    target_account_ids: Optional[List[int]] = None
-    social_account_ids: Optional[List[int]] = None
     status: Optional[str] = None
     scheduled_at: Optional[datetime] = None
 
@@ -53,7 +49,6 @@ class PostResponse(BaseModel):
     last_error: Optional[str]
     fb_post_id: Optional[str]
     ig_media_id: Optional[str]
-    batch_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
