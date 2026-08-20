@@ -55,6 +55,15 @@ export default function StudioPage() {
 
   // Preview Mode state ('facebook' | 'instagram' | 'both')
   const [previewPlatform, setPreviewPlatform] = useState<'both' | 'facebook' | 'instagram'>('both');
+  const pollIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Load active brands & connected social destinations
   useEffect(() => {
@@ -271,9 +280,9 @@ export default function StudioPage() {
           throw new Error('Failed to create post record in database.');
         }
 
-        setPublishingMessage(`Publishing across ${selectedAccountIds.length} target account(s)...`);
+        setPublishingMessage(`Initializing batch for ${selectedAccountIds.length} target account(s)...`);
 
-        // 2. Call restored multi-publish endpoint from commit 214742c
+        // 2. Call async multi-publish endpoint
         const multiPublishPayload = {
           post_id: createdPost.id,
           social_account_ids: selectedAccountIds
@@ -281,22 +290,67 @@ export default function StudioPage() {
         const publishRes = await apiClient.post('/posts/publish-multi', multiPublishPayload);
         const batchData = publishRes.data;
 
-        if (batchData?.status === 'SUCCESS' || batchData?.successful_targets === batchData?.total_targets) {
-          setIsPublishing(false);
-          setPublishingMessage(`✓ Post published successfully across all ${batchData.total_targets} connected target account(s)!`);
-        } else if (batchData?.status === 'PARTIAL_SUCCESS' || (batchData?.successful_targets || 0) > 0) {
-          setIsPublishing(false);
-          setPublishingMessage(`✓ Published to ${batchData.successful_targets}/${batchData.total_targets} target account(s). Some accounts failed.`);
-        } else if (batchData?.status === 'FAILED') {
-          setIsPublishing(false);
-          const failedJobs = batchData.jobs?.filter((j: any) => j.status === 'FAILED') || [];
-          const firstErr = failedJobs[0]?.error_message || 'Target channels could not be reached.';
-          setErrorMessage(`Publishing Failed: ${firstErr}`);
-          setPublishingMessage(null);
-        } else {
-          setIsPublishing(false);
-          setPublishingMessage('✓ Post published successfully!');
+        if (!batchData || !batchData.id) {
+          throw new Error('Failed to initialize publishing batch.');
         }
+
+        const batchId = batchData.id;
+
+        // Function to check if batch has completed and update UI state
+        const checkTerminalState = (batch: any): boolean => {
+          if (batch.status === 'SUCCESS' || (batch.total_targets > 0 && batch.successful_targets === batch.total_targets)) {
+            setIsPublishing(false);
+            setPublishingMessage(`✓ Post published successfully across all ${batch.total_targets} connected target account(s)!`);
+            return true;
+          } else if (batch.status === 'PARTIAL_SUCCESS' || (batch.successful_targets || 0) > 0) {
+            setIsPublishing(false);
+            setPublishingMessage(`✓ Published to ${batch.successful_targets}/${batch.total_targets} target account(s). Some accounts failed.`);
+            return true;
+          } else if (batch.status === 'FAILED') {
+            setIsPublishing(false);
+            const failedJobs = batch.jobs?.filter((j: any) => j.status === 'FAILED') || [];
+            const firstErr = failedJobs[0]?.error_message || 'Target channels could not be reached.';
+            setErrorMessage(`Publishing Failed: ${firstErr}`);
+            setPublishingMessage(null);
+            return true;
+          }
+          return false;
+        };
+
+        // Check if batch already completed (e.g., instant mock execution)
+        if (checkTerminalState(batchData)) {
+          return;
+        }
+
+        // Batch is processing asynchronously in Celery; start polling GET /posts/batch/{batchId}
+        setPublishingMessage(`Publishing in progress across ${selectedAccountIds.length} target account(s)...`);
+
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+        }
+
+        pollIntervalRef.current = setInterval(async () => {
+          try {
+            const statusRes = await apiClient.get(`/posts/batch/${batchId}`);
+            const currentBatch = statusRes.data;
+            if (!currentBatch) return;
+
+            if (currentBatch.status === 'PROCESSING') {
+              setPublishingMessage(
+                `Publishing in progress (${currentBatch.successful_targets + currentBatch.failed_targets}/${currentBatch.total_targets} accounts completed)...`
+              );
+            }
+
+            if (checkTerminalState(currentBatch)) {
+              if (pollIntervalRef.current) {
+                clearInterval(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+              }
+            }
+          } catch (pollErr) {
+            console.warn('Batch status polling warning:', pollErr);
+          }
+        }, 2000);
       }
     } catch (e: any) {
       setIsPublishing(false);

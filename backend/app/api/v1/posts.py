@@ -88,29 +88,17 @@ def publish_now_direct(
             SocialAccount.id.in_(target_ids) if target_ids else True
         ).all()
 
-        # Execute parallel batch publishing
-        publishing_engine.execute_batch(
-            db=db,
-            batch_id=batch.id,
-            post_caption=new_post.caption,
-            raw_media_url=new_post.image_url,
-            accounts=target_accounts,
-            t0=t0
-        )
+        # Execute parallel batch publishing asynchronously via Celery worker
+        db.commit()
+        from app.tasks.publish_task import execute_batch_publishing_task
+        execute_batch_publishing_task.delay(batch.id)
 
-        # Update main Post status based on batch outcome
-        res_batch = publishing_repo.get_batch(db, batch.id)
-        if res_batch.status in [BatchStatus.SUCCESS.value, BatchStatus.PARTIAL_SUCCESS.value]:
-            new_post.status = "PUBLISHED"
-            new_post.published_at = datetime.now(timezone.utc)
-        else:
-            new_post.status = "FAILED"
-            new_post.last_error = f"Multi-account publishing failed on {res_batch.failed_targets} target accounts."
+        new_post.status = "PUBLISHING"
         db.commit()
         db.refresh(new_post)
 
         t_end = (time.time() - t0) * 1000
-        logger.info(f"⏱️ [PERF LOG] RESPONSE SENT at t={t_end:.1f}ms (Total elapsed: {t_end:.1f}ms)")
+        logger.info(f"⏱️ [PERF LOG] ASYNC RESPONSE SENT at t={t_end:.1f}ms (Total elapsed: {t_end:.1f}ms)")
 
         res = PostResponse.model_validate(new_post)
         res.batch_id = batch.id
@@ -192,11 +180,11 @@ def schedule_post_by_id(
 @router.post("/{post_id}/publish-now/", response_model=PostResponse, include_in_schema=False)
 def publish_now_by_id(
     post_id: int,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Immediately trigger background Meta Graph API publishing for existing post."""
+    """Immediately trigger background Celery task multi-account publishing for existing post."""
+    from app.tasks.publish_task import execute_batch_publishing_task
     post = post_service.get_post(db, post_id, current_user.id)
     batch = post_service.create_and_start_publish_batch(
         db=db,
@@ -204,14 +192,7 @@ def publish_now_by_id(
         user_id=current_user.id
     )
 
-    background_tasks.add_task(
-        run_background_publish_batch,
-        batch_id=batch.id,
-        post_id=post.id,
-        user_id=current_user.id,
-        caption=post.caption,
-        raw_media_url=post.image_url
-    )
+    execute_batch_publishing_task.delay(batch.id)
 
     res = PostResponse.model_validate(post)
     res.batch_id = batch.id
@@ -227,7 +208,7 @@ def retry_failed(
     """Retry publication for a failed post."""
     return post_service.retry_failed_post(db, post_id, current_user.id)
 
-# 🚀 MULTI-ACCOUNT PUBLISHING ENDPOINTS (RESTORED FROM 214742c) 🚀
+# 🚀 MULTI-ACCOUNT PUBLISHING ENDPOINTS (ASYNC CELERY QUEUED) 🚀
 
 @router.post("/publish-multi", response_model=PublishingBatchResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/multi-publish", response_model=PublishingBatchResponse, status_code=status.HTTP_201_CREATED)
@@ -239,14 +220,14 @@ def publish_multi_account(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Publish one post to multiple selected Facebook Pages and Instagram Accounts concurrently.
+    Asynchronously publish one post to multiple selected Facebook Pages and Instagram Accounts via Celery.
     Supports idempotency, per-account job tracking, token expiration detection, and partial batch success.
-    Restored from proven commit 214742c.
+    Returns the PublishingBatch response immediately.
     """
     from app.repositories.publishing_repository import publishing_repo
     from app.repositories.social_account_repository import social_account_repo
-    from app.services.publisher_service import publishing_engine
     from app.models.publishing_batch import BatchStatus, PublishingJob
+    from app.tasks.publish_task import execute_batch_publishing_task
 
     post = post_service.get_post(db, request.post_id, current_user.id)
     if not request.social_account_ids:
@@ -267,7 +248,7 @@ def publish_multi_account(
         )
 
     # 1. Create or retrieve PublishingBatch with idempotency safeguard
-    idempotency_key = request.idempotency_key or f"batch_{post.id}_{abs(hash(tuple(request.social_account_ids)))}"
+    idempotency_key = request.idempotency_key or f"batch_{post.id}_{abs(hash(tuple(sorted(request.social_account_ids))))}"
     batch = publishing_repo.create_batch(
         db=db,
         post_id=post.id,
@@ -276,45 +257,33 @@ def publish_multi_account(
         idempotency_key=idempotency_key
     )
 
+    # Idempotency check: If an existing batch is already PROCESSING, SUCCESS, or PARTIAL_SUCCESS, do NOT enqueue another task
+    if batch.status in [BatchStatus.PROCESSING.value, BatchStatus.SUCCESS.value, BatchStatus.PARTIAL_SUCCESS.value]:
+        return batch
+
     # 2. Initialize PublishingJob entries for targets
     existing_jobs = db.query(PublishingJob).filter(
         PublishingJob.batch_id == batch.id
     ).all()
 
+    is_new_jobs = False
     if not existing_jobs:
         for acc in accounts:
             publishing_repo.create_job(db, batch.id, acc.id, acc.platform)
+        is_new_jobs = True
 
-    # 3. Format caption & execute batch publishing engine concurrently
-    formatted_caption = f"{post.caption}\n\n{' '.join(post.hashtags or [])}\n\n{post.cta or ''}".strip()
-    publishing_engine.execute_batch(
-        db=db,
-        batch_id=batch.id,
-        post_caption=formatted_caption,
-        raw_media_url=post.image_url,
-        accounts=accounts
-    )
+    post.status = "PUBLISHING"
 
-    # 4. Refresh & return complete PublishingBatchResponse
-    db.expire_all()
-    res_batch = publishing_repo.update_batch_summary(db, batch.id)
-    if not res_batch:
-        res_batch = publishing_repo.get_batch(db, batch.id)
-    
-    # Update main Post status based on batch result
-    if res_batch.status in [BatchStatus.SUCCESS.value, BatchStatus.PARTIAL_SUCCESS.value] or res_batch.successful_targets > 0:
-        post.status = "PUBLISHED"
-        post.published_at = post.published_at or res_batch.completed_at
-        if res_batch.failed_targets > 0:
-            post.last_error = f"Published to {res_batch.successful_targets} of {res_batch.total_targets} target accounts."
-        else:
-            post.last_error = None
-    else:
-        post.status = "FAILED"
-        post.last_error = f"Multi-account publishing failed on {res_batch.failed_targets} target accounts."
+    # 3. Commit DB transaction BEFORE queuing Celery task so worker finds committed batch & jobs
     db.commit()
+    db.refresh(batch)
 
-    return res_batch
+    # 4. Queue task to Celery worker asynchronously
+    if is_new_jobs or batch.status == BatchStatus.QUEUED.value:
+        execute_batch_publishing_task.delay(batch.id)
+
+    # 5. Immediately return PublishingBatchResponse
+    return batch
 
 @router.get("/batch/{batch_id}", response_model=PublishingBatchResponse)
 def get_publishing_batch(
