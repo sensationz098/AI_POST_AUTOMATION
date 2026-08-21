@@ -583,10 +583,8 @@ export default function AIStudioPage() {
         localStorage.setItem('local_posts_queue', JSON.stringify([newPostObj, ...existingQueue]));
       } catch {}
     } catch (e: any) {
-      const pageName = selectedBrand?.meta_account?.facebook_page_name || selectedBrand?.name || 'Facebook Page';
-      setStatusNotification(
-        `🎉 Successfully published post to Facebook Page "${pageName}" & Instagram feed!`
-      );
+      const errorMsg = e.response?.data?.detail || e.message || 'Publishing failed. Please check social account connection.';
+      setStatusNotification(`❌ Publishing failed: ${errorMsg}`);
     } finally {
       setIsPublishing(false);
     }
@@ -649,13 +647,24 @@ export default function AIStudioPage() {
           </div>
 
           {statusNotification && (
-            <div className="flex items-center space-x-1.5 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded text-emerald-300 text-[11px]">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+            <div className={`flex items-center space-x-1.5 px-3 py-1 rounded text-[11px] border ${
+              statusNotification.startsWith('❌')
+                ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+                : statusNotification.startsWith('⚠️')
+                ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+            }`}>
+              {statusNotification.startsWith('❌') || statusNotification.startsWith('⚠️') ? (
+                <AlertTriangle className={`w-3.5 h-3.5 flex-shrink-0 ${statusNotification.startsWith('❌') ? 'text-rose-400' : 'text-amber-400'}`} />
+              ) : (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+              )}
               <span className="truncate max-w-xs">{statusNotification}</span>
             </div>
           )}
         </div>
       </div>
+
 
       {/* Main Grid: Left Upload Form | Right Rich Social Preview */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
