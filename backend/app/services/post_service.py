@@ -202,14 +202,12 @@ class PostService:
         errors = []
         successful_publish = False
 
-        raw_url = (post.image_url or "").lower()
-        pub_url = (public_image_url or "").lower()
-        is_video = bool(
-            "video" in raw_url or
-            "video" in pub_url or
-            any(ext in pub_url for ext in [".mp4", ".mov", ".webm", ".m4v"]) or
-            any(ext in raw_url for ext in [".mp4", ".mov", ".webm", ".m4v"])
+        from app.services.publisher_service import resolve_media_type
+        resolved_media_type, is_video = resolve_media_type(
+            stored_media_type=getattr(post, "media_type", None),
+            media_url=post.image_url or public_image_url
         )
+
 
         is_sandbox_fb = False
         is_sandbox_ig = False

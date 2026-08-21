@@ -17,6 +17,45 @@ logger = logging.getLogger(__name__)
 from app.core.database import SessionLocal
 from app.core.security_encryption import decrypt_token
 
+from app.core.logging_config import sanitize_url
+from app.models.post import Post
+
+def resolve_media_type(
+    explicit_media_type: Optional[str] = None,
+    stored_media_type: Optional[str] = None,
+    media_url: Optional[str] = None
+) -> tuple[str, bool]:
+    """
+    Safely resolve media type into ('image' | 'video', is_video: bool).
+    Preference order:
+    1. Explicit passed media_type (from request payload or method argument)
+    2. Stored post.media_type (from database model)
+    3. Legacy URL inference as a final fallback
+    """
+    if explicit_media_type and str(explicit_media_type).strip():
+        norm = str(explicit_media_type).strip().lower()
+        if norm in ["video", "reels", "reel"]:
+            return "video", True
+        elif norm in ["image", "photo", "picture"]:
+            return "image", False
+
+    if stored_media_type and str(stored_media_type).strip():
+        norm = str(stored_media_type).strip().lower()
+        if norm in ["video", "reels", "reel"]:
+            return "video", True
+        elif norm in ["image", "photo", "picture"]:
+            return "image", False
+
+    url_lower = (media_url or "").lower()
+    is_video_inferred = bool(
+        url_lower.startswith("data:video") or
+        "video" in url_lower or
+        any(ext in url_lower for ext in [".mp4", ".mov", ".webm", ".m4v"])
+    )
+    if is_video_inferred:
+        return "video", True
+    return "image", False
+
 def classify_error(err_str: str) -> tuple[str, str]:
     """Classify technical exceptions into human-readable error codes and messages."""
     err_lower = err_str.lower()
@@ -34,6 +73,7 @@ def classify_error(err_str: str) -> tuple[str, str]:
 
 class FacebookPublisher:
     def publish(self, account: SocialAccount, caption: str, public_media_url: Optional[str], is_video: bool) -> str:
+        logger.info(f"[PUBLISH_TRACE] META_SERVICE_ENTERED | platform=facebook | account_id={account.account_id} | is_video={is_video}")
         final_url = public_media_url
         if is_video:
             if not final_url or final_url.startswith("blob:") or final_url.startswith("data:") or not (final_url.startswith("http://") or final_url.startswith("https://")):
@@ -62,6 +102,7 @@ class FacebookPublisher:
 
 class InstagramPublisher:
     def publish(self, account: SocialAccount, caption: str, public_media_url: Optional[str], is_video: bool) -> str:
+        logger.info(f"[PUBLISH_TRACE] META_SERVICE_ENTERED | platform=instagram | account_id={account.account_id} | is_video={is_video}")
         final_url = public_media_url
         if is_video:
             if not final_url or final_url.startswith("blob:") or final_url.startswith("data:") or not (final_url.startswith("http://") or final_url.startswith("https://")):
@@ -101,21 +142,34 @@ class PublishingEngine:
         social_account_id: int,
         caption: str,
         public_media_url: Optional[str],
-        is_video: bool
+        is_video: bool,
+        batch_id: Optional[int] = None,
+        resolved_media_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """Execute job in a dedicated thread-local database session."""
+        start_time = time.time()
+        logger.info(f"[PUBLISH_TRACE] THREAD_JOB_STARTED | batch_id={batch_id} | job_id={job_id} | social_account_id={social_account_id}")
         thread_db = SessionLocal()
         try:
             acc = social_account_repo.get_by_id(thread_db, social_account_id)
             if not acc:
                 publishing_repo.update_job_status(thread_db, job_id, JobStatus.FAILED.value, error_message="Social account not found.")
+                logger.error(f"[PUBLISH_TRACE] PUBLISH_JOB_FAILED | batch_id={batch_id} | job_id={job_id} | platform=unknown | error_code=ACCOUNT_NOT_FOUND | error_class=Exception | error=Social account not found | elapsed={round(time.time() - start_time, 2)}s")
                 return {"job_id": job_id, "status": "FAILED", "error": "Account not found"}
 
             publishing_repo.update_job_status(thread_db, job_id, JobStatus.PROCESSING.value)
 
+            logger.info(
+                f"[PUBLISH_TRACE] PUBLISH_JOB_STARTED | batch_id={batch_id} | job_id={job_id} | "
+                f"social_account_id={social_account_id} | platform={acc.platform} | "
+                f"resolved_media_type={resolved_media_type or ('video' if is_video else 'image')} | is_video={is_video} | "
+                f"media_url={sanitize_url(public_media_url)}"
+            )
+
             if acc.status == "TOKEN_EXPIRED":
                 code, msg = "TOKEN_EXPIRED", "Account authorization expired. Please reconnect this account."
                 publishing_repo.update_job_status(thread_db, job_id, JobStatus.FAILED.value, error_code=code, error_message=msg)
+                logger.error(f"[PUBLISH_TRACE] PUBLISH_JOB_FAILED | batch_id={batch_id} | job_id={job_id} | platform={acc.platform} | error_code={code} | error_class=Exception | error={msg} | elapsed={round(time.time() - start_time, 2)}s")
                 return {"job_id": job_id, "status": "FAILED", "error": msg}
 
             try:
@@ -127,6 +181,8 @@ class PublishingEngine:
                     raise Exception(f"Unsupported platform: {acc.platform}")
 
                 publishing_repo.update_job_status(thread_db, job_id, JobStatus.SUCCESS.value, external_post_id=ext_id)
+                elapsed = round(time.time() - start_time, 2)
+                logger.info(f"[PUBLISH_TRACE] PUBLISH_JOB_SUCCESS | batch_id={batch_id} | job_id={job_id} | platform={acc.platform} | external_id={ext_id} | elapsed={elapsed}s")
                 return {"job_id": job_id, "status": "SUCCESS", "external_id": ext_id}
             except Exception as e:
                 err_str = str(e)
@@ -134,6 +190,8 @@ class PublishingEngine:
                 if code == "TOKEN_EXPIRED":
                     social_account_repo.mark_status(thread_db, acc.id, "TOKEN_EXPIRED")
                 publishing_repo.update_job_status(thread_db, job_id, JobStatus.FAILED.value, error_code=code, error_message=msg)
+                elapsed = round(time.time() - start_time, 2)
+                logger.error(f"[PUBLISH_TRACE] PUBLISH_JOB_FAILED | batch_id={batch_id} | job_id={job_id} | platform={acc.platform} | error_code={code} | error_class={e.__class__.__name__} | error={msg} | elapsed={elapsed}s")
                 return {"job_id": job_id, "status": "FAILED", "error": msg}
         finally:
             thread_db.close()
@@ -162,9 +220,11 @@ class PublishingEngine:
         batch_id: int,
         post_caption: str,
         raw_media_url: Optional[str],
-        accounts: List[SocialAccount]
+        accounts: List[SocialAccount],
+        media_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """Execute multi-account batch publishing concurrently with thread-isolated DB sessions."""
+        batch_start_time = time.time()
         batch = publishing_repo.get_batch(db, batch_id)
         if not batch:
             raise Exception(f"PublishingBatch ID={batch_id} not found.")
@@ -175,17 +235,25 @@ class PublishingEngine:
         if raw_media_url and (raw_media_url.startswith("data:") or raw_media_url.startswith("blob:")):
             public_media_url = upload_base64_to_public_https(raw_media_url) or raw_media_url
 
-        raw_url_lower = (raw_media_url or "").lower()
-        pub_url_lower = (public_media_url or "").lower()
-        is_video = bool(
-            "video" in raw_url_lower or "video" in pub_url_lower or
-            any(ext in pub_url_lower for ext in [".mp4", ".mov", ".webm", ".m4v"]) or
-            any(ext in raw_url_lower for ext in [".mp4", ".mov", ".webm", ".m4v"])
+        # Retrieve stored media_type from Post model if available
+        post = db.query(Post).filter(Post.id == batch.post_id).first()
+        stored_type = getattr(post, "media_type", None) if post else None
+
+        resolved_media_type, is_video = resolve_media_type(
+            explicit_media_type=media_type,
+            stored_media_type=stored_type,
+            media_url=raw_media_url or public_media_url
         )
 
         jobs = db.query(PublishingJob).filter(
             PublishingJob.batch_id == batch_id
         ).all()
+
+        logger.info(f"[PUBLISH_TRACE] BATCH_EXECUTION_STARTED | batch_id={batch_id} | post_id={batch.post_id} | total_jobs={len(jobs)}")
+        logger.info(
+            f"[PUBLISH_TRACE] MEDIA_TYPE_RESOLVED | batch_id={batch_id} | post_id={batch.post_id} | "
+            f"resolved_media_type={resolved_media_type} | is_video={is_video} | media_url={sanitize_url(public_media_url)}"
+        )
 
         account_map = {acc.id: acc for acc in accounts}
 
@@ -196,7 +264,8 @@ class PublishingEngine:
                 if acc:
                     future = executor.submit(
                         self.process_single_job_in_thread,
-                        job.id, acc.id, post_caption, public_media_url, is_video
+                        job.id, acc.id, post_caption, public_media_url, is_video,
+                        batch_id, resolved_media_type
                     )
                     future_to_job[future] = job.id
 
@@ -204,9 +273,15 @@ class PublishingEngine:
                 try:
                     future.result()
                 except Exception as e:
-                    logger.error(f"Worker exception during batch publishing job: {e}")
+                    logger.error(f"[PUBLISH_TRACE] Worker exception during batch publishing job: {e}")
 
         updated_batch = publishing_repo.update_batch_summary(db, batch_id)
+        batch_elapsed = round(time.time() - batch_start_time, 2)
+        logger.info(
+            f"[PUBLISH_TRACE] PUBLISH_BATCH_COMPLETED | batch_id={batch_id} | status={updated_batch.status} | "
+            f"total={updated_batch.total_targets} | successful={updated_batch.successful_targets} | "
+            f"failed={updated_batch.failed_targets} | elapsed={batch_elapsed}s"
+        )
         return {
             "batch_id": batch_id,
             "status": updated_batch.status,
@@ -216,3 +291,4 @@ class PublishingEngine:
         }
 
 publishing_engine = PublishingEngine()
+

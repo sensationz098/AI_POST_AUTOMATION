@@ -34,7 +34,9 @@ class SocialAccountResponse(BaseModel):
 class MultiPublishRequest(BaseModel):
     post_id: int
     social_account_ids: List[int] = Field(..., description="List of SocialAccount IDs to publish to")
+    media_type: Optional[str] = Field(default=None, description="Optional override for media_type: 'image' or 'video'")
     idempotency_key: Optional[str] = None
+
 
 class PublishingJobResponse(BaseModel):
     id: int

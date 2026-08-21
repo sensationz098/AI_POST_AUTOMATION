@@ -30,6 +30,7 @@ class Post(Base):
     seo_keywords = Column(JSON, default=list)
     image_prompt = Column(Text, nullable=True)
     image_url = Column(Text, nullable=True)
+    media_type = Column(String(50), nullable=True)  # "image" or "video"
     
     platforms = Column(JSON, default=list)  # ["facebook", "instagram"]
     status = Column(String(50), default=PostStatus.DRAFT.value, index=True)
