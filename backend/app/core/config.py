@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = Field(default="http://localhost:3000", env="FRONTEND_URL")
     META_CONFIG_ID: Optional[str] = Field(default=None, env="META_CONFIG_ID")
     
+    # Meta Long Video Processing & Polling Configurations
+    META_VIDEO_PROCESSING_MAX_SECONDS: int = Field(default=300, env="META_VIDEO_PROCESSING_MAX_SECONDS")
+    META_VIDEO_POLL_INITIAL_SECONDS: int = Field(default=3, env="META_VIDEO_POLL_INITIAL_SECONDS")
+    META_VIDEO_POLL_MAX_SECONDS: int = Field(default=15, env="META_VIDEO_POLL_MAX_SECONDS")
+    META_VIDEO_UPLOAD_TIMEOUT_SECONDS: int = Field(default=120, env="META_VIDEO_UPLOAD_TIMEOUT_SECONDS")
+    
     # CORS
     BACKEND_CORS_ORIGINS: Union[List[str], str] = Field(
         default=["http://localhost:3000", "http://127.0.0.1:3000"],

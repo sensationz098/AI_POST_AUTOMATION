@@ -218,17 +218,24 @@ class PostService:
         if "facebook" in (post.platforms or ["facebook"]):
             if fb_acc or (meta_acc and meta_acc.facebook_page_id):
                 try:
-                    res = meta_service.publish_to_facebook_page(
-                        page_id=fb_page_id,
-                        access_token=fb_token or "sandbox_token",
-                        message=formatted_caption,
-                        image_url=public_image_url or post.image_url,
-                        is_video=is_video
-                    )
-                    post.fb_post_id = res.get("id")
-                    successful_publish = True
-                    if res.get("status") == "published_sandbox":
-                        is_sandbox_fb = True
+                    fb_media_url = public_image_url or post.image_url
+                    if is_video and (not fb_media_url or fb_media_url.startswith("data:") or fb_media_url.startswith("blob:") or not (fb_media_url.startswith("http://") or fb_media_url.startswith("https://"))):
+                        errors.append("FB Publish Error: A valid public HTTPS video URL is required for Facebook video publishing.")
+                    else:
+                        res = meta_service.publish_to_facebook_page(
+                            page_id=fb_page_id,
+                            access_token=fb_token or "sandbox_token",
+                            message=formatted_caption,
+                            image_url=fb_media_url,
+                            is_video=is_video
+                        )
+                        fb_id = res.get("id")
+                        if not fb_id:
+                            raise Exception("Facebook API returned response without published post ID.")
+                        post.fb_post_id = str(fb_id)
+                        successful_publish = True
+                        if res.get("status") == "published_sandbox":
+                            is_sandbox_fb = True
                 except Exception as e:
                     errors.append(f"FB Publish Error: {str(e)}")
             else:
@@ -239,8 +246,10 @@ class PostService:
             if ig_acc or (meta_acc and meta_acc.instagram_account_id):
                 try:
                     ig_url = public_image_url
-                    if not ig_url or ig_url.startswith("data:") or ig_url.startswith("blob:"):
-                        errors.append("IG Publish Error: A valid photo/video file or public URL is required for Instagram publishing.")
+                    if is_video and (not ig_url or ig_url.startswith("data:") or ig_url.startswith("blob:") or not (ig_url.startswith("http://") or ig_url.startswith("https://"))):
+                        errors.append("IG Publish Error: A valid public HTTPS video URL is required for Instagram Reel publishing.")
+                    elif not is_video and (not ig_url or ig_url.startswith("data:") or ig_url.startswith("blob:")):
+                        errors.append("IG Publish Error: A valid photo file or public URL is required for Instagram publishing.")
                     else:
                         res = meta_service.publish_to_instagram_business(
                             ig_user_id=ig_user_id,
@@ -250,7 +259,10 @@ class PostService:
                             is_video=is_video
                         )
                         post.ig_container_id = res.get("container_id")
-                        post.ig_media_id = res.get("id")
+                        published_ig_id = res.get("id")
+                        if not published_ig_id:
+                            raise Exception("Instagram API returned response without published media ID.")
+                        post.ig_media_id = str(published_ig_id)
                         successful_publish = True
                         if res.get("status") == "published_sandbox":
                             is_sandbox_ig = True
@@ -258,6 +270,7 @@ class PostService:
                     errors.append(f"IG Publish Error: {str(e)}")
             else:
                 errors.append("IG Publish Notice: No connected Instagram Business account found.")
+
 
         if not successful_publish:
             post.retry_count += 1

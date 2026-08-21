@@ -12,24 +12,19 @@ class MetaGraphService:
         self, page_id: str, access_token: str, message: str, image_url: Optional[str] = None, is_video: bool = False
     ) -> Dict[str, Any]:
         """Publish a photo or video post to a Facebook Page via Meta Graph API."""
-    def publish_to_facebook_page(
-        self, page_id: str, access_token: str, message: str, image_url: Optional[str] = None, is_video: bool = False
-    ) -> Dict[str, Any]:
-        """Publish a photo or video post to a Facebook Page via Meta Graph API."""
         is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
         if is_mock_allowed and (not page_id or not access_token or page_id == "sandbox" or access_token.startswith("sandbox") or access_token.startswith("mock")):
-            logger.info("Meta Graph API: Executing Sandbox FB Publish Simulation.")
+            logger.info("[FB_PUBLISH] Executing Sandbox Facebook Publish Simulation.")
             return {"id": f"fb_mock_post_{abs(hash(message)) % 1000000}", "status": "published_sandbox"}
 
         if not page_id or not access_token:
             raise Exception("Facebook Page ID and valid Access Token are required for publishing.")
 
         if not access_token or access_token.startswith("sandbox") or access_token.startswith("mock") or page_id == "sandbox":
-            logger.info("Meta Graph API: Executing Sandbox Facebook Publish Simulation.")
+            logger.info("[FB_PUBLISH] Executing Sandbox Facebook Publish Simulation.")
             return {"id": f"fb_post_mock_{abs(hash(message)) % 1000000}", "status": "published_sandbox"}
 
         try:
-            # Determine if media is video
             is_video_media = is_video or (image_url and any(image_url.lower().endswith(ext) for ext in [".mp4", ".mov", ".webm", ".m4v"]))
 
             if is_video_media and image_url:
@@ -39,7 +34,16 @@ class MetaGraphService:
                     "description": message,
                     "access_token": access_token
                 }
-                response = requests.post(url, data=payload, timeout=30)
+                video_timeout = settings.META_VIDEO_UPLOAD_TIMEOUT_SECONDS
+                logger.info(f"[FB_PUBLISH] VIDEO_UPLOAD_STARTED | page_id={page_id} | video_url={image_url} | timeout={video_timeout}s")
+                try:
+                    response = requests.post(url, data=payload, timeout=video_timeout)
+                except requests.exceptions.Timeout:
+                    logger.error(f"[FB_PUBLISH] VIDEO_UPLOAD_TIMEOUT | page_id={page_id} | timeout={video_timeout}s")
+                    raise Exception(f"Facebook video upload network HTTP timeout after {video_timeout} seconds.")
+                except requests.exceptions.RequestException as req_err:
+                    logger.error(f"[FB_PUBLISH] VIDEO_UPLOAD_NETWORK_ERROR | page_id={page_id} | error={req_err}")
+                    raise Exception(f"Facebook video upload network error: {req_err}")
             elif image_url and image_url.startswith("data:image"):
                 url = f"{self.BASE_URL}/{page_id}/photos"
                 import base64
@@ -50,6 +54,7 @@ class MetaGraphService:
 
                 files = {"source": (f"post_photo.{ext}", img_bytes, mime_type)}
                 data = {"caption": message, "access_token": access_token}
+                logger.info(f"[FB_PUBLISH] PHOTO_UPLOAD_STARTED (base64) | page_id={page_id}")
                 response = requests.post(url, data=data, files=files, timeout=30)
             elif image_url:
                 url = f"{self.BASE_URL}/{page_id}/photos"
@@ -58,6 +63,7 @@ class MetaGraphService:
                     "caption": message,
                     "access_token": access_token
                 }
+                logger.info(f"[FB_PUBLISH] PHOTO_UPLOAD_STARTED | page_id={page_id} | image_url={image_url}")
                 response = requests.post(url, data=payload, timeout=20)
             else:
                 feed_url = f"{self.BASE_URL}/{page_id}/feed"
@@ -65,16 +71,23 @@ class MetaGraphService:
                     "message": message,
                     "access_token": access_token
                 }
+                logger.info(f"[FB_PUBLISH] FEED_POST_STARTED | page_id={page_id}")
                 response = requests.post(feed_url, data=payload, timeout=15)
             
             res_data = response.json()
             if response.status_code != 200:
                 error_msg = res_data.get("error", {}).get("message", "Facebook API Error")
+                logger.error(f"[FB_PUBLISH] PUBLISH_FAILED | page_id={page_id} | status_code={response.status_code} | error={error_msg}")
                 raise Exception(f"Facebook Graph API Error ({response.status_code}): {error_msg}")
             
+            fb_post_id = res_data.get("id")
+            if not fb_post_id:
+                raise Exception(f"Facebook Graph API returned success response but missing post/video ID: {res_data}")
+
+            logger.info(f"[FB_PUBLISH] MEDIA_PUBLISHED | page_id={page_id} | external_id={fb_post_id}")
             return res_data
         except Exception as e:
-            logger.error(f"Meta Service Facebook publish error: {e}")
+            logger.error(f"[FB_PUBLISH] Meta Service Facebook publish error: {e}")
             raise e
 
     def publish_to_instagram_business(
@@ -83,12 +96,12 @@ class MetaGraphService:
         """
         Publish Photo or Video Reel to Instagram Business Account via 2-Step Container Graph API flow:
         Step 1: Create IG Media Container (POST /{ig-user-id}/media)
-        Step 2: Poll container status until FINISHED
+        Step 2: Bounded polling of container status until FINISHED (with exponential backoff & configurable timeout)
         Step 3: Publish IG Media Container (POST /{ig-user-id}/media_publish)
         """
         is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
         if is_mock_allowed and (not ig_user_id or not access_token or ig_user_id == "sandbox" or access_token.startswith("sandbox") or access_token.startswith("mock")):
-            logger.info("Meta Graph API: Executing Sandbox IG Publish Simulation.")
+            logger.info("[IG_PUBLISH] Executing Sandbox Instagram Publish Simulation.")
             return {
                 "container_id": f"ig_container_mock_{abs(hash(caption)) % 100000}",
                 "id": f"ig_media_mock_{abs(hash(caption)) % 1000000}",
@@ -109,70 +122,119 @@ class MetaGraphService:
                     "caption": caption,
                     "access_token": access_token
                 }
+                logger.info(f"[IG_PUBLISH] VIDEO_UPLOAD_STARTED | ig_user_id={ig_user_id} | video_url={image_url}")
             else:
                 container_payload = {
                     "image_url": image_url,
                     "caption": caption,
                     "access_token": access_token
                 }
+                logger.info(f"[IG_PUBLISH] PHOTO_UPLOAD_STARTED | ig_user_id={ig_user_id} | image_url={image_url}")
 
-            container_res = requests.post(container_url, data=container_payload, timeout=25)
+            container_res = requests.post(container_url, data=container_payload, timeout=30)
             c_data = container_res.json()
             if container_res.status_code != 200:
                 err = c_data.get("error", {}).get("message", "IG Container Error")
-                raise Exception(f"IG Container Creation Failed: {err}")
+                logger.error(f"[IG_PUBLISH] CONTAINER_FAILED | ig_user_id={ig_user_id} | status_code={container_res.status_code} | error={err}")
+                raise Exception(f"IG Container Creation Failed ({container_res.status_code}): {err}")
 
             creation_id = c_data.get("id")
+            if not creation_id:
+                raise Exception(f"IG Container Creation Failed: Meta returned success response without container ID: {c_data}")
 
-            # Step 2: Poll container status until FINISHED for BOTH photos and video reels
+            logger.info(f"[IG_PUBLISH] CONTAINER_CREATED | ig_user_id={ig_user_id} | container_id={creation_id}")
+
+            # Step 2: Bounded polling of container status until FINISHED (with exponential backoff & configurable timeout)
             import time
             status_url = f"{self.BASE_URL}/{creation_id}"
-            is_ready = False
-            for attempt in range(15):
-                st_res = requests.get(status_url, params={"fields": "status_code,status", "access_token": access_token}, timeout=10)
-                st_data = st_res.json()
-                status_code = st_data.get("status_code")
-                if status_code == "FINISHED":
-                    is_ready = True
+            max_wait_seconds = settings.META_VIDEO_PROCESSING_MAX_SECONDS
+            initial_delay = settings.META_VIDEO_POLL_INITIAL_SECONDS
+            max_delay = settings.META_VIDEO_POLL_MAX_SECONDS
+            backoff_factor = 1.5
+
+            start_time = time.time()
+            attempt = 0
+            current_delay = float(initial_delay)
+            is_finished = False
+            last_status_code = None
+            last_status_details = None
+
+            while (time.time() - start_time) < max_wait_seconds:
+                attempt += 1
+                elapsed = round(time.time() - start_time, 2)
+                logger.info(f"[IG_PUBLISH] CONTAINER_STATUS_CHECK | attempt={attempt} | container_id={creation_id} | elapsed={elapsed}s")
+
+                try:
+                    st_res = requests.get(
+                        status_url,
+                        params={"fields": "status_code,status", "access_token": access_token},
+                        timeout=15
+                    )
+                    st_data = st_res.json()
+                    last_status_code = st_data.get("status_code")
+                    last_status_details = st_data.get("status")
+                except Exception as poll_err:
+                    logger.warning(f"[IG_PUBLISH] CONTAINER_STATUS_CHECK_WARNING | attempt={attempt} | container_id={creation_id} | error={poll_err}")
+                    time.sleep(current_delay)
+                    current_delay = min(current_delay * backoff_factor, max_delay)
+                    continue
+
+                logger.info(f"[IG_PUBLISH] CONTAINER_PROCESSING | attempt={attempt} | container_id={creation_id} | status_code={last_status_code} | elapsed={elapsed}s")
+
+                if last_status_code == "FINISHED":
+                    is_finished = True
+                    logger.info(f"[IG_PUBLISH] CONTAINER_FINISHED | container_id={creation_id} | attempt={attempt} | total_time={elapsed}s")
                     break
-                elif status_code in ["ERROR", "EXPIRED"]:
-                    err_details = st_data.get("status", "Unknown container processing error")
-                    raise Exception(f"IG Container processing failed on Meta servers ({status_code}): {err_details}")
-                time.sleep(2)
+                elif last_status_code == "ERROR":
+                    err_msg = last_status_details or st_data.get("error", {}).get("message") or "Unknown container processing error on Meta servers"
+                    logger.error(f"[IG_PUBLISH] CONTAINER_FAILED | container_id={creation_id} | status_code=ERROR | error={err_msg} | elapsed={elapsed}s")
+                    raise Exception(f"IG Container processing failed on Meta servers (ERROR): {err_msg}")
+                elif last_status_code == "EXPIRED":
+                    logger.error(f"[IG_PUBLISH] CONTAINER_EXPIRED | container_id={creation_id} | status_code=EXPIRED | elapsed={elapsed}s")
+                    raise Exception(f"IG Container processing expired on Meta servers (EXPIRED). Container ID: {creation_id}")
 
-            if not is_ready:
-                logger.warning(f"IG Container {creation_id} status poll timed out. Attempting publish.")
+                # Still processing (e.g. IN_PROGRESS or pending)
+                time.sleep(current_delay)
+                current_delay = min(current_delay * backoff_factor, max_delay)
 
-            # Step 3: Publish Media Container
+            if not is_finished:
+                total_elapsed = round(time.time() - start_time, 2)
+                logger.error(f"[IG_PUBLISH] CONTAINER_TIMEOUT | container_id={creation_id} | status_code={last_status_code} | total_time={total_elapsed}s | max_allowed={max_wait_seconds}s")
+                raise Exception(
+                    f"IG Video container processing timed out on Meta servers after {total_elapsed}s (status: {last_status_code or 'IN_PROGRESS'}). "
+                    f"Publication could not be confirmed within the configured processing window ({max_wait_seconds}s). Container ID: {creation_id}"
+                )
+
+            # Step 3: Publish Media Container ONLY after FINISHED status is confirmed
+            logger.info(f"[IG_PUBLISH] MEDIA_PUBLISH_STARTED | container_id={creation_id}")
             publish_url = f"{self.BASE_URL}/{ig_user_id}/media_publish"
             publish_payload = {
                 "creation_id": creation_id,
                 "access_token": access_token
             }
-            pub_res = requests.post(publish_url, data=publish_payload, timeout=25)
+            pub_res = requests.post(publish_url, data=publish_payload, timeout=30)
             p_data = pub_res.json()
-
-            # Retry once if Meta returns "Media container is not ready" (Error code 9007 / 2454041)
-            if pub_res.status_code != 200:
-                err_msg = p_data.get("error", {}).get("message", "")
-                if "not ready" in err_msg.lower() or "9007" in str(p_data) or "2454041" in str(p_data):
-                    logger.info("IG Media Container not ready. Waiting 4 seconds before retrying publish...")
-                    time.sleep(4)
-                    pub_res = requests.post(publish_url, data=publish_payload, timeout=25)
-                    p_data = pub_res.json()
 
             if pub_res.status_code != 200:
                 err = p_data.get("error", {}).get("message", "IG Publish Error")
-                raise Exception(f"IG Media Publish Failed: {err}")
+                logger.error(f"[IG_PUBLISH] MEDIA_PUBLISH_FAILED | container_id={creation_id} | status_code={pub_res.status_code} | error={err}")
+                raise Exception(f"IG Media Publish Failed ({pub_res.status_code}): {err}")
 
+            published_media_id = p_data.get("id")
+            if not published_media_id:
+                logger.error(f"[IG_PUBLISH] MEDIA_PUBLISH_NO_ID | container_id={creation_id} | response={p_data}")
+                raise Exception(f"IG Media Publish succeeded but returned no published media ID: {p_data}")
+
+            logger.info(f"[IG_PUBLISH] MEDIA_PUBLISHED | container_id={creation_id} | external_id={published_media_id}")
             return {
                 "container_id": creation_id,
-                "id": p_data.get("id"),
+                "id": str(published_media_id),
                 "status": "published"
             }
         except Exception as e:
-            logger.error(f"Meta Service Instagram publish error: {e}")
+            logger.error(f"[IG_PUBLISH] Meta Service Instagram publish error: {e}")
             raise e
+
 
     def fetch_facebook_page_metrics(self, page_id: str, access_token: str) -> Dict[str, Any]:
         """Fetch real Facebook Page metrics (followers, likes, category, picture) via Graph API."""

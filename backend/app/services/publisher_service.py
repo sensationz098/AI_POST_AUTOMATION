@@ -20,21 +20,32 @@ from app.core.security_encryption import decrypt_token
 def classify_error(err_str: str) -> tuple[str, str]:
     """Classify technical exceptions into human-readable error codes and messages."""
     err_lower = err_str.lower()
+    if "timeout" in err_lower or "timed out" in err_lower:
+        return "PUBLISH_TIMEOUT", f"Publishing process timed out: {err_str[:200]}"
     if "token" in err_lower or "expired" in err_lower or "session" in err_lower or "oauth" in err_lower:
         return "TOKEN_EXPIRED", "Account authorization expired. Please reconnect this account."
     if "permission" in err_lower or "access" in err_lower or "denied" in err_lower:
         return "PERMISSION_ERROR", "Insufficient Page permissions. Reconnect account with required scopes."
     if "rate" in err_lower or "limit" in err_lower or "429" in err_lower:
         return "RATE_LIMIT", "Meta API rate limit reached. Retrying automatically shortly."
-    if "media" in err_lower or "image" in err_lower or "video" in err_lower or "format" in err_lower:
-        return "INVALID_MEDIA", "Media file format or aspect ratio is incompatible with Meta requirements."
-    return "PLATFORM_ERROR", f"Meta Graph API error: {err_str[:150]}"
+    if "media" in err_lower or "image" in err_lower or "video" in err_lower or "format" in err_lower or "cdn" in err_lower:
+        return "INVALID_MEDIA", f"Media requirements error: {err_str[:200]}"
+    return "PLATFORM_ERROR", f"Meta Graph API error: {err_str[:200]}"
 
 class FacebookPublisher:
     def publish(self, account: SocialAccount, caption: str, public_media_url: Optional[str], is_video: bool) -> str:
         final_url = public_media_url
-        if final_url and (final_url.startswith("blob:") or final_url.startswith("data:")):
-            final_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&auto=format&fit=crop&q=80"
+        if is_video:
+            if not final_url or final_url.startswith("blob:") or final_url.startswith("data:") or not (final_url.startswith("http://") or final_url.startswith("https://")):
+                raise Exception("Facebook video publishing failed: Media URL is invalid or could not be uploaded to a public HTTPS CDN. Video publishing requires a publicly accessible HTTPS URL.")
+        else:
+            if final_url and (final_url.startswith("blob:") or final_url.startswith("data:")):
+                final_url = upload_base64_to_public_https(final_url) or final_url
+                if final_url.startswith("blob:") or final_url.startswith("data:"):
+                    from app.core.config import settings
+                    if not (settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"):
+                        raise Exception("Facebook photo publishing failed: Media URL could not be uploaded to a public HTTPS CDN.")
+                    final_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&auto=format&fit=crop&q=80"
 
         token = decrypt_token(account.access_token) or account.access_token
         res = meta_service.publish_to_facebook_page(
@@ -52,8 +63,18 @@ class FacebookPublisher:
 class InstagramPublisher:
     def publish(self, account: SocialAccount, caption: str, public_media_url: Optional[str], is_video: bool) -> str:
         final_url = public_media_url
-        if not final_url or final_url.startswith("data:") or final_url.startswith("blob:"):
-            final_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&auto=format&fit=crop&q=80"
+        if is_video:
+            if not final_url or final_url.startswith("blob:") or final_url.startswith("data:") or not (final_url.startswith("http://") or final_url.startswith("https://")):
+                raise Exception("Instagram video publishing failed: Media URL is invalid or could not be uploaded to a public HTTPS CDN. Video publishing requires a publicly accessible HTTPS URL.")
+        else:
+            if not final_url or final_url.startswith("data:") or final_url.startswith("blob:"):
+                if final_url:
+                    final_url = upload_base64_to_public_https(final_url) or final_url
+                if not final_url or final_url.startswith("blob:") or final_url.startswith("data:"):
+                    from app.core.config import settings
+                    if not (settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"):
+                        raise Exception("Instagram photo publishing failed: A valid public HTTPS image URL is required.")
+                    final_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&auto=format&fit=crop&q=80"
         
         token = decrypt_token(account.access_token) or account.access_token
         res = meta_service.publish_to_instagram_business(
@@ -63,10 +84,11 @@ class InstagramPublisher:
             image_url=final_url,
             is_video=is_video
         )
-        media_id = res.get("id") or res.get("container_id")
+        media_id = res.get("id")
         if not media_id:
-            raise Exception(f"Instagram Graph API returned no media ID: {res}")
+            raise Exception(f"Instagram Graph API returned no published media ID (container_id={res.get('container_id')}): {res}")
         return str(media_id)
+
 
 class PublishingEngine:
     def __init__(self):
