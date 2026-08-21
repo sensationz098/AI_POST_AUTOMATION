@@ -99,3 +99,12 @@ def test_post_model_and_schemas_media_type_field_alignment():
     multi_req = MultiPublishRequest(post_id=10, social_account_ids=[1, 2], media_type="video")
     assert multi_req.media_type == "video"
 
+
+def test_posts_router_logger_defined():
+    """Verify that backend/app/api/v1/posts.py module defines 'logger' to prevent NameError on trace logs."""
+    import app.api.v1.posts as posts_module
+    assert hasattr(posts_module, "logger")
+    assert posts_module.logger is not None
+    assert isinstance(posts_module.logger, logging.Logger)
+
+

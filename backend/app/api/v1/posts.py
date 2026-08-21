@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, status, Query, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -12,7 +13,10 @@ from app.models.publishing_batch import BatchStatus, JobStatus, PublishingJob
 from app.api.v1.deps import get_current_user
 from app.models.user import User
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/posts", tags=["Social Posts Workflow"])
+
 
 @router.post("/", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
 def create_post(
