@@ -77,3 +77,25 @@ def test_setup_logging_configures_stdout_handler():
     assert root_logger.level == logging.INFO
     assert len(root_logger.handlers) >= 1
     assert isinstance(root_logger.handlers[0], logging.StreamHandler)
+
+
+def test_post_model_and_schemas_media_type_field_alignment():
+    """Verify SQLAlchemy Post model and Pydantic schemas align on media_type field."""
+    from app.models.post import Post
+    from app.schemas.post import PostCreate, PostUpdate, PostResponse
+    from app.schemas.social_account import MultiPublishRequest
+
+    # 1. Verify SQLAlchemy model has media_type attribute
+    assert hasattr(Post, "media_type")
+    assert Post.media_type.property.columns[0].nullable is True
+
+    # 2. Verify Pydantic schemas include media_type
+    create_schema = PostCreate(brand_id=1, caption="Test", media_type="video")
+    assert create_schema.media_type == "video"
+
+    update_schema = PostUpdate(media_type="image")
+    assert update_schema.media_type == "image"
+
+    multi_req = MultiPublishRequest(post_id=10, social_account_ids=[1, 2], media_type="video")
+    assert multi_req.media_type == "video"
+
