@@ -15,6 +15,9 @@ import requests
 
 from app.services.cloudinary_service import upload_media_to_cloudinary
 
+from app.core.logging_config import sanitize_url
+from app.services.publisher_service import resolve_media_type
+
 logger = logging.getLogger(__name__)
 
 def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
@@ -22,10 +25,74 @@ def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
     return upload_media_to_cloudinary(base64_str)
 
 class PostService:
+    def _process_and_upload_post_media(self, data: dict) -> dict:
+        """
+        Inspect incoming post data dictionary for media content, resolve media_type explicitly,
+        and ensure Base64 / data URIs are uploaded to Cloudinary CDN before DB persistence.
+        """
+        raw_url = data.get("image_url")
+        req_media_type = data.get("media_type")
+
+        # 1. Resolve media_type explicitly
+        resolved_type, is_video = resolve_media_type(
+            explicit_media_type=req_media_type,
+            stored_media_type=None,
+            media_url=raw_url
+        )
+        data["media_type"] = resolved_type
+
+        if not raw_url:
+            return data
+
+        # 2. Check if raw_url is a data URL / base64 or blob URL requiring Cloudinary upload
+        is_data_uri = (
+            raw_url.startswith("data:") or
+            raw_url.startswith("blob:") or
+            (";base64," in raw_url)
+        )
+
+        if is_data_uri:
+            payload_bytes = len(raw_url)
+            size_mb = payload_bytes / (1024 * 1024)
+            logger.info(
+                f"[MEDIA_TRACE] POST_MEDIA_RECEIVED | source=data_url | "
+                f"media_type={resolved_type} | payload_size_mb={size_mb:.2f}"
+            )
+            logger.info(f"[MEDIA_TRACE] CLOUDINARY_UPLOAD_STARTED | media_type={resolved_type}")
+
+            cloudinary_url = upload_media_to_cloudinary(raw_url, media_type=resolved_type)
+
+            if cloudinary_url:
+                sanitized_cdn_url = sanitize_url(cloudinary_url)
+                logger.info(
+                    f"[MEDIA_TRACE] CLOUDINARY_UPLOAD_SUCCESS | media_type={resolved_type} | "
+                    f"url={sanitized_cdn_url}"
+                )
+                data["image_url"] = cloudinary_url
+            else:
+                logger.error(
+                    f"[MEDIA_TRACE] CLOUDINARY_UPLOAD_FAILED | media_type={resolved_type} | "
+                    f"payload_size_mb={size_mb:.2f}"
+                )
+                if payload_bytes > 500000:  # > 500KB
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Failed to upload large media asset to Cloudinary. Raw Base64 payloads cannot be saved directly to database."
+                    )
+        elif raw_url.startswith("https://res.cloudinary.com/"):
+            logger.info(f"[MEDIA_TRACE] POST_MEDIA_REUSED | source=cloudinary_url | media_type={resolved_type}")
+        else:
+            logger.info(f"[MEDIA_TRACE] POST_MEDIA_RECEIVED | source=external_url | media_type={resolved_type}")
+
+        return data
+
     def create_post(self, db: Session, user_id: int, post_in: PostCreate) -> Post:
         from app.models.brand import BrandProfile
         data = post_in.model_dump()
         data["user_id"] = user_id
+
+        # Pre-process media: resolve media_type and upload base64 payloads to Cloudinary CDN before DB insert
+        data = self._process_and_upload_post_media(data)
 
         # Ensure brand exists and belongs to current user
         brand_id = data.get("brand_id", 1)
@@ -54,8 +121,13 @@ class PostService:
                 except Exception:
                     db.rollback()
 
+        logger.info(
+            f"[MEDIA_TRACE] POST_PERSISTING | media_type={data.get('media_type')} | "
+            f"media_url_len={len(data.get('image_url') or '')}"
+        )
         post = post_repo.create(db, data)
-        
+        logger.info(f"[MEDIA_TRACE] POST_PERSISTED | post_id={post.id} | media_type={post.media_type}")
+
         audit_repo.log(
             db=db,
             user_id=user_id,
@@ -65,6 +137,7 @@ class PostService:
             details={"title": post.title, "status": post.status}
         )
         return post
+
 
     def get_post(self, db: Session, post_id: int, user_id: int) -> Post:
         """Get single post with strict user ownership validation."""
@@ -102,16 +175,20 @@ class PostService:
 
     def update_post(self, db: Session, post_id: int, user_id: int, post_in: PostUpdate) -> Post:
         post = self.get_post(db, post_id, user_id)
-        updated = post_repo.update(db, post, post_in.model_dump(exclude_unset=True))
+        update_data = post_in.model_dump(exclude_unset=True)
+        if "image_url" in update_data or "media_type" in update_data:
+            update_data = self._process_and_upload_post_media(update_data)
+        updated = post_repo.update(db, post, update_data)
         audit_repo.log(
             db=db,
             user_id=user_id,
             action="POST_UPDATED",
             resource_type="Post",
             resource_id=post_id,
-            details=post_in.model_dump(exclude_unset=True)
+            details=update_data
         )
         return updated
+
 
     def approve_post(self, db: Session, post_id: int, user_id: int) -> Post:
         post = self.get_post(db, post_id, user_id)

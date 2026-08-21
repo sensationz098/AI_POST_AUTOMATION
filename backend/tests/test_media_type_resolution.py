@@ -108,3 +108,118 @@ def test_posts_router_logger_defined():
     assert isinstance(posts_module.logger, logging.Logger)
 
 
+def test_create_post_small_image_base64_uploads_to_cloudinary():
+    """Verify small image base64 is uploaded to Cloudinary and HTTPS URL saved with media_type='image'."""
+    from app.services.post_service import PostService
+    from app.schemas.post import PostCreate
+
+    service = PostService()
+    db = MagicMock()
+    
+    # Mock brand check
+    db.query.return_value.filter.return_value.first.return_value = MagicMock(id=1, user_id=1)
+
+    image_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    post_in = PostCreate(brand_id=1, caption="Test Image", image_url=image_base64)
+
+    with patch("app.services.post_service.upload_media_to_cloudinary") as mock_upload, \
+         patch("app.services.post_service.post_repo.create") as mock_create:
+        
+        mock_upload.return_value = "https://res.cloudinary.com/demo/image/upload/v12345/sample.png"
+        mock_create.return_value = MagicMock(id=101, media_type="image", image_url="https://res.cloudinary.com/demo/image/upload/v12345/sample.png")
+
+        res = service.create_post(db=db, user_id=1, post_in=post_in)
+
+        # 1. Cloudinary upload called with resource_type image
+        mock_upload.assert_called_once_with(image_base64, media_type="image")
+
+        # 2. Database receive ONLY HTTPS URL and media_type='image' (never raw base64)
+        created_data = mock_create.call_args[0][1]
+        assert created_data["image_url"] == "https://res.cloudinary.com/demo/image/upload/v12345/sample.png"
+        assert created_data["media_type"] == "image"
+        assert not created_data["image_url"].startswith("data:")
+
+
+def test_create_post_mp4_video_base64_uploads_to_cloudinary_video():
+    """Verify MP4 video base64 is uploaded to Cloudinary with media_type='video' and HTTPS URL saved."""
+    from app.services.post_service import PostService
+    from app.schemas.post import PostCreate
+
+    service = PostService()
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = MagicMock(id=1, user_id=1)
+
+    video_base64 = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQ=="
+    post_in = PostCreate(brand_id=1, caption="Test Reel", image_url=video_base64, media_type="video")
+
+    with patch("app.services.post_service.upload_media_to_cloudinary") as mock_upload, \
+         patch("app.services.post_service.post_repo.create") as mock_create:
+        
+        mock_upload.return_value = "https://res.cloudinary.com/demo/video/upload/v12345/reel.mp4"
+        mock_create.return_value = MagicMock(id=102, media_type="video", image_url="https://res.cloudinary.com/demo/video/upload/v12345/reel.mp4")
+
+        res = service.create_post(db=db, user_id=1, post_in=post_in)
+
+        # 1. Cloudinary upload called with media_type video
+        mock_upload.assert_called_once_with(video_base64, media_type="video")
+
+        # 2. DB receives ONLY HTTPS URL and media_type='video'
+        created_data = mock_create.call_args[0][1]
+        assert created_data["image_url"] == "https://res.cloudinary.com/demo/video/upload/v12345/reel.mp4"
+        assert created_data["media_type"] == "video"
+
+
+def test_create_post_existing_cloudinary_url_skips_duplicate_upload():
+    """Verify existing Cloudinary HTTPS URL is preserved without duplicate upload."""
+    from app.services.post_service import PostService
+    from app.schemas.post import PostCreate
+
+    service = PostService()
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = MagicMock(id=1, user_id=1)
+
+    cdn_url = "https://res.cloudinary.com/demo/video/upload/v12345/existing_clip.mp4"
+    post_in = PostCreate(brand_id=1, caption="Existing CDN Clip", image_url=cdn_url)
+
+    with patch("app.services.post_service.upload_media_to_cloudinary") as mock_upload, \
+         patch("app.services.post_service.post_repo.create") as mock_create:
+        
+        service.create_post(db=db, user_id=1, post_in=post_in)
+
+        # Duplicate upload should NOT occur for existing Cloudinary URL
+        mock_upload.assert_not_called()
+
+        created_data = mock_create.call_args[0][1]
+        assert created_data["image_url"] == cdn_url
+        assert created_data["media_type"] == "video"
+
+
+def test_large_base64_video_payload_never_inserted_into_db():
+    """Verify large 45MB simulated base64 string is uploaded to CDN and NEVER passed raw to DB insert."""
+    from app.services.post_service import PostService
+    from app.schemas.post import PostCreate
+
+    service = PostService()
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = MagicMock(id=1, user_id=1)
+
+    # 1MB simulated payload header for testing
+    huge_base64 = "data:video/mp4;base64," + ("A" * 1000000)
+    post_in = PostCreate(brand_id=1, caption="33s Video Test", image_url=huge_base64)
+
+    with patch("app.services.post_service.upload_media_to_cloudinary") as mock_upload, \
+         patch("app.services.post_service.post_repo.create") as mock_create:
+        
+        mock_upload.return_value = "https://res.cloudinary.com/demo/video/upload/v999/large_33s_video.mp4"
+        mock_create.return_value = MagicMock(id=103)
+
+        service.create_post(db=db, user_id=1, post_in=post_in)
+
+        created_data = mock_create.call_args[0][1]
+        # Raw base64 MUST NEVER reach post_repo.create
+        assert created_data["image_url"] != huge_base64
+        assert created_data["image_url"] == "https://res.cloudinary.com/demo/video/upload/v999/large_33s_video.mp4"
+        assert created_data["media_type"] == "video"
+
+
+

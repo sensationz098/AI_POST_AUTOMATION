@@ -456,6 +456,8 @@ export default function AIStudioPage() {
 
   const handleSaveDraft = async () => {
     setStatusNotification(null);
+    const isVideo = imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.endsWith('.webm') || imageUrl.endsWith('.m4v') || imageUrl.startsWith('data:video/'));
+    const detectedMediaType = isVideo ? 'video' : 'image';
     try {
       await apiClient.post('/posts/', {
         brand_id: selectedBrand.id,
@@ -466,6 +468,7 @@ export default function AIStudioPage() {
         seo_keywords: seoKeywords,
         image_prompt: imagePrompt,
         image_url: imageUrl,
+        media_type: detectedMediaType,
         platforms: ['facebook', 'instagram'],
         status: 'DRAFT',
       });
@@ -483,6 +486,8 @@ export default function AIStudioPage() {
     }
     setIsScheduling(true);
     setStatusNotification(null);
+    const isVideo = imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.endsWith('.webm') || imageUrl.endsWith('.m4v') || imageUrl.startsWith('data:video/'));
+    const detectedMediaType = isVideo ? 'video' : 'image';
     try {
       // Create post with SCHEDULED status
       const postRes = await apiClient.post('/posts/', {
@@ -494,6 +499,7 @@ export default function AIStudioPage() {
         seo_keywords: seoKeywords,
         image_prompt: imagePrompt,
         image_url: imageUrl,
+        media_type: detectedMediaType,
         platforms: ['facebook', 'instagram'],
         status: 'SCHEDULED',
         scheduled_at: new Date(scheduledDateTime).toISOString(),
@@ -511,8 +517,10 @@ export default function AIStudioPage() {
   const handlePublishNow = async () => {
     setIsPublishing(true);
     setStatusNotification(null);
+    const isVideo = imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.endsWith('.webm') || imageUrl.endsWith('.m4v') || imageUrl.startsWith('data:video/'));
+    const detectedMediaType = isVideo ? 'video' : 'image';
     try {
-      // 1. Create post entry
+      // 1. Create post entry (Base64 uploads to Cloudinary automatically on backend before DB insert)
       const postRes = await apiClient.post('/posts/', {
         brand_id: selectedBrand?.id || 1,
         title: topic,
@@ -522,6 +530,7 @@ export default function AIStudioPage() {
         seo_keywords: seoKeywords,
         image_prompt: imagePrompt,
         image_url: imageUrl,
+        media_type: detectedMediaType,
         platforms: ['facebook', 'instagram'],
         status: 'DRAFT',
       });
@@ -532,7 +541,9 @@ export default function AIStudioPage() {
         const batchRes = await apiClient.post('/posts/publish-multi', {
           post_id: postId,
           social_account_ids: selectedAccountIds,
+          media_type: detectedMediaType,
         });
+
 
         setActiveBatch(batchRes.data);
         setIsBatchModalOpen(true);
