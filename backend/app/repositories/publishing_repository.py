@@ -82,26 +82,32 @@ class PublishingRepository:
         return job
 
     def update_batch_summary(self, db: Session, batch_id: int) -> Optional[PublishingBatch]:
+        db.expire_all()
         batch = self.get_batch(db, batch_id)
         if not batch:
             return None
 
         jobs = db.query(PublishingJob).filter(PublishingJob.batch_id == batch_id).all()
+        total_jobs = len(jobs)
         success_count = sum(1 for j in jobs if j.status == JobStatus.SUCCESS.value)
         failed_count = sum(1 for j in jobs if j.status == JobStatus.FAILED.value)
         processing_count = sum(1 for j in jobs if j.status in [JobStatus.QUEUED.value, JobStatus.PROCESSING.value, JobStatus.RETRYING.value])
 
+        batch.total_targets = total_jobs if total_jobs > 0 else batch.total_targets
         batch.successful_targets = success_count
         batch.failed_targets = failed_count
 
         now_utc = datetime.now(timezone.utc)
         if processing_count > 0:
             batch.status = BatchStatus.PROCESSING.value
-        elif success_count == len(jobs):
+        elif total_jobs > 0 and success_count == total_jobs:
             batch.status = BatchStatus.SUCCESS.value
             batch.completed_at = now_utc
         elif success_count > 0 and failed_count > 0:
             batch.status = BatchStatus.PARTIAL_SUCCESS.value
+            batch.completed_at = now_utc
+        elif total_jobs > 0 and failed_count == total_jobs:
+            batch.status = BatchStatus.FAILED.value
             batch.completed_at = now_utc
         else:
             batch.status = BatchStatus.FAILED.value
@@ -110,5 +116,6 @@ class PublishingRepository:
         db.commit()
         db.refresh(batch)
         return batch
+
 
 publishing_repo = PublishingRepository()

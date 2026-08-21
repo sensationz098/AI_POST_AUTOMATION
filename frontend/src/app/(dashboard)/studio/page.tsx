@@ -25,8 +25,8 @@ import {
 } from 'lucide-react';
 import { FacebookPostPreview } from '@/components/FacebookPostPreview';
 import { InstagramPostPreview } from '@/components/InstagramPostPreview';
-import { BrandProfile, MetaAccount, SocialAccount, PublishingBatch, PublishingJob } from '@/lib/types';
-import { apiClient } from '@/lib/api';
+import { apiClient, PUBLISHING_TIMEOUT_MS } from '@/lib/api';
+
 
 // ─── Music Card Component ────────────────────────────────────────────────────
 function MusicCard({
@@ -533,17 +533,16 @@ export default function AIStudioPage() {
         media_type: detectedMediaType,
         platforms: ['facebook', 'instagram'],
         status: 'DRAFT',
-      });
+      }, { timeout: PUBLISHING_TIMEOUT_MS });
       const postId = postRes.data.id;
 
       if (selectedAccountIds.length > 0) {
-        // Multi-Account Publishing Batch
+        // Multi-Account Publishing Batch (uses 300s window matching server-side max Meta video processing window)
         const batchRes = await apiClient.post('/posts/publish-multi', {
           post_id: postId,
           social_account_ids: selectedAccountIds,
           media_type: detectedMediaType,
-        });
-
+        }, { timeout: PUBLISHING_TIMEOUT_MS });
 
         setActiveBatch(batchRes.data);
         setIsBatchModalOpen(true);
@@ -557,7 +556,7 @@ export default function AIStudioPage() {
         }
       } else {
         // Single Account / Direct Meta Account Fallback Publishing
-        const pubRes = await apiClient.post(`/posts/${postId}/publish-now`);
+        const pubRes = await apiClient.post(`/posts/${postId}/publish-now`, null, { timeout: PUBLISHING_TIMEOUT_MS });
         const pubData = pubRes.data;
 
         if (pubData.status === 'PUBLISHED' || pubData.fb_post_id || pubData.ig_media_id || pubData.ig_container_id) {
@@ -594,8 +593,12 @@ export default function AIStudioPage() {
         localStorage.setItem('local_posts_queue', JSON.stringify([newPostObj, ...existingQueue]));
       } catch {}
     } catch (e: any) {
-      const errorMsg = e.response?.data?.detail || e.message || 'Publishing failed. Please check social account connection.';
-      setStatusNotification(`❌ Publishing failed: ${errorMsg}`);
+      if (e.code === 'ECONNABORTED' || e.message?.toLowerCase().includes('timeout')) {
+        setStatusNotification('❌ Publishing request timed out after 300 seconds. Media processing or platform publishing may still be finalizing in the background.');
+      } else {
+        const errorMsg = e.response?.data?.detail || e.message || 'Publishing failed. Please check social account connection.';
+        setStatusNotification(`❌ Publishing failed: ${errorMsg}`);
+      }
     } finally {
       setIsPublishing(false);
     }
@@ -605,14 +608,19 @@ export default function AIStudioPage() {
     if (!activeBatch) return;
     setIsPublishing(true);
     try {
-      const retryRes = await apiClient.post(`/posts/batch/${activeBatch.id}/retry`);
+      const retryRes = await apiClient.post(`/posts/batch/${activeBatch.id}/retry`, null, { timeout: PUBLISHING_TIMEOUT_MS });
       setActiveBatch(retryRes.data);
       if (retryRes.data.status === 'SUCCESS') {
         setStatusNotification(`🚀 Retry successful! Published across all ${retryRes.data.total_targets} destinations.`);
       }
-    } catch (e) {
-      alert('Failed to retry failed accounts.');
+    } catch (e: any) {
+      if (e.code === 'ECONNABORTED' || e.message?.toLowerCase().includes('timeout')) {
+        setStatusNotification('❌ Retry request timed out after 300 seconds. Media processing or platform publishing may still be finalizing in the background.');
+      } else {
+        alert('Failed to retry failed accounts.');
+      }
     } finally {
+
       setIsPublishing(false);
     }
   };
