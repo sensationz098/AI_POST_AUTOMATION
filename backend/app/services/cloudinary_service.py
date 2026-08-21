@@ -26,7 +26,11 @@ def _init_cloudinary():
             secure=True
         )
 
-def upload_media_to_cloudinary(media_str_or_bytes: str, filename_prefix: str = "post_media") -> Optional[str]:
+def upload_media_to_cloudinary(
+    media_str_or_bytes: str,
+    filename_prefix: str = "post_media",
+    media_type: Optional[str] = None
+) -> Optional[str]:
     """
     Upload media (photo or video) to Cloudinary and return a public HTTPS CDN URL.
     Supports base64 data URIs, raw bytes, or public HTTP URLs.
@@ -53,8 +57,13 @@ def upload_media_to_cloudinary(media_str_or_bytes: str, filename_prefix: str = "
         if isinstance(media_str_or_bytes, str) and "," in media_str_or_bytes:
             header, encoded_data = media_str_or_bytes.split(",", 1)
 
-        is_video = "video" in header.lower() or any(ext in str(media_str_or_bytes).lower() for ext in [".mp4", ".mov", ".webm", ".m4v"])
+        is_video = (
+            (media_type and media_type.lower() == "video") or
+            "video" in header.lower() or
+            any(ext in str(media_str_or_bytes).lower() for ext in [".mp4", ".mov", ".webm", ".m4v"])
+        )
         resource_type = "video" if is_video else "image"
+
 
         if isinstance(encoded_data, str) and (encoded_data.startswith("http://") or encoded_data.startswith("https://")):
             res = cloudinary.uploader.upload(
