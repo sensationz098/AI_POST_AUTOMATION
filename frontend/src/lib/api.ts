@@ -2,13 +2,17 @@ import axios from 'axios';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
 
+export const DEFAULT_API_TIMEOUT_MS = 15000;
+export const PUBLISHING_TIMEOUT_MS = 300000; // 300s window matching server-side max Meta video processing window
+
 export const apiClient = axios.create({
   baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: DEFAULT_API_TIMEOUT_MS,
 });
+
 
 apiClient.interceptors.request.use(async (config) => {
   if (typeof window !== 'undefined') {

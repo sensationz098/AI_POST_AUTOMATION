@@ -225,4 +225,71 @@ def test_large_base64_video_payload_never_inserted_into_db():
         assert created_data["media_type"] == "video"
 
 
+def test_batch_status_aggregation_all_success():
+    """Verify batch with 2 successful jobs calculates status=SUCCESS, 2 successful, 0 failed."""
+    from app.repositories.publishing_repository import PublishingRepository
+    from app.models.publishing_batch import PublishingBatch, PublishingJob, BatchStatus, JobStatus
+
+    repo = PublishingRepository()
+    db = MagicMock()
+
+    batch = PublishingBatch(id=1, total_targets=2, status=BatchStatus.PROCESSING.value, successful_targets=0, failed_targets=0)
+    job1 = PublishingJob(id=101, batch_id=1, status=JobStatus.SUCCESS.value)
+    job2 = PublishingJob(id=102, batch_id=1, status=JobStatus.SUCCESS.value)
+
+    db.query.return_value.filter.return_value.first.return_value = batch
+    db.query.return_value.filter.return_value.all.return_value = [job1, job2]
+
+    updated = repo.update_batch_summary(db, batch_id=1)
+    assert updated.status == BatchStatus.SUCCESS.value
+    assert updated.total_targets == 2
+    assert updated.successful_targets == 2
+    assert updated.failed_targets == 0
+
+
+def test_batch_status_aggregation_partial_success():
+    """Verify batch with 1 success and 1 failed job calculates status=PARTIAL_SUCCESS, 1 successful, 1 failed."""
+    from app.repositories.publishing_repository import PublishingRepository
+    from app.models.publishing_batch import PublishingBatch, PublishingJob, BatchStatus, JobStatus
+
+    repo = PublishingRepository()
+    db = MagicMock()
+
+    batch = PublishingBatch(id=2, total_targets=2, status=BatchStatus.PROCESSING.value, successful_targets=0, failed_targets=0)
+    job1 = PublishingJob(id=103, batch_id=2, status=JobStatus.SUCCESS.value)
+    job2 = PublishingJob(id=104, batch_id=2, status=JobStatus.FAILED.value)
+
+    db.query.return_value.filter.return_value.first.return_value = batch
+    db.query.return_value.filter.return_value.all.return_value = [job1, job2]
+
+    updated = repo.update_batch_summary(db, batch_id=2)
+    assert updated.status == BatchStatus.PARTIAL_SUCCESS.value
+    assert updated.total_targets == 2
+    assert updated.successful_targets == 1
+    assert updated.failed_targets == 1
+
+
+def test_batch_status_aggregation_all_failed():
+    """Verify batch with 2 failed jobs calculates status=FAILED, 0 successful, 2 failed."""
+    from app.repositories.publishing_repository import PublishingRepository
+    from app.models.publishing_batch import PublishingBatch, PublishingJob, BatchStatus, JobStatus
+
+    repo = PublishingRepository()
+    db = MagicMock()
+
+    batch = PublishingBatch(id=3, total_targets=2, status=BatchStatus.PROCESSING.value, successful_targets=0, failed_targets=0)
+    job1 = PublishingJob(id=105, batch_id=3, status=JobStatus.FAILED.value)
+    job2 = PublishingJob(id=106, batch_id=3, status=JobStatus.FAILED.value)
+
+    db.query.return_value.filter.return_value.first.return_value = batch
+    db.query.return_value.filter.return_value.all.return_value = [job1, job2]
+
+    updated = repo.update_batch_summary(db, batch_id=3)
+    assert updated.status == BatchStatus.FAILED.value
+    assert updated.total_targets == 2
+    assert updated.successful_targets == 0
+    assert updated.failed_targets == 2
+
+
+
 

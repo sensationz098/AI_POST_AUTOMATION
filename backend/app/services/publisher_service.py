@@ -240,7 +240,9 @@ class PublishingEngine:
                 except Exception as e:
                     logger.error(f"[PUBLISH_TRACE] Worker exception during batch publishing job: {e}")
 
+        db.expire_all()
         updated_batch = publishing_repo.update_batch_summary(db, batch_id)
+
         batch_elapsed = round(time.time() - batch_start_time, 2)
         logger.info(
             f"[PUBLISH_TRACE] PUBLISH_BATCH_COMPLETED | batch_id={batch_id} | status={updated_batch.status} | "
