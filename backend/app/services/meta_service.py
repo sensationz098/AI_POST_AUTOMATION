@@ -2,17 +2,17 @@ import requests
 import logging
 from typing import Dict, Any, Optional
 from app.core.config import settings
+from app.core.logging_config import sanitize_url
 
 logger = logging.getLogger(__name__)
 
 class MetaGraphService:
     BASE_URL = f"https://graph.facebook.com/{settings.META_GRAPH_API_VERSION}"
 
-from app.core.logging_config import sanitize_url
-
     def publish_to_facebook_page(
         self, page_id: str, access_token: str, message: str, image_url: Optional[str] = None, is_video: bool = False
     ) -> Dict[str, Any]:
+
         """Publish a photo or video post to a Facebook Page via Meta Graph API."""
         is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
         if is_mock_allowed and (not page_id or not access_token or page_id == "sandbox" or access_token.startswith("sandbox") or access_token.startswith("mock")):
