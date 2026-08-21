@@ -10,7 +10,7 @@ from app.models.social_account import SocialAccount
 from app.repositories.publishing_repository import publishing_repo
 from app.repositories.social_account_repository import social_account_repo
 from app.services.meta_service import meta_service
-from app.services.post_service import upload_base64_to_public_https
+from app.services.media_service import resolve_media_type, upload_base64_to_public_https
 
 logger = logging.getLogger(__name__)
 
@@ -20,41 +20,6 @@ from app.core.security_encryption import decrypt_token
 from app.core.logging_config import sanitize_url
 from app.models.post import Post
 
-def resolve_media_type(
-    explicit_media_type: Optional[str] = None,
-    stored_media_type: Optional[str] = None,
-    media_url: Optional[str] = None
-) -> tuple[str, bool]:
-    """
-    Safely resolve media type into ('image' | 'video', is_video: bool).
-    Preference order:
-    1. Explicit passed media_type (from request payload or method argument)
-    2. Stored post.media_type (from database model)
-    3. Legacy URL inference as a final fallback
-    """
-    if explicit_media_type and str(explicit_media_type).strip():
-        norm = str(explicit_media_type).strip().lower()
-        if norm in ["video", "reels", "reel"]:
-            return "video", True
-        elif norm in ["image", "photo", "picture"]:
-            return "image", False
-
-    if stored_media_type and str(stored_media_type).strip():
-        norm = str(stored_media_type).strip().lower()
-        if norm in ["video", "reels", "reel"]:
-            return "video", True
-        elif norm in ["image", "photo", "picture"]:
-            return "image", False
-
-    url_lower = (media_url or "").lower()
-    is_video_inferred = bool(
-        url_lower.startswith("data:video") or
-        "video" in url_lower or
-        any(ext in url_lower for ext in [".mp4", ".mov", ".webm", ".m4v"])
-    )
-    if is_video_inferred:
-        return "video", True
-    return "image", False
 
 def classify_error(err_str: str) -> tuple[str, str]:
     """Classify technical exceptions into human-readable error codes and messages."""

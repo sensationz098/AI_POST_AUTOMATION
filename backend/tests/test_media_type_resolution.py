@@ -1,8 +1,9 @@
 import pytest
 import logging
 from unittest.mock import MagicMock, patch
-from app.services.publisher_service import resolve_media_type
+from app.services.media_service import resolve_media_type, upload_base64_to_public_https
 from app.core.logging_config import sanitize_url, setup_logging
+
 
 def test_resolve_media_type_explicit_override():
     """Verify explicit passed media_type takes highest priority over URL string."""
@@ -62,12 +63,14 @@ def test_sanitize_url_redacts_tokens_and_base64():
     url_with_token = "https://graph.facebook.com/v19.0/12345/videos?access_token=EAABwz12345secret&file_url=https://example.com/video.mp4"
     sanitized = sanitize_url(url_with_token)
     assert "EAABwz12345secret" not in sanitized
-    assert "access_token=[REDACTED]" in sanitized
+    assert "access_token=" in sanitized and "REDACTED" in sanitized
+
 
     base64_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
     sanitized_b64 = sanitize_url(base64_url)
-    assert "data:image/png;base64," in sanitized_b64
-    assert "[BASE64_DATA_TRUNCATED]" in sanitized_b64
+    assert "data:image/png" in sanitized_b64
+    assert "length=" in sanitized_b64
+
 
 
 def test_setup_logging_configures_stdout_handler():

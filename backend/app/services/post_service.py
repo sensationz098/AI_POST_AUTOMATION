@@ -14,17 +14,13 @@ from app.services.meta_service import meta_service
 import requests
 
 from app.services.cloudinary_service import upload_media_to_cloudinary
-
 from app.core.logging_config import sanitize_url
-from app.services.publisher_service import resolve_media_type
+from app.services.media_service import resolve_media_type, upload_base64_to_public_https
 
 logger = logging.getLogger(__name__)
 
-def upload_base64_to_public_https(base64_str: str) -> Optional[str]:
-    """Upload image or video media to Cloudinary HTTPS CDN for Meta Facebook & Instagram Graph API."""
-    return upload_media_to_cloudinary(base64_str)
-
 class PostService:
+
     def _process_and_upload_post_media(self, data: dict) -> dict:
         """
         Inspect incoming post data dictionary for media content, resolve media_type explicitly,
