@@ -111,6 +111,11 @@ def publish_multi_account(
     Publish one post to multiple selected Facebook Pages and Instagram Accounts concurrently.
     Supports idempotency, per-account job tracking, token expiration detection, and partial batch success.
     """
+    logger.info(
+        f"[PUBLISH_TRACE] PUBLISH_MULTI_RECEIVED | post_id={request.post_id} | "
+        f"social_account_ids={request.social_account_ids} | user_id={current_user.id} | "
+        f"req_media_type={request.media_type}"
+    )
     post = post_service.get_post(db, request.post_id, current_user.id)
     if not request.social_account_ids:
         raise HTTPException(
@@ -139,6 +144,8 @@ def publish_multi_account(
         idempotency_key=idempotency_key
     )
 
+    logger.info(f"[PUBLISH_TRACE] PUBLISH_BATCH_STARTED | batch_id={batch.id} | post_id={post.id} | total_targets={len(accounts)}")
+
     # 2. Initialize PublishingJob entries for targets
     existing_jobs = db.query(PublishingJob).filter(
         PublishingJob.batch_id == batch.id
@@ -155,8 +162,10 @@ def publish_multi_account(
         batch_id=batch.id,
         post_caption=formatted_caption,
         raw_media_url=post.image_url,
-        accounts=accounts
+        accounts=accounts,
+        media_type=request.media_type or getattr(post, "media_type", None)
     )
+
 
     # 4. Refresh & return complete PublishingBatchResponse
     db.expire_all()

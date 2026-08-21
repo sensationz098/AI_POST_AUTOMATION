@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 class MetaGraphService:
     BASE_URL = f"https://graph.facebook.com/{settings.META_GRAPH_API_VERSION}"
 
+from app.core.logging_config import sanitize_url
+
     def publish_to_facebook_page(
         self, page_id: str, access_token: str, message: str, image_url: Optional[str] = None, is_video: bool = False
     ) -> Dict[str, Any]:
@@ -26,6 +28,7 @@ class MetaGraphService:
 
         try:
             is_video_media = is_video or (image_url and any(image_url.lower().endswith(ext) for ext in [".mp4", ".mov", ".webm", ".m4v"]))
+            logger.info(f"[PUBLISH_TRACE] FACEBOOK_PUBLISH_STARTED | page_id={page_id} | is_video={is_video_media} | media_url={sanitize_url(image_url)}")
 
             if is_video_media and image_url:
                 url = f"{self.BASE_URL}/{page_id}/videos"
@@ -35,7 +38,7 @@ class MetaGraphService:
                     "access_token": access_token
                 }
                 video_timeout = settings.META_VIDEO_UPLOAD_TIMEOUT_SECONDS
-                logger.info(f"[FB_PUBLISH] VIDEO_UPLOAD_STARTED | page_id={page_id} | video_url={image_url} | timeout={video_timeout}s")
+                logger.info(f"[FB_PUBLISH] VIDEO_UPLOAD_STARTED | page_id={page_id} | video_url={sanitize_url(image_url)} | timeout={video_timeout}s")
                 try:
                     response = requests.post(url, data=payload, timeout=video_timeout)
                 except requests.exceptions.Timeout:
@@ -63,7 +66,7 @@ class MetaGraphService:
                     "caption": message,
                     "access_token": access_token
                 }
-                logger.info(f"[FB_PUBLISH] PHOTO_UPLOAD_STARTED | page_id={page_id} | image_url={image_url}")
+                logger.info(f"[FB_PUBLISH] PHOTO_UPLOAD_STARTED | page_id={page_id} | image_url={sanitize_url(image_url)}")
                 response = requests.post(url, data=payload, timeout=20)
             else:
                 feed_url = f"{self.BASE_URL}/{page_id}/feed"
@@ -75,16 +78,23 @@ class MetaGraphService:
                 response = requests.post(feed_url, data=payload, timeout=15)
             
             res_data = response.json()
+            logger.info(f"[PUBLISH_TRACE] FACEBOOK_RESPONSE_RECEIVED | page_id={page_id} | status_code={response.status_code} | response_keys={list(res_data.keys())}")
             if response.status_code != 200:
-                error_msg = res_data.get("error", {}).get("message", "Facebook API Error")
-                logger.error(f"[FB_PUBLISH] PUBLISH_FAILED | page_id={page_id} | status_code={response.status_code} | error={error_msg}")
-                raise Exception(f"Facebook Graph API Error ({response.status_code}): {error_msg}")
+                err_dict = res_data.get("error", {})
+                error_msg = err_dict.get("message", "Facebook API Error")
+                err_code = err_dict.get("code")
+                err_subcode = err_dict.get("error_subcode")
+                logger.error(f"[PUBLISH_TRACE] FACEBOOK_PUBLISH_FAILED | page_id={page_id} | status_code={response.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={error_msg}")
+                raise Exception(f"Facebook Graph API Error ({response.status_code}) [code={err_code}, subcode={err_subcode}]: {error_msg}")
             
             fb_post_id = res_data.get("id")
             if not fb_post_id:
                 raise Exception(f"Facebook Graph API returned success response but missing post/video ID: {res_data}")
 
-            logger.info(f"[FB_PUBLISH] MEDIA_PUBLISHED | page_id={page_id} | external_id={fb_post_id}")
+            logger.info(
+                f"[PUBLISH_TRACE] FACEBOOK_PUBLISH_SUCCESS | page_id={page_id} | returned_id={fb_post_id} | "
+                f"sanitized_response={{\"platform\": \"facebook\", \"returned_id\": \"{fb_post_id}\", \"response_keys\": {list(res_data.keys())}}}"
+            )
             return res_data
         except Exception as e:
             logger.error(f"[FB_PUBLISH] Meta Service Facebook publish error: {e}")
@@ -114,6 +124,7 @@ class MetaGraphService:
         try:
             container_url = f"{self.BASE_URL}/{ig_user_id}/media"
             is_video_media = is_video or (image_url and any(image_url.lower().endswith(ext) for ext in [".mp4", ".mov", ".webm", ".m4v"]))
+            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_STARTED | ig_user_id={ig_user_id} | is_video={is_video_media} | media_url={sanitize_url(image_url)}")
 
             if is_video_media:
                 container_payload = {
@@ -122,27 +133,30 @@ class MetaGraphService:
                     "caption": caption,
                     "access_token": access_token
                 }
-                logger.info(f"[IG_PUBLISH] VIDEO_UPLOAD_STARTED | ig_user_id={ig_user_id} | video_url={image_url}")
+                logger.info(f"[IG_PUBLISH] VIDEO_UPLOAD_STARTED | ig_user_id={ig_user_id} | video_url={sanitize_url(image_url)}")
             else:
                 container_payload = {
                     "image_url": image_url,
                     "caption": caption,
                     "access_token": access_token
                 }
-                logger.info(f"[IG_PUBLISH] PHOTO_UPLOAD_STARTED | ig_user_id={ig_user_id} | image_url={image_url}")
+                logger.info(f"[IG_PUBLISH] PHOTO_UPLOAD_STARTED | ig_user_id={ig_user_id} | image_url={sanitize_url(image_url)}")
 
             container_res = requests.post(container_url, data=container_payload, timeout=30)
             c_data = container_res.json()
             if container_res.status_code != 200:
-                err = c_data.get("error", {}).get("message", "IG Container Error")
-                logger.error(f"[IG_PUBLISH] CONTAINER_FAILED | ig_user_id={ig_user_id} | status_code={container_res.status_code} | error={err}")
-                raise Exception(f"IG Container Creation Failed ({container_res.status_code}): {err}")
+                err_dict = c_data.get("error", {})
+                err = err_dict.get("message", "IG Container Error")
+                err_code = err_dict.get("code")
+                err_subcode = err_dict.get("error_subcode")
+                logger.error(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_FAILED | ig_user_id={ig_user_id} | status_code={container_res.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={err}")
+                raise Exception(f"IG Container Creation Failed ({container_res.status_code}) [code={err_code}, subcode={err_subcode}]: {err}")
 
             creation_id = c_data.get("id")
             if not creation_id:
                 raise Exception(f"IG Container Creation Failed: Meta returned success response without container ID: {c_data}")
 
-            logger.info(f"[IG_PUBLISH] CONTAINER_CREATED | ig_user_id={ig_user_id} | container_id={creation_id}")
+            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_CREATED | ig_user_id={ig_user_id} | container_id={creation_id}")
 
             # Step 2: Bounded polling of container status until FINISHED (with exponential backoff & configurable timeout)
             import time
@@ -162,8 +176,6 @@ class MetaGraphService:
             while (time.time() - start_time) < max_wait_seconds:
                 attempt += 1
                 elapsed = round(time.time() - start_time, 2)
-                logger.info(f"[IG_PUBLISH] CONTAINER_STATUS_CHECK | attempt={attempt} | container_id={creation_id} | elapsed={elapsed}s")
-
                 try:
                     st_res = requests.get(
                         status_url,
@@ -174,23 +186,23 @@ class MetaGraphService:
                     last_status_code = st_data.get("status_code")
                     last_status_details = st_data.get("status")
                 except Exception as poll_err:
-                    logger.warning(f"[IG_PUBLISH] CONTAINER_STATUS_CHECK_WARNING | attempt={attempt} | container_id={creation_id} | error={poll_err}")
+                    logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_STATUS_WARNING | attempt={attempt} | container_id={creation_id} | error={poll_err}")
                     time.sleep(current_delay)
                     current_delay = min(current_delay * backoff_factor, max_delay)
                     continue
 
-                logger.info(f"[IG_PUBLISH] CONTAINER_PROCESSING | attempt={attempt} | container_id={creation_id} | status_code={last_status_code} | elapsed={elapsed}s")
+                logger.info(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_STATUS | attempt={attempt} | container_id={creation_id} | status_code={last_status_code} | elapsed={elapsed}s")
 
                 if last_status_code == "FINISHED":
                     is_finished = True
-                    logger.info(f"[IG_PUBLISH] CONTAINER_FINISHED | container_id={creation_id} | attempt={attempt} | total_time={elapsed}s")
+                    logger.info(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_FINISHED | container_id={creation_id} | attempt={attempt} | total_time={elapsed}s")
                     break
                 elif last_status_code == "ERROR":
                     err_msg = last_status_details or st_data.get("error", {}).get("message") or "Unknown container processing error on Meta servers"
-                    logger.error(f"[IG_PUBLISH] CONTAINER_FAILED | container_id={creation_id} | status_code=ERROR | error={err_msg} | elapsed={elapsed}s")
+                    logger.error(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_FAILED | container_id={creation_id} | status_code=ERROR | error={err_msg} | elapsed={elapsed}s")
                     raise Exception(f"IG Container processing failed on Meta servers (ERROR): {err_msg}")
                 elif last_status_code == "EXPIRED":
-                    logger.error(f"[IG_PUBLISH] CONTAINER_EXPIRED | container_id={creation_id} | status_code=EXPIRED | elapsed={elapsed}s")
+                    logger.error(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_EXPIRED | container_id={creation_id} | status_code=EXPIRED | elapsed={elapsed}s")
                     raise Exception(f"IG Container processing expired on Meta servers (EXPIRED). Container ID: {creation_id}")
 
                 # Still processing (e.g. IN_PROGRESS or pending)
@@ -199,14 +211,14 @@ class MetaGraphService:
 
             if not is_finished:
                 total_elapsed = round(time.time() - start_time, 2)
-                logger.error(f"[IG_PUBLISH] CONTAINER_TIMEOUT | container_id={creation_id} | status_code={last_status_code} | total_time={total_elapsed}s | max_allowed={max_wait_seconds}s")
+                logger.error(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_TIMEOUT | container_id={creation_id} | status_code={last_status_code} | total_time={total_elapsed}s | max_allowed={max_wait_seconds}s")
                 raise Exception(
                     f"IG Video container processing timed out on Meta servers after {total_elapsed}s (status: {last_status_code or 'IN_PROGRESS'}). "
                     f"Publication could not be confirmed within the configured processing window ({max_wait_seconds}s). Container ID: {creation_id}"
                 )
 
             # Step 3: Publish Media Container ONLY after FINISHED status is confirmed
-            logger.info(f"[IG_PUBLISH] MEDIA_PUBLISH_STARTED | container_id={creation_id}")
+            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_MEDIA_PUBLISH_STARTED | container_id={creation_id}")
             publish_url = f"{self.BASE_URL}/{ig_user_id}/media_publish"
             publish_payload = {
                 "creation_id": creation_id,
@@ -214,18 +226,25 @@ class MetaGraphService:
             }
             pub_res = requests.post(publish_url, data=publish_payload, timeout=30)
             p_data = pub_res.json()
+            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_RESPONSE_RECEIVED | container_id={creation_id} | status_code={pub_res.status_code} | response_keys={list(p_data.keys())}")
 
             if pub_res.status_code != 200:
-                err = p_data.get("error", {}).get("message", "IG Publish Error")
-                logger.error(f"[IG_PUBLISH] MEDIA_PUBLISH_FAILED | container_id={creation_id} | status_code={pub_res.status_code} | error={err}")
-                raise Exception(f"IG Media Publish Failed ({pub_res.status_code}): {err}")
+                err_dict = p_data.get("error", {})
+                err = err_dict.get("message", "IG Publish Error")
+                err_code = err_dict.get("code")
+                err_subcode = err_dict.get("error_subcode")
+                logger.error(f"[PUBLISH_TRACE] INSTAGRAM_MEDIA_PUBLISH_FAILED | container_id={creation_id} | status_code={pub_res.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={err}")
+                raise Exception(f"IG Media Publish Failed ({pub_res.status_code}) [code={err_code}, subcode={err_subcode}]: {err}")
 
             published_media_id = p_data.get("id")
             if not published_media_id:
-                logger.error(f"[IG_PUBLISH] MEDIA_PUBLISH_NO_ID | container_id={creation_id} | response={p_data}")
+                logger.error(f"[PUBLISH_TRACE] INSTAGRAM_MEDIA_PUBLISH_NO_ID | container_id={creation_id} | response={p_data}")
                 raise Exception(f"IG Media Publish succeeded but returned no published media ID: {p_data}")
 
-            logger.info(f"[IG_PUBLISH] MEDIA_PUBLISHED | container_id={creation_id} | external_id={published_media_id}")
+            logger.info(
+                f"[PUBLISH_TRACE] INSTAGRAM_MEDIA_PUBLISH_SUCCESS | ig_user_id={ig_user_id} | container_id={creation_id} | "
+                f"published_media_id={published_media_id} | sanitized_response={{\"platform\": \"instagram\", \"container_id\": \"{creation_id}\", \"status_code\": \"FINISHED\", \"published_media_id\": \"{published_media_id}\"}}"
+            )
             return {
                 "container_id": creation_id,
                 "id": str(published_media_id),
@@ -234,6 +253,7 @@ class MetaGraphService:
         except Exception as e:
             logger.error(f"[IG_PUBLISH] Meta Service Instagram publish error: {e}")
             raise e
+
 
 
     def fetch_facebook_page_metrics(self, page_id: str, access_token: str) -> Dict[str, Any]:

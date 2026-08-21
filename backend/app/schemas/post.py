@@ -11,6 +11,7 @@ class PostCreate(BaseModel):
     seo_keywords: List[str] = Field(default_factory=list)
     image_prompt: Optional[str] = None
     image_url: Optional[str] = None
+    media_type: Optional[str] = Field(default=None, description="'image' or 'video'")
     platforms: List[str] = Field(default_factory=lambda: ["facebook", "instagram"])
     status: Optional[str] = "DRAFT"
     scheduled_at: Optional[datetime] = None
@@ -22,6 +23,7 @@ class PostUpdate(BaseModel):
     cta: Optional[str] = None
     seo_keywords: Optional[List[str]] = None
     image_url: Optional[str] = None
+    media_type: Optional[str] = None
     platforms: Optional[List[str]] = None
     status: Optional[str] = None
     scheduled_at: Optional[datetime] = None
@@ -40,6 +42,7 @@ class PostResponse(BaseModel):
     seo_keywords: List[str]
     image_prompt: Optional[str]
     image_url: Optional[str]
+    media_type: Optional[str] = None
     platforms: List[str]
     status: str
     scheduled_at: Optional[datetime]
@@ -51,6 +54,7 @@ class PostResponse(BaseModel):
     ig_media_id: Optional[str]
     created_at: datetime
     updated_at: datetime
+
 
     class Config:
         from_attributes = True
