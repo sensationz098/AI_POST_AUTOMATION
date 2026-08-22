@@ -26,6 +26,14 @@ import {
 import { FacebookPostPreview } from '@/components/FacebookPostPreview';
 import { InstagramPostPreview } from '@/components/InstagramPostPreview';
 import { apiClient, PUBLISHING_TIMEOUT_MS } from '@/lib/api';
+import { 
+  BrandProfile, 
+  MetaAccount, 
+  SocialAccount, 
+  PublishingBatch, 
+  PublishingJob 
+} from '@/lib/types';
+
 
 
 // ─── Music Card Component ────────────────────────────────────────────────────
