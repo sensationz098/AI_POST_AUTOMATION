@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, status, Query, HTTPException
+from fastapi import APIRouter, Depends, status, Query, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
@@ -18,6 +18,45 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/posts", tags=["Social Posts Workflow"])
 
 
+@router.post("/upload-media")
+async def upload_media(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Upload image or video file directly from client with byte-level upload progress reporting.
+    """
+    filename = file.filename or "uploaded_media"
+    content_type = file.content_type or ""
+    file_bytes = await file.read()
+
+    from app.services.media_service import resolve_media_type
+    from app.services.cloudinary_service import upload_media_to_cloudinary
+
+    is_vid = content_type.startswith("video/") or any(
+        filename.lower().endswith(ext) for ext in [".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv"]
+    )
+    media_type = "video" if is_vid else "image"
+
+    logger.info(f"[UPLOAD_TRACE] DIRECT_MEDIA_UPLOAD | filename={filename} | size_bytes={len(file_bytes)} | media_type={media_type}")
+
+    cdn_url = upload_media_to_cloudinary(file_bytes, media_type=media_type)
+
+    if not cdn_url:
+        import base64
+        b64_str = base64.b64encode(file_bytes).decode("utf-8")
+        mime = content_type if content_type else ("video/mp4" if is_vid else "image/png")
+        cdn_url = f"data:{mime};base64,{b64_str}"
+
+    return {
+        "image_url": cdn_url,
+        "media_type": media_type,
+        "filename": filename,
+        "size": len(file_bytes)
+    }
+
+
 @router.post("/", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
 def create_post(
     post_in: PostCreate,
@@ -26,6 +65,7 @@ def create_post(
 ):
     """Create a draft post for approval or scheduling."""
     return post_service.create_post(db, current_user.id, post_in)
+
 
 @router.get("/", response_model=List[PostResponse])
 def get_user_posts(
