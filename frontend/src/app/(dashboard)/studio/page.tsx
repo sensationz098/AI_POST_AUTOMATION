@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { FacebookPostPreview } from '@/components/FacebookPostPreview';
 import { InstagramPostPreview } from '@/components/InstagramPostPreview';
+import axios from 'axios';
 import { apiClient, PUBLISHING_TIMEOUT_MS } from '@/lib/api';
 import { 
   BrandProfile, 
@@ -324,18 +325,144 @@ export default function AIStudioPage() {
     setSelectedAccountIds([]);
   };
 
-  // Local Photo Upload handler
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  // ─── Real Media Upload Progress State ──────────────────────────────────────
+  const [uploadState, setUploadState] = useState<{
+    stage: 'IDLE' | 'UPLOADING' | 'PROCESSING' | 'READY' | 'ERROR';
+    progressPercent: number;
+    loadedBytes: number;
+    totalBytes: number;
+    fileName: string;
+    mediaType: 'image' | 'video';
+    errorMessage?: string;
+    currentFile?: File;
+  }>({
+    stage: 'IDLE',
+    progressPercent: 0,
+    loadedBytes: 0,
+    totalBytes: 0,
+    fileName: '',
+    mediaType: 'image',
+  });
+
+  const uploadAbortControllerRef = React.useRef<AbortController | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (uploadAbortControllerRef.current) {
+        uploadAbortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  const handleFileUploadWithProgress = async (file: File, isVideo: boolean) => {
+    if (!file) return;
+
+    if (uploadAbortControllerRef.current) {
+      uploadAbortControllerRef.current.abort();
+    }
+
+    const abortController = new AbortController();
+    uploadAbortControllerRef.current = abortController;
+
+    const mediaType: 'image' | 'video' = isVideo ? 'video' : 'image';
+
+    setUploadState({
+      stage: 'UPLOADING',
+      progressPercent: 0,
+      loadedBytes: 0,
+      totalBytes: file.size,
+      fileName: file.name,
+      mediaType,
+      currentFile: file,
+    });
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await apiClient.post('/posts/upload-media', formData, {
+        signal: abortController.signal,
+        onUploadProgress: (progressEvent) => {
+          if (abortController.signal.aborted || uploadAbortControllerRef.current !== abortController) return;
+
+          const total = progressEvent.total || file.size || 1;
+          const loaded = progressEvent.loaded;
+          const percent = Math.min(100, Math.round((loaded * 100) / total));
+
+          if (percent >= 100) {
+            setUploadState(prev => ({
+              ...prev,
+              stage: 'PROCESSING',
+              progressPercent: 100,
+              loadedBytes: total,
+              totalBytes: total,
+            }));
+          } else {
+            setUploadState(prev => ({
+              ...prev,
+              stage: 'UPLOADING',
+              progressPercent: percent,
+              loadedBytes: loaded,
+              totalBytes: total,
+            }));
+          }
+        },
+      });
+
+      if (abortController.signal.aborted || uploadAbortControllerRef.current !== abortController) return;
+
+      if (res.data?.image_url) {
+        setImageUrl(res.data.image_url);
+        setUploadState({
+          stage: 'READY',
+          progressPercent: 100,
+          loadedBytes: file.size,
+          totalBytes: file.size,
+          fileName: file.name,
+          mediaType,
+          currentFile: file,
+        });
+        setStatusNotification(
+          isVideo
+            ? `🎥 Video Reel ready for publishing! (${file.name})`
+            : `Custom post photo uploaded successfully!`
+        );
+      }
+    } catch (error: any) {
+      if (axios.isCancel(error) || error.name === 'CanceledError' || error.name === 'AbortError' || abortController.signal.aborted) {
+        console.log('Upload canceled');
+        return;
+      }
+
+      // Fallback: Read file locally if server endpoint fails
       const reader = new FileReader();
       reader.onloadend = () => {
         if (reader.result) {
           setImageUrl(reader.result as string);
-          setStatusNotification('Custom post photo uploaded successfully!');
         }
       };
       reader.readAsDataURL(file);
+
+      const errMsg = error.response?.data?.detail || error.message || 'Media upload failed.';
+      setUploadState({
+        stage: 'ERROR',
+        progressPercent: 0,
+        loadedBytes: 0,
+        totalBytes: file.size,
+        fileName: file.name,
+        mediaType,
+        errorMessage: errMsg,
+        currentFile: file,
+      });
+      setStatusNotification(`❌ Media upload failed: ${errMsg}`);
+    }
+  };
+
+  // Local Photo Upload handler
+  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUploadWithProgress(file, false);
     }
   };
 
@@ -343,16 +470,10 @@ export default function AIStudioPage() {
   const handleVideoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (reader.result) {
-          setImageUrl(reader.result as string);
-          setStatusNotification(`🎥 Video Reel uploaded successfully! (${file.name})`);
-        }
-      };
-      reader.readAsDataURL(file);
+      handleFileUploadWithProgress(file, true);
     }
   };
+
 
 
   // Generator inputs
@@ -762,6 +883,133 @@ export default function AIStudioPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Media Upload Progress UI Card */}
+              {uploadState.stage !== 'IDLE' && (
+                <div className="p-4 rounded-2xl border border-slate-700/80 bg-slate-900/90 shadow-xl space-y-3 font-sans">
+                  {/* Stage 1: UPLOADING from device */}
+                  {uploadState.stage === 'UPLOADING' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <UploadCloud className="w-4 h-4 text-indigo-400 animate-bounce" />
+                          <div>
+                            <span className="text-xs font-bold text-slate-100 block">
+                              {uploadState.mediaType === 'video' ? '📹 Uploading video from device' : '🖼️ Uploading photo from device'}
+                            </span>
+                            <span className="text-[10px] text-indigo-300">STAGE 1: Device → AI Post Automation Storage</span>
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/60">
+                          {uploadState.progressPercent}%
+                        </span>
+                      </div>
+
+                      {/* Real Progress Bar */}
+                      <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                        <div
+                          className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full transition-all duration-150"
+                          style={{ width: `${uploadState.progressPercent}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-0.5">
+                        <span className="truncate max-w-[200px] text-slate-300 font-semibold">{uploadState.fileName}</span>
+                        <span className="text-indigo-300 font-bold">
+                          {(uploadState.loadedBytes / (1024 * 1024)).toFixed(1)} MB / {(uploadState.totalBytes / (1024 * 1024)).toFixed(1)} MB
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stage 2: PROCESSING upload */}
+                  {uploadState.stage === 'PROCESSING' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <RefreshCw className="w-4 h-4 text-amber-400 animate-spin" />
+                          <div>
+                            <span className="text-xs font-bold text-slate-100 block">
+                              ⏳ Processing upload...
+                            </span>
+                            <span className="text-[10px] text-amber-300">STAGE 2: Preparing video for publishing CDN</span>
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/60">
+                          100%
+                        </span>
+                      </div>
+
+                      {/* Pulsing Progress Bar at 100% */}
+                      <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                        <div className="h-full bg-gradient-to-r from-amber-500 via-indigo-500 to-emerald-500 rounded-full animate-pulse w-full" />
+                      </div>
+
+                      <p className="text-[11px] text-amber-300/90 font-medium">
+                        File transfer complete! Finalizing storage upload...
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Stage 3: READY for publishing */}
+                  {uploadState.stage === 'READY' && (
+                    <div className="flex items-center justify-between p-3 bg-emerald-950/50 border border-emerald-500/30 rounded-xl text-emerald-300">
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-emerald-100">
+                            ✅ {uploadState.mediaType === 'video' ? 'Video' : 'Photo'} uploaded successfully
+                          </p>
+                          <p className="text-[11px] text-emerald-300/90 truncate">
+                            {uploadState.fileName} ({(uploadState.totalBytes / (1024 * 1024)).toFixed(1)} MB) — Ready for publishing.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setUploadState({ stage: 'IDLE', progressPercent: 0, loadedBytes: 0, totalBytes: 0, fileName: '', mediaType: 'image' })}
+                        className="text-xs font-bold text-emerald-400 hover:text-emerald-200 px-2 py-1 bg-emerald-900/60 rounded border border-emerald-700/50 transition ml-2 flex-shrink-0"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Stage ERROR */}
+                  {uploadState.stage === 'ERROR' && (
+                    <div className="p-3 bg-rose-950/50 border border-rose-500/30 rounded-xl space-y-2 text-rose-300">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                          <span className="text-xs font-bold text-rose-200">
+                            ❌ {uploadState.mediaType === 'video' ? 'Video' : 'Photo'} upload failed
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setUploadState({ stage: 'IDLE', progressPercent: 0, loadedBytes: 0, totalBytes: 0, fileName: '', mediaType: 'image' })}
+                          className="text-rose-400 hover:text-rose-200 text-xs font-bold"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-rose-300/90">
+                        {uploadState.errorMessage || 'Please check your connection and try again.'}
+                      </p>
+                      {uploadState.currentFile && (
+                        <button
+                          type="button"
+                          onClick={() => handleFileUploadWithProgress(uploadState.currentFile!, uploadState.mediaType === 'video')}
+                          className="px-3 py-1.5 bg-rose-800 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 transition"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Retry Upload</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* AI Caption Generator (inside Pre-Made Mode) */}
               <div className="bg-indigo-950/30 border border-indigo-500/25 rounded-xl p-4 space-y-3">
