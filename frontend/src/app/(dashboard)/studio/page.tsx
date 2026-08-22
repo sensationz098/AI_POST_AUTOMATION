@@ -354,6 +354,35 @@ export default function AIStudioPage() {
     };
   }, []);
 
+  // Safe error string formatting to prevent Minified React error #31
+  const formatErrorMessage = (error: any): string => {
+    if (!error) return 'Media upload failed.';
+    const detail = error.response?.data?.detail;
+    if (typeof detail === 'string') {
+      return detail;
+    }
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item: any) => {
+          if (typeof item === 'string') return item;
+          if (typeof item === 'object' && item !== null) {
+            const loc = Array.isArray(item.loc) ? item.loc.filter((l: any) => l !== 'body').join('.') : '';
+            const msg = item.msg || item.message || 'Validation error';
+            return loc ? `${loc}: ${msg}` : msg;
+          }
+          return String(item);
+        })
+        .join(' | ');
+    }
+    if (typeof detail === 'object' && detail !== null) {
+      return detail.message || detail.msg || JSON.stringify(detail);
+    }
+    if (error.message && typeof error.message === 'string') {
+      return error.message;
+    }
+    return 'Media upload failed. Please try again.';
+  };
+
   const handleFileUploadWithProgress = async (file: File, isVideo: boolean) => {
     if (!file) return;
 
@@ -381,6 +410,9 @@ export default function AIStudioPage() {
 
     try {
       const res = await apiClient.post('/posts/upload-media', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
         signal: abortController.signal,
         onUploadProgress: (progressEvent) => {
           if (abortController.signal.aborted || uploadAbortControllerRef.current !== abortController) return;
@@ -434,6 +466,9 @@ export default function AIStudioPage() {
         return;
       }
 
+      // Safe string error formatting prevents React crashes
+      const errMsg = formatErrorMessage(error);
+
       // Fallback: Read file locally if server endpoint fails
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -443,7 +478,6 @@ export default function AIStudioPage() {
       };
       reader.readAsDataURL(file);
 
-      const errMsg = error.response?.data?.detail || error.message || 'Media upload failed.';
       setUploadState({
         stage: 'ERROR',
         progressPercent: 0,
