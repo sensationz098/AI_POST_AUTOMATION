@@ -49,10 +49,12 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = Field(default="gpt-4o", env="OPENAI_MODEL")
     OPENAI_IMAGE_MODEL: str = Field(default="dall-e-3", env="OPENAI_IMAGE_MODEL")
     
-    # Cloudinary Media CDN
+    # Cloudinary Media CDN & Upload Size Limits
     CLOUDINARY_CLOUD_NAME: Optional[str] = Field(default=None, env="CLOUDINARY_CLOUD_NAME")
     CLOUDINARY_API_KEY: Optional[str] = Field(default=None, env="CLOUDINARY_API_KEY")
     CLOUDINARY_API_SECRET: Optional[str] = Field(default=None, env="CLOUDINARY_API_SECRET")
+    MAX_VIDEO_UPLOAD_BYTES: int = Field(default=500 * 1024 * 1024, env="MAX_VIDEO_UPLOAD_BYTES")  # 500 MB max for videos
+    MAX_IMAGE_UPLOAD_BYTES: int = Field(default=30 * 1024 * 1024, env="MAX_IMAGE_UPLOAD_BYTES")   # 30 MB max for images
     
     # Meta Graph API (Facebook & Instagram OAuth)
     META_APP_ID: Optional[str] = Field(default=None, env="META_APP_ID")

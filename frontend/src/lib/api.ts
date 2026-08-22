@@ -4,6 +4,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v
 
 export const DEFAULT_API_TIMEOUT_MS = 15000;
 export const PUBLISHING_TIMEOUT_MS = 300000; // 300s window matching server-side max Meta video processing window
+export const MEDIA_UPLOAD_TIMEOUT_MS = 600000; // 600s (10 min) window for large media file uploads (up to 500MB)
 
 export const apiClient = axios.create({
   baseURL: API_BASE,

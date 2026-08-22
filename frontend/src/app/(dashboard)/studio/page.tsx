@@ -26,7 +26,7 @@ import {
 import { FacebookPostPreview } from '@/components/FacebookPostPreview';
 import { InstagramPostPreview } from '@/components/InstagramPostPreview';
 import axios from 'axios';
-import { apiClient, PUBLISHING_TIMEOUT_MS } from '@/lib/api';
+import { apiClient, PUBLISHING_TIMEOUT_MS, MEDIA_UPLOAD_TIMEOUT_MS } from '@/lib/api';
 import { 
   BrandProfile, 
   MetaAccount, 
@@ -357,6 +357,12 @@ export default function AIStudioPage() {
   // Safe error string formatting to prevent Minified React error #31
   const formatErrorMessage = (error: any): string => {
     if (!error) return 'Media upload failed.';
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      return 'Upload timed out. The media transfer took longer than expected. Please check your connection and try again.';
+    }
+    if (error.response?.status === 413) {
+      return error.response?.data?.detail || 'File size exceeds maximum allowed upload limit for media assets.';
+    }
     const detail = error.response?.data?.detail;
     if (typeof detail === 'string') {
       return detail;
@@ -410,6 +416,7 @@ export default function AIStudioPage() {
 
     try {
       const res = await apiClient.post('/posts/upload-media', formData, {
+        timeout: MEDIA_UPLOAD_TIMEOUT_MS,
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -469,14 +476,16 @@ export default function AIStudioPage() {
       // Safe string error formatting prevents React crashes
       const errMsg = formatErrorMessage(error);
 
-      // Fallback: Read file locally if server endpoint fails
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (reader.result) {
-          setImageUrl(reader.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
+      // Fallback: Read file locally ONLY for small images (<= 5MB) if server endpoint fails
+      if (!isVideo && file.size <= 5 * 1024 * 1024) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (reader.result) {
+            setImageUrl(reader.result as string);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
 
       setUploadState({
         stage: 'ERROR',
@@ -980,7 +989,7 @@ export default function AIStudioPage() {
                       </div>
 
                       <p className="text-[11px] text-amber-300/90 font-medium">
-                        File transfer complete! Finalizing storage upload...
+                        Transfer complete! Processing video and transferring to secure CDN storage...
                       </p>
                     </div>
                   )}

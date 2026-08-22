@@ -25,35 +25,97 @@ async def upload_media(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Upload image or video file directly from client with byte-level upload progress reporting.
+    Upload image or video file directly from client with byte-level upload progress reporting,
+    streaming file objects directly to Cloudinary without memory inflation.
     """
+    import time
+    import os
+    from app.core.config import settings
+    from app.services.cloudinary_service import upload_media_to_cloudinary, is_cloudinary_configured
+
+    start_time = time.time()
     filename = file.filename or "uploaded_media"
     content_type = file.content_type or ""
-    file_bytes = await file.read()
-
-    from app.services.media_service import resolve_media_type
-    from app.services.cloudinary_service import upload_media_to_cloudinary
 
     is_vid = content_type.startswith("video/") or any(
         filename.lower().endswith(ext) for ext in [".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv"]
     )
     media_type = "video" if is_vid else "image"
 
-    logger.info(f"[UPLOAD_TRACE] DIRECT_MEDIA_UPLOAD | filename={filename} | size_bytes={len(file_bytes)} | media_type={media_type}")
+    # Calculate file size safely via file handle pointer
+    file.file.seek(0, os.SEEK_END)
+    file_size = file.file.tell()
+    file.file.seek(0)
 
-    cdn_url = upload_media_to_cloudinary(file_bytes, media_type=media_type)
+    max_allowed_bytes = settings.MAX_VIDEO_UPLOAD_BYTES if is_vid else settings.MAX_IMAGE_UPLOAD_BYTES
+    max_mb = max_allowed_bytes / (1024 * 1024)
 
-    if not cdn_url:
-        import base64
-        b64_str = base64.b64encode(file_bytes).decode("utf-8")
-        mime = content_type if content_type else ("video/mp4" if is_vid else "image/png")
-        cdn_url = f"data:{mime};base64,{b64_str}"
+    logger.info(
+        f"[UPLOAD_TRACE] UPLOAD_RECEIVED | filename={filename} | size_bytes={file_size} | "
+        f"size_mb={file_size / (1024*1024):.1f}MB | media_type={media_type}"
+    )
+
+    # Step 3: Check size limit and return HTTP 413 Payload Too Large if exceeded
+    if file_size > max_allowed_bytes:
+        logger.warning(
+            f"[UPLOAD_TRACE] UPLOAD_REJECTED_SIZE | filename={filename} | size_bytes={file_size} | "
+            f"max_allowed={max_allowed_bytes}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File size ({file_size / (1024*1024):.1f} MB) exceeds the maximum allowed upload limit of {max_mb:.0f} MB."
+        )
+
+    device_upload_elapsed = time.time() - start_time
+    logger.info(
+        f"[UPLOAD_TRACE] DEVICE_TO_BACKEND_COMPLETE | filename={filename} | "
+        f"device_upload_elapsed={device_upload_elapsed:.2f}s"
+    )
+
+    logger.info(f"[UPLOAD_TRACE] CLOUDINARY_UPLOAD_STARTED | filename={filename} | size_mb={file_size / (1024*1024):.1f}MB")
+
+    # Step 4: Stream file.file (SpooledTemporaryFile) directly to Cloudinary without loading full file into RAM
+    cloudinary_start = time.time()
+    cdn_url = upload_media_to_cloudinary(file.file, filename_prefix=filename, media_type=media_type)
+    cloudinary_elapsed = time.time() - cloudinary_start
+
+    if cdn_url:
+        logger.info(
+            f"[UPLOAD_TRACE] CLOUDINARY_UPLOAD_SUCCESS | filename={filename} | cdn_url={cdn_url} | "
+            f"cloudinary_elapsed={cloudinary_elapsed:.2f}s | total_elapsed={time.time() - start_time:.2f}s"
+        )
+    else:
+        logger.error(
+            f"[UPLOAD_TRACE] CLOUDINARY_UPLOAD_FAILED | filename={filename} | "
+            f"cloudinary_elapsed={cloudinary_elapsed:.2f}s | total_elapsed={time.time() - start_time:.2f}s"
+        )
+
+        # Step 5: REMOVE DANGEROUS LARGE VIDEO BASE64 FALLBACK
+        if is_vid:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Cloudinary video storage upload failed. Please verify storage configuration and try again."
+            )
+
+        # Small image local fallback (ONLY if Cloudinary is unconfigured and file is <= 5MB)
+        if not is_cloudinary_configured() and file_size <= 5 * 1024 * 1024:
+            import base64
+            file_bytes = file.file.read()
+            b64_str = base64.b64encode(file_bytes).decode("utf-8")
+            mime = content_type if content_type else "image/png"
+            cdn_url = f"data:{mime};base64,{b64_str}"
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Cloudinary image storage upload failed. Please verify storage configuration."
+            )
 
     return {
         "image_url": cdn_url,
         "media_type": media_type,
         "filename": filename,
-        "size": len(file_bytes)
+        "size": file_size,
+        "total_elapsed_sec": round(time.time() - start_time, 2)
     }
 
 
