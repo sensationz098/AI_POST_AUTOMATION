@@ -83,7 +83,7 @@ def test_refresh_using_httponly_cookie(client: TestClient, db_session: Session):
     login_res = client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
     assert login_res.status_code == 200
 
-    ref_res = client.post("/api/v1/auth/refresh", cookies=login_res.cookies)
+    ref_res = client.post("/api/v1/auth/refresh", cookies=login_res.cookies, headers={"X-Requested-With": "XMLHttpRequest"})
     assert ref_res.status_code == 200
     ref_data = ref_res.json()
     assert "access_token" in ref_data
@@ -101,7 +101,7 @@ def test_refresh_token_rotation(client: TestClient, db_session: Session):
     login_res = client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
     old_cookie = login_res.cookies.get(settings.REFRESH_COOKIE_NAME)
 
-    ref_res = client.post("/api/v1/auth/refresh", cookies=login_res.cookies)
+    ref_res = client.post("/api/v1/auth/refresh", cookies=login_res.cookies, headers={"X-Requested-With": "XMLHttpRequest"})
     assert ref_res.status_code == 200
     new_cookie = ref_res.cookies.get(settings.REFRESH_COOKIE_NAME)
 
@@ -119,11 +119,11 @@ def test_old_refresh_token_rejected_after_rotation(client: TestClient, db_sessio
     old_cookie = login_res.cookies.get(settings.REFRESH_COOKIE_NAME)
 
     # Perform refresh -> rotates token
-    ref_res = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: old_cookie})
+    ref_res = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: old_cookie}, headers={"X-Requested-With": "XMLHttpRequest"})
     assert ref_res.status_code == 200
 
     # Try to use old cookie again -> must be rejected (due to reuse detection / revocation)
-    second_ref = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: old_cookie})
+    second_ref = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: old_cookie}, headers={"X-Requested-With": "XMLHttpRequest"})
     assert second_ref.status_code == 401
 
 
@@ -138,10 +138,10 @@ def test_revoked_refresh_token_rejected(client: TestClient, db_session: Session)
     cookie_val = login_res.cookies.get(settings.REFRESH_COOKIE_NAME)
 
     # Logout to revoke
-    client.post("/api/v1/auth/logout", cookies={settings.REFRESH_COOKIE_NAME: cookie_val})
+    client.post("/api/v1/auth/logout", cookies={settings.REFRESH_COOKIE_NAME: cookie_val}, headers={"X-Requested-With": "XMLHttpRequest"})
 
     # Try to refresh -> 401
-    ref_res = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: cookie_val})
+    ref_res = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: cookie_val}, headers={"X-Requested-With": "XMLHttpRequest"})
     assert ref_res.status_code == 401
 
 
@@ -156,17 +156,17 @@ def test_refresh_token_reuse_detection_revokes_family(client: TestClient, db_ses
     initial_cookie = login_res.cookies.get(settings.REFRESH_COOKIE_NAME)
 
     # Legitimate refresh 1
-    ref1_res = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: initial_cookie})
+    ref1_res = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: initial_cookie}, headers={"X-Requested-With": "XMLHttpRequest"})
     assert ref1_res.status_code == 200
     legit_cookie_2 = ref1_res.cookies.get(settings.REFRESH_COOKIE_NAME)
 
     # Attacker tries to reuse initial_cookie (which was revoked)
-    reuse_res = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: initial_cookie})
+    reuse_res = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: initial_cookie}, headers={"X-Requested-With": "XMLHttpRequest"})
     assert reuse_res.status_code == 401
     assert "reuse detected" in reuse_res.json()["detail"].lower()
 
     # Legitimate cookie 2 should now ALSO be revoked due to family revocation
-    ref2_res = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: legit_cookie_2})
+    ref2_res = client.post("/api/v1/auth/refresh", cookies={settings.REFRESH_COOKIE_NAME: legit_cookie_2}, headers={"X-Requested-With": "XMLHttpRequest"})
     assert ref2_res.status_code == 401
 
 
@@ -180,7 +180,7 @@ def test_logout_revocation(client: TestClient, db_session: Session):
     login_res = client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
     cookie_val = login_res.cookies.get(settings.REFRESH_COOKIE_NAME)
 
-    logout_res = client.post("/api/v1/auth/logout", cookies={settings.REFRESH_COOKIE_NAME: cookie_val})
+    logout_res = client.post("/api/v1/auth/logout", cookies={settings.REFRESH_COOKIE_NAME: cookie_val}, headers={"X-Requested-With": "XMLHttpRequest"})
     assert logout_res.status_code == 200
     assert logout_res.json()["detail"] == "Successfully logged out"
 
@@ -198,8 +198,9 @@ def test_logout_clears_cookie(client: TestClient, db_session: Session):
     db_session.commit()
 
     login_res = client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
-    logout_res = client.post("/api/v1/auth/logout", cookies=login_res.cookies)
+    logout_res = client.post("/api/v1/auth/logout", cookies=login_res.cookies, headers={"X-Requested-With": "XMLHttpRequest"})
     assert logout_res.status_code == 200
+
 
     cookie_header = logout_res.headers.get("set-cookie", "")
     assert settings.REFRESH_COOKIE_NAME in cookie_header
