@@ -1,3 +1,5 @@
+import hashlib
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Union, Any
 import jwt
@@ -32,6 +34,10 @@ def validate_password_strength(password: str) -> None:
             detail="Password must contain at least one letter."
         )
 
+def hash_token(raw_token: str) -> str:
+    """Computes SHA-256 hash of a raw token for secure database storage."""
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
 def create_access_token(subject: Union[str, Any], role: str, expires_delta: Optional[timedelta] = None) -> str:
     now_utc = datetime.now(timezone.utc)
     if expires_delta:
@@ -48,7 +54,7 @@ def create_access_token(subject: Union[str, Any], role: str, expires_delta: Opti
     }
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
-def create_refresh_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_refresh_token(subject: Union[str, Any], family_id: Optional[str] = None, expires_delta: Optional[timedelta] = None) -> str:
     now_utc = datetime.now(timezone.utc)
     if expires_delta:
         expire = now_utc + expires_delta
@@ -59,9 +65,12 @@ def create_refresh_token(subject: Union[str, Any], expires_delta: Optional[timed
         "type": "refresh",
         "exp": expire,
         "iat": now_utc,
-        "sub": str(subject)
+        "sub": str(subject),
+        "family_id": family_id or str(uuid.uuid4()),
+        "jti": str(uuid.uuid4())
     }
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
 
 def decode_token(token: str, expected_type: str = "access") -> dict:
     try:

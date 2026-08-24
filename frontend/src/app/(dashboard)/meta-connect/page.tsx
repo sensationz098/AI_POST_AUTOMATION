@@ -72,17 +72,16 @@ export default function MetaConnectPage() {
       if (res.data?.authorization_url) {
         window.location.href = res.data.authorization_url;
       } else {
-        const token = localStorage.getItem('social_ai_token') || '';
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-        window.location.href = `${apiUrl}/meta/oauth/start?token=${token}`;
+        window.location.href = `${apiUrl}/meta/oauth/start`;
       }
     } catch (e: any) {
       console.error('Meta OAuth start error:', e);
-      const token = localStorage.getItem('social_ai_token') || '';
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-      window.location.href = `${apiUrl}/meta/oauth/start?token=${token}`;
+      window.location.href = `${apiUrl}/meta/oauth/start`;
     }
   };
+
 
   // Disconnect a single social account
   const handleDisconnectAccount = async (id: number | string) => {

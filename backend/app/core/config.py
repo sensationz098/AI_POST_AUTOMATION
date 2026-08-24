@@ -19,8 +19,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = Field(default="super-secret-jwt-key-for-social-ai-automation-2026", env="SECRET_KEY")
     TOKEN_ENCRYPTION_KEY: Optional[str] = Field(default=None, env="TOKEN_ENCRYPTION_KEY")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15  # 15 minutes (short-lived access token)
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days
+    REFRESH_COOKIE_NAME: str = "refresh_token"
+    REFRESH_COOKIE_PATH: str = "/api/v1/auth"
     
     # Rate Limiting
     RATE_LIMIT_LOGIN: str = "5 per minute"

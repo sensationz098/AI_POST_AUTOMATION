@@ -44,17 +44,19 @@ def test_registration_and_login_flow(client):
     assert login_res.status_code == 200
     data = login_res.json()
     assert "access_token" in data
-    assert "refresh_token" in data
+    assert "refresh_token" not in data  # No longer exposed in JSON response body
+    assert "refresh_token" in login_res.cookies  # Delivered via HttpOnly cookie
 
     # Test me endpoint with access token
     me_res = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {data['access_token']}"})
     assert me_res.status_code == 200
     assert me_res.json()["email"] == email
 
-    # Test refresh token
-    ref_res = client.post("/api/v1/auth/refresh", json={"refresh_token": data["refresh_token"]})
+    # Test refresh token using cookie
+    ref_res = client.post("/api/v1/auth/refresh", cookies=login_res.cookies)
     assert ref_res.status_code == 200
     assert "access_token" in ref_res.json()
+
 
 def test_idor_user_isolation(client, db_session):
     """User A must NOT be able to access User B's brand profile or post."""

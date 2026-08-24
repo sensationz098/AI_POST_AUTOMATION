@@ -1,27 +1,93 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request, Response, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.schemas.auth import UserCreate, UserLogin, Token, UserResponse, RefreshTokenRequest
+from app.core.config import settings
+from app.core.rate_limit import limiter
+from app.schemas.auth import UserCreate, UserLogin, Token, UserResponse
 from app.services.auth_service import auth_service
 from app.api.v1.deps import get_current_user
 from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+
+def set_refresh_cookie(response: Response, refresh_token_str: str) -> None:
+    is_prod = settings.APP_ENV.lower() == "production"
+    response.set_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        value=refresh_token_str,
+        httponly=True,
+        secure=is_prod,
+        samesite="lax",
+        path=settings.REFRESH_COOKIE_PATH,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+
+def clear_refresh_cookie(response: Response) -> None:
+    is_prod = settings.APP_ENV.lower() == "production"
+    response.delete_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        path=settings.REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=is_prod,
+        samesite="lax",
+    )
+
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(user_in: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMIT_REGISTER)
+def register(request: Request, user_in: UserCreate, db: Session = Depends(get_db)):
     """Register a new user account (Admin or Editor)."""
     return auth_service.register_user(db, user_in)
 
+
 @router.post("/login", response_model=Token)
-def login(login_data: UserLogin, db: Session = Depends(get_db)):
-    """Authenticate user and obtain JWT access & refresh tokens."""
-    return auth_service.authenticate_user(db, login_data)
+@limiter.limit(settings.RATE_LIMIT_LOGIN)
+def login(request: Request, response: Response, login_data: UserLogin, db: Session = Depends(get_db)):
+    """Authenticate user, set HttpOnly refresh cookie, and obtain short-lived JWT access token."""
+    user_agent = request.headers.get("user-agent")
+    ip_address = request.client.host if request.client else None
+    
+    token_resp, refresh_token_str = auth_service.authenticate_user(
+        db=db,
+        login_data=login_data,
+        user_agent=user_agent,
+        ip_address=ip_address
+    )
+    set_refresh_cookie(response, refresh_token_str)
+    return token_resp
+
 
 @router.post("/refresh", response_model=Token)
-def refresh(request: RefreshTokenRequest, db: Session = Depends(get_db)):
-    """Obtain a fresh JWT access token using a valid refresh token."""
-    return auth_service.refresh_access_token(db, request.refresh_token)
+def refresh(request: Request, response: Response, db: Session = Depends(get_db)):
+    """Obtain a fresh short-lived access token using a valid HttpOnly refresh cookie."""
+    raw_refresh_token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
+    user_agent = request.headers.get("user-agent")
+    ip_address = request.client.host if request.client else None
+
+    try:
+        token_resp, new_refresh_token_str = auth_service.refresh_access_token(
+            db=db,
+            raw_refresh_token=raw_refresh_token,
+            user_agent=user_agent,
+            ip_address=ip_address
+        )
+        set_refresh_cookie(response, new_refresh_token_str)
+        return token_resp
+    except HTTPException as exc:
+        clear_refresh_cookie(response)
+        raise exc
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
+    """Revoke active refresh token session and clear HttpOnly cookie."""
+    raw_refresh_token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
+    auth_service.logout_user(db, raw_refresh_token)
+    clear_refresh_cookie(response)
+    return {"detail": "Successfully logged out"}
+
 
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):

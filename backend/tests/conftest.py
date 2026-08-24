@@ -9,6 +9,8 @@ from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 from app.core.database import Base, get_db
 from app.main import app
+from app.core.rate_limit import limiter
+limiter.enabled = False
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 

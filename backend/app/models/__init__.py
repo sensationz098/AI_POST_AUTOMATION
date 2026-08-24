@@ -6,6 +6,7 @@ from app.models.analytics import PostAnalytics
 from app.models.audit import AuditLog
 from app.models.social_account import SocialAccount
 from app.models.publishing_batch import PublishingBatch, PublishingJob, BatchStatus, JobStatus
+from app.models.refresh_token import RefreshToken
 
 __all__ = [
     "User", 
@@ -19,5 +20,7 @@ __all__ = [
     "PublishingBatch",
     "PublishingJob",
     "BatchStatus",
-    "JobStatus"
+    "JobStatus",
+    "RefreshToken"
 ]
+

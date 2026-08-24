@@ -3,10 +3,13 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.core.database import engine, Base
+from app.core.rate_limit import limiter
 import app.models  # Register all models with SQLAlchemy Base
 
 setup_logging()
@@ -23,8 +26,6 @@ from app.api.v1.analytics import router as analytics_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.health import router as health_router
 
-
-
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
@@ -32,7 +33,11 @@ app = FastAPI(
     description="Production-Ready AI Social Media Automation Platform for Facebook & Instagram API."
 )
 
-# Enforce production-safe restricted CORS configuration
+# Register slowapi rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Enforce production-safe restricted CORS configuration for credentialed requests
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
