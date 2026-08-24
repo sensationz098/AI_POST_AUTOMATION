@@ -23,14 +23,28 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days
     REFRESH_COOKIE_NAME: str = "refresh_token"
     REFRESH_COOKIE_PATH: str = "/api/v1/auth"
+    REFRESH_COOKIE_SECURE: Optional[bool] = Field(default=None, env="REFRESH_COOKIE_SECURE")
     
     # Rate Limiting
     RATE_LIMIT_LOGIN: str = "5 per minute"
     RATE_LIMIT_REGISTER: str = "5 per hour"
     RATE_LIMIT_PUBLISH: str = "30 per minute"
     RATE_LIMIT_AI: str = "20 per minute"
+
+    @property
+    def is_cookie_secure(self) -> bool:
+        if self.REFRESH_COOKIE_SECURE is not None:
+            return self.REFRESH_COOKIE_SECURE
+        return self.APP_ENV.lower() == "production"
+
+    @property
+    def refresh_cookie_samesite(self) -> str:
+        # Cross-site cookies (e.g. Vercel frontend <-> Render backend) REQUIRE SameSite=None and Secure=True.
+        # For local HTTP development without TLS, SameSite must be "lax".
+        return "none" if self.is_cookie_secure else "lax"
     
     # Database & Connection Pooling
+
     POSTGRES_SERVER: str = Field(default="localhost", env="POSTGRES_SERVER")
     POSTGRES_USER: str = Field(default="postgres", env="POSTGRES_USER")
     POSTGRES_PASSWORD: str = Field(default="postgres", env="POSTGRES_PASSWORD")
@@ -75,9 +89,14 @@ class Settings(BaseSettings):
     
     # CORS
     BACKEND_CORS_ORIGINS: Union[List[str], str] = Field(
-        default=["http://localhost:3000", "http://127.0.0.1:3000"],
+        default=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://ai-post-automation.vercel.app",
+        ],
         env="BACKEND_CORS_ORIGINS"
     )
+
 
     @property
     def cors_origins(self) -> List[str]:

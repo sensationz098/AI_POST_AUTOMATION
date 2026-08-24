@@ -35,15 +35,29 @@ export const apiClient = axios.create({
   withCredentials: true, // Always send HttpOnly cookies to API backend
   headers: {
     'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
   },
   timeout: DEFAULT_API_TIMEOUT_MS,
 });
 
-// Request Interceptor: Attach in-memory access token as Bearer header if available
+function getCsrfTokenFromCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp('(?:^|; )csrf_token=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+// Request Interceptor: Attach in-memory access token & anti-CSRF headers
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   config.withCredentials = true;
-  if (memoryAccessToken && config.headers) {
-    config.headers.Authorization = `Bearer ${memoryAccessToken}`;
+  if (config.headers) {
+    config.headers['X-Requested-With'] = 'XMLHttpRequest';
+    const csrfToken = getCsrfTokenFromCookie();
+    if (csrfToken) {
+      config.headers['X-CSRF-Token'] = csrfToken;
+    }
+    if (memoryAccessToken) {
+      config.headers.Authorization = `Bearer ${memoryAccessToken}`;
+    }
   }
   return config;
 });

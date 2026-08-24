@@ -53,9 +53,10 @@ def test_registration_and_login_flow(client):
     assert me_res.json()["email"] == email
 
     # Test refresh token using cookie
-    ref_res = client.post("/api/v1/auth/refresh", cookies=login_res.cookies)
+    ref_res = client.post("/api/v1/auth/refresh", cookies=login_res.cookies, headers={"X-Requested-With": "XMLHttpRequest"})
     assert ref_res.status_code == 200
     assert "access_token" in ref_res.json()
+
 
 
 def test_idor_user_isolation(client, db_session):
