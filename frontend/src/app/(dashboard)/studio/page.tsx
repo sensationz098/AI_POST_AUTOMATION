@@ -165,31 +165,6 @@ export default function AIStudioPage() {
   // Creation Mode: 'premade' = Upload Custom Pre-Made Post Mode
   const [creationMode, setCreationMode] = useState<'ai' | 'premade'>('premade');
 
-  // Auto-login with default admin account so API calls are authenticated
-  React.useEffect(() => {
-    async function autoLogin() {
-      if (typeof window === 'undefined') return;
-      const existing = localStorage.getItem('social_ai_token');
-      if (!existing) {
-        try {
-          const res = await apiClient.post('/auth/login', {
-            email: 'testadmin@socialai.com',
-            password: 'TestAdmin123!',
-          });
-          if (res.data?.access_token) {
-            localStorage.setItem('social_ai_token', res.data.access_token);
-            // Set axios default header immediately
-            apiClient.defaults.headers.common['Authorization'] = `Bearer ${res.data.access_token}`;
-          }
-        } catch (e) {
-          // Backend offline — app still works in frontend fallback mode
-        }
-      } else {
-        apiClient.defaults.headers.common['Authorization'] = `Bearer ${existing}`;
-      }
-    }
-    autoLogin();
-  }, []);
 
 
 

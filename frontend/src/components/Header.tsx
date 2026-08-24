@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bell, UserCheck, CheckCircle2, Sparkles, Sun, Moon, X, Clock, ExternalLink, Activity, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from '@/components/ThemeProvider';
+import { useAuth } from '@/context/AuthContext';
 import { apiClient } from '@/lib/api';
 
 interface Props {
@@ -22,14 +23,17 @@ interface ActivityItem {
 
 export const Header: React.FC<Props> = ({
   brandName = 'Apex Innovations',
-  userRole = 'Admin'
+  userRole
 }) => {
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
+  const displayRole = userRole || user?.role || 'Admin';
   const [hasUnread, setHasUnread] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
+
 
   // Fetch recent activity audit logs
   const fetchActivities = async () => {
@@ -222,20 +226,17 @@ export const Header: React.FC<Props> = ({
 
         <div className="flex items-center space-x-1.5 bg-slate-900/60 border border-slate-800/80 px-2 py-1 rounded text-[11px]">
           <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
-          <span className="font-semibold text-slate-200 text-[10px]">{userRole}</span>
+          <span className="font-semibold text-slate-200 text-[10px]">{displayRole}</span>
         </div>
 
         <button
-          onClick={() => {
-            localStorage.removeItem('social_ai_token');
-            localStorage.removeItem('social_ai_user');
-            window.location.href = '/login';
-          }}
+          onClick={() => logout()}
           className="p-1 text-slate-400 hover:text-rose-400 rounded hover:bg-slate-800/60 transition focus-ring"
           title="Sign Out"
         >
           <LogOut className="w-3.5 h-3.5" />
         </button>
+
       </div>
     </header>
   );

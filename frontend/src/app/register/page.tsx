@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Sparkles, Mail, Lock, User, Shield, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { apiClient } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { user, register, isInitialized } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,44 +16,23 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isInitialized && user) {
+      router.push('/studio');
+    }
+  }, [isInitialized, user, router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
 
     try {
-      // 1. Register User
-      await apiClient.post('/auth/register', {
-        full_name: fullName.trim(),
-        email: email.trim(),
-        password,
-        role,
-      });
-
-      // 2. Auto-login after registration
-      const loginRes = await apiClient.post('/auth/login', {
-        email: email.trim(),
-        password,
-      });
-
-      if (loginRes.data?.access_token) {
-        localStorage.setItem('social_ai_token', loginRes.data.access_token);
-        if (loginRes.data?.user_id) {
-          localStorage.setItem('social_ai_user', JSON.stringify({
-            id: loginRes.data.user_id,
-            email: loginRes.data.email,
-            full_name: loginRes.data.full_name,
-            role: loginRes.data.role,
-          }));
-        }
-        apiClient.defaults.headers.common['Authorization'] = `Bearer ${loginRes.data.access_token}`;
-        router.push('/studio');
-      } else {
-        router.push('/login');
-      }
+      await register(email, password, fullName, role);
+      router.push('/studio');
     } catch (err: any) {
       console.error('Registration error:', err);
-      const detail = err.response?.data?.detail;
+      const detail = err.response?.data?.detail || err.message;
       if (typeof detail === 'string') {
         setError(detail);
       } else if (Array.isArray(detail)) {
@@ -64,6 +44,7 @@ export default function RegisterPage() {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-[#070A11] text-slate-100 flex items-center justify-center p-4 relative overflow-hidden font-sans">

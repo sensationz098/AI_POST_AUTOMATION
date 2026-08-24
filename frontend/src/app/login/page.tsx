@@ -1,17 +1,24 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Sparkles, Mail, Lock, ArrowRight, CheckCircle2, ShieldCheck, KeyRound, AlertCircle } from 'lucide-react';
-import { apiClient } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, login, isInitialized } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isInitialized && user) {
+      router.push('/studio');
+    }
+  }, [isInitialized, user, router]);
 
   // Fill default test admin credentials
   const fillTestCredentials = () => {
@@ -26,34 +33,11 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const res = await apiClient.post('/auth/login', {
-        email: email.trim(),
-        password,
-      });
-
-      if (res.data?.access_token) {
-        // Save JWT token to localStorage
-        localStorage.setItem('social_ai_token', res.data.access_token);
-        if (res.data?.user_id) {
-          localStorage.setItem('social_ai_user', JSON.stringify({
-            id: res.data.user_id,
-            email: res.data.email,
-            full_name: res.data.full_name,
-            role: res.data.role,
-          }));
-        }
-
-        // Set default Authorization header for subsequent API calls
-        apiClient.defaults.headers.common['Authorization'] = `Bearer ${res.data.access_token}`;
-
-        // Redirect to main studio page
-        router.push('/studio');
-      } else {
-        setError('Authentication response did not return an access token.');
-      }
+      await login(email, password);
+      router.push('/studio');
     } catch (err: any) {
       console.error('Login error:', err);
-      const detail = err.response?.data?.detail;
+      const detail = err.response?.data?.detail || err.message;
       if (typeof detail === 'string') {
         setError(detail);
       } else if (Array.isArray(detail)) {
@@ -65,6 +49,7 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-[#070A11] text-slate-100 flex items-center justify-center p-4 relative overflow-hidden font-sans">
