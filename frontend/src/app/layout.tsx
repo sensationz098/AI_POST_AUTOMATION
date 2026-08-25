@@ -6,6 +6,10 @@ import { AuthProvider } from '@/context/AuthContext';
 export const metadata: Metadata = {
   title: 'SocialAI Pro - Facebook & Instagram AI Automation Platform',
   description: 'Production-Ready AI Content Generation & Social Media Automation Platform for Facebook & Instagram Meta Graph API.',
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
