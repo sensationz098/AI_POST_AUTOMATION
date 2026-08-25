@@ -60,7 +60,8 @@ def test_development_cookie_attributes(client: TestClient, db_session: Session):
 
 def test_cors_allows_exact_vercel_origin(client: TestClient):
     """Verify CORS explicitly allows the production Vercel frontend origin with allow_credentials=True."""
-    vercel_origin = "https://ai-post-automation.vercel.app"
+    # vercel_origin = "https://ai-post-automation.vercel.app"
+    vercel_origin="https://ai-post-automation-sensationz.vercel.app"
     res = client.options(
         "/api/v1/auth/login",
         headers={
