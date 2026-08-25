@@ -92,7 +92,8 @@ class Settings(BaseSettings):
         default=[
             "http://localhost:3000",
             "http://127.0.0.1:3000",
-            "https://ai-post-automation.vercel.app",
+            # "https://ai-post-automation.vercel.app",
+            "https://ai-post-automation-sensationz.vercel.app"
         ],
         env="BACKEND_CORS_ORIGINS"
     )
