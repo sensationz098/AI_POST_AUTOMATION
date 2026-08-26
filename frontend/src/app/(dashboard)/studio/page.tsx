@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import toast, { Toaster } from 'react-hot-toast';
 import { 
   Sparkles, 
   Image as ImageIcon, 
@@ -661,6 +662,21 @@ export default function AIStudioPage() {
 
   const handlePublishNow = async () => {
     if (selectedAccountIds.length === 0) {
+      toast.error('Please select at least one account to publish.', {
+        duration: 4000,
+        style: {
+          background: '#0f172a',
+          color: '#f8fafc',
+          border: '1px solid #ef4444',
+          borderRadius: '0.75rem',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+        },
+        iconTheme: {
+          primary: '#ef4444',
+          secondary: '#ffffff',
+        },
+      });
       setStatusNotification('⚠️ Please select at least one account to publish.');
       return;
     }
@@ -776,6 +792,7 @@ export default function AIStudioPage() {
 
   return (
     <div className="space-y-5 select-none font-sans text-xs">
+      <Toaster position="top-right" reverseOrder={false} />
       {/* Linear Workspace Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800/60">
         <div>
