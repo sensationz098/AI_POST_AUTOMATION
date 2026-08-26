@@ -1,12 +1,60 @@
 import json
 import logging
-from typing import Dict, Any, List
+import re
+from typing import Dict, Any, List, Optional
 from openai import OpenAI
 from app.core.config import settings
 from app.schemas.ai import AIGenerateRequest, AIGenerateResponse, AIImageGenerateRequest, AIImageGenerateResponse
 from app.models.brand import BrandProfile
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_hashtags(raw_hashtags: List[Any]) -> List[str]:
+    """Clean, format, deduplicate, and normalize hashtags."""
+    normalized = []
+    seen = set()
+    for tag in raw_hashtags:
+        if not isinstance(tag, str):
+            continue
+        cleaned = tag.strip()
+        if not cleaned:
+            continue
+        cleaned = cleaned.lstrip('#')
+        # Keep alphanumeric and underscores only
+        cleaned = re.sub(r'[^\w]', '', cleaned)
+        if not cleaned:
+            continue
+        formatted = f"#{cleaned}"
+        key = formatted.lower()
+        if key not in seen:
+            seen.add(key)
+            normalized.append(formatted)
+    return normalized
+
+
+def extract_and_parse_json(text: str) -> dict:
+    """Extract and parse JSON from AI model response safely."""
+    text = text.strip()
+
+    # 1. Check if enclosed in markdown code fences ```json ... ```
+    match_fence = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+    if match_fence:
+        return json.loads(match_fence.group(1))
+
+    # 2. Try parsing raw text directly
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # 3. Fallback regex to find outermost JSON object {}
+    match_obj = re.search(r'\{.*\}', text, re.DOTALL)
+    if match_obj:
+        return json.loads(match_obj.group(0))
+
+    raise ValueError("Could not parse valid JSON from response")
+
 
 class AIService:
     def __init__(self):
@@ -26,28 +74,88 @@ class AIService:
         else:
             self.client = None
 
-
     def generate_content(self, brand: BrandProfile, request: AIGenerateRequest) -> AIGenerateResponse:
+        """
+        Generates high-converting social media copy using OpenAI/OpenRouter with platform awareness,
+        campaign goal awareness, brand personalization, and strict quality control.
+        Falls back gracefully if the provider fails or is unconfigured.
+        """
+        brand_name = brand.name if brand and brand.name else "Brand"
+        tone = brand.tone_of_voice if brand and brand.tone_of_voice else "Authentic, Engaging & Professional"
+        audience = brand.target_audience if brand and brand.target_audience else "General target audience"
+        cta_pref = brand.cta_style if brand and brand.cta_style else "Natural & Value-focused"
+        industry = brand.industry if brand and brand.industry else "General"
+        brand_colors = brand.brand_colors if brand and brand.brand_colors else ["#4F46E5", "#06B6D4"]
+
+        platform = (request.platform or "all").lower()
+        campaign_goal = request.campaign_goal or "Brand Awareness & Lead Generation"
+
         system_prompt = (
-            f"You are an expert AI Social Media Strategist and Copywriter for the brand '{brand.name}'.\n"
-            f"Brand Tone of Voice: {brand.tone_of_voice}\n"
-            f"Target Audience: {brand.target_audience or 'General audience'}\n"
-            f"CTA Style: {brand.cta_style}\n"
-            f"Industry: {brand.industry or 'General'}\n"
-            "Generate engaging social media content optimized for high viral reach on Facebook and Instagram.\n"
-            "Return JSON matching this exact structure:\n"
+            "You are an expert social media strategist and elite conversion copywriter.\n"
+            f"You write high-performing social copy for the brand '{brand_name}'.\n\n"
+            "BRAND STRATEGY CONTEXT:\n"
+            f"- Brand Name: {brand_name}\n"
+            f"- Industry: {industry}\n"
+            f"- Tone of Voice: {tone}\n"
+            f"- Target Audience: {audience}\n"
+            f"- Preferred CTA Style: {cta_pref}\n"
+            f"- Brand Accent Colors: {', '.join(brand_colors)}\n\n"
+            "COPYWRITING GUIDELINES:\n"
+            "1. Write like an experienced human copywriter—natural, compelling, and authentic.\n"
+            "2. Open with a captivating hook that grabs immediate attention.\n"
+            "3. Provide real substance, context, or clear value related directly to the topic.\n"
+            "4. Match the campaign goal and target audience precisely.\n"
+            "5. NO generic AI clichés! NEVER use phrases like 'In today's fast-paced world', 'game-changer', 'revolutionize', 'unlock your potential', 'delve into', 'beacon', or 'look no further'.\n"
+            "6. DO NOT invent fake statistics, false claims, prices, warranties, or non-existent features.\n"
+            "7. Keep line breaks readable and spacious for mobile devices.\n"
+            "8. Use emojis tastefully and sparingly based on tone—avoid emoji overload.\n"
+            "9. End with a natural CTA that fits the campaign goal naturally without forcing a hard sales pitch onto every sentence.\n\n"
+            "PLATFORM SPECIFIC INSTRUCTIONS:\n"
+        )
+
+        if platform == "instagram":
+            system_prompt += (
+                "- Platform: INSTAGRAM\n"
+                "- Prioritize concise, visually scannable copy with clean line breaks.\n"
+                "- Strong first-line hook before the 'more' cut.\n"
+                "- Conversational, mobile-first tone.\n"
+                "- Include 3-7 highly relevant discovery hashtags.\n"
+            )
+        elif platform == "facebook":
+            system_prompt += (
+                "- Platform: FACEBOOK\n"
+                "- Allow rich storytelling, background context, and community interaction.\n"
+                "- Encourage comments, discussions, or user opinions where appropriate.\n"
+                "- Avoid turning every post into a hard advertisement pitch.\n"
+                "- Include 2-4 targeted hashtags.\n"
+            )
+        else:
+            system_prompt += (
+                "- Platform: ALL (CROSS-PLATFORM FB & IG)\n"
+                "- Craft versatile copy that looks natural and engaging on both Facebook and Instagram.\n"
+                "- Balance visual scannability with meaningful context and community engagement.\n"
+                "- Include 3-5 targeted hashtags.\n"
+            )
+
+        system_prompt += (
+            "\nRESPONSE FORMAT REQUIREMENT:\n"
+            "You MUST respond ONLY with a single valid JSON object with the following exact keys:\n"
             "{\n"
-            '  "caption": "The main engaging copy with emojis and line breaks",\n'
-            '  "hashtags": ["#Tag1", "#Tag2", "#Tag3", "#Tag4", "#Tag5"],\n'
-            '  "cta": "Compelling call to action statement",\n'
+            '  "caption": "The main post copy with line breaks and appropriate emojis",\n'
+            '  "hashtags": ["#Tag1", "#Tag2", "#Tag3"],\n'
+            '  "cta": "Context-aware call to action",\n'
             '  "seo_keywords": ["keyword1", "keyword2", "keyword3"],\n'
-            '  "image_prompt": "Detailed photorealistic text prompt for image generation"\n'
+            '  "image_prompt": "Detailed text prompt for AI image generation tailored to this post concept"\n'
             "}"
         )
 
-        user_prompt = f"Topic / Promo Idea: {request.topic}\nCampaign Goal: {request.campaign_goal or 'Engagement'}"
+        user_prompt = (
+            f"Topic / Post Concept: {request.topic}\n"
+            f"Campaign Goal: {campaign_goal}\n"
+            f"Target Platform: {platform.upper()}\n"
+        )
         if request.custom_instructions:
-            user_prompt += f"\nCustom Instructions: {request.custom_instructions}"
+            user_prompt += f"CUSTOM INSTRUCTIONS (MUST FOLLOW STRICTLY): {request.custom_instructions}\n"
 
         if self.client:
             try:
@@ -59,49 +167,156 @@ class AIService:
                     ],
                     temperature=0.7
                 )
-                raw = response.choices[0].message.content or ""
-                # Extract JSON block robustly (handles markdown code fences too)
-                import re
-                json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-                if json_match:
-                    data = json.loads(json_match.group())
+                raw_text = response.choices[0].message.content or ""
+                data = extract_and_parse_json(raw_text)
+
+                caption = str(data.get("caption", "")).strip()
+                raw_hashtags = data.get("hashtags", [])
+                if not isinstance(raw_hashtags, list):
+                    raw_hashtags = []
+                hashtags = normalize_hashtags(raw_hashtags)
+
+                cta = str(data.get("cta", "")).strip()
+
+                raw_keywords = data.get("seo_keywords", [])
+                if not isinstance(raw_keywords, list):
+                    raw_keywords = []
+                seo_keywords = [str(k).strip() for k in raw_keywords if k]
+
+                image_prompt = str(data.get("image_prompt", "")).strip()
+
+                if caption and hashtags and cta:
                     return AIGenerateResponse(
-                        caption=data.get("caption", ""),
-                        hashtags=data.get("hashtags", []),
-                        cta=data.get("cta", ""),
-                        seo_keywords=data.get("seo_keywords", []),
-                        image_prompt=data.get("image_prompt", "")
+                        caption=caption,
+                        hashtags=hashtags,
+                        cta=cta,
+                        seo_keywords=seo_keywords,
+                        image_prompt=image_prompt or f"A high-quality visual representation of {request.topic} for {brand_name}"
                     )
-                else:
-                    raise ValueError("No JSON found in OpenRouter response")
             except Exception as e:
-                logger.error(f"OpenRouter/OpenAI API call failed: {e}. Using intelligent fallback generator.")
+                logger.error(f"AI content generation failed: {e}. Falling back to smart fallback generator.")
 
+        # Smart fallback generator when API client is not configured or fails
+        return self._smart_fallback_generation(brand, request)
 
-        # Fallback simulation generator when OpenAI API key is omitted or fails
-        return AIGenerateResponse(
-            caption=(
-                f"🚀 Transform your reach with {brand.name}!\n\n"
-                f"We are excited to share {request.topic}. Designed specifically for {brand.target_audience or 'innovators'}, "
-                f"our latest release brings unprecedented efficiency to your workflow.\n\n"
-                f"✨ Key Highlights:\n"
-                f"• Automated AI workflows tailored to your brand voice.\n"
-                f"• Seamless integration across Facebook and Instagram.\n"
-                f"• Built to drive real engagement and measurable results.\n"
-            ),
-            hashtags=[
-                f"#{brand.name.replace(' ', '')}",
-                "#SocialMediaAutomation",
-                "#AICreative",
-                "#MarketingGrowth",
-                "#InstagramStrategy"
-            ],
-            cta=f"👉 Click the link in our bio to try {brand.name} today!",
-            seo_keywords=[request.topic.lower(), brand.name.lower(), "ai social media", "automation", "growth"],
-            image_prompt=(
-                f"A modern minimalist digital artwork showcasing '{request.topic}' in a sleek tech aesthetic with "
-                f"gradient lighting in colors {', '.join(brand.brand_colors or ['#4F46E5'])}, high resolution, 8k render."
+    def _smart_fallback_generation(self, brand: BrandProfile, request: AIGenerateRequest) -> AIGenerateResponse:
+        """
+        Intelligent deterministic fallback generator that customizes output based on
+        brand, topic, campaign goal, platform, and custom instructions.
+        """
+        brand_name = (brand.name if brand and brand.name else "Brand").strip()
+        audience = (brand.target_audience if brand and brand.target_audience else "innovators and leaders").strip()
+        industry = (brand.industry if brand and brand.industry else "Technology & Business").strip()
+        topic = (request.topic or "Our Latest Solution").strip()
+        goal = (request.campaign_goal or "Brand Awareness").strip()
+        platform = (request.platform or "all").lower()
+        instructions = (request.custom_instructions or "").strip()
+
+        goal_lower = goal.lower()
+        instructions_lower = instructions.lower()
+
+        # Build hook & body based on campaign goal and platform
+        if "lead" in goal_lower or "sales" in goal_lower or "promo" in goal_lower or "product" in goal_lower:
+            hook = f"Looking for a better way to handle {topic}?"
+            body = (
+                f"At {brand_name}, we built our latest solution specifically for {audience} who want clear results in {industry}.\n\n"
+                f"Here is how it helps:\n"
+                f"• Designed around key priorities that matter to {audience}.\n"
+                f"• Straightforward execution without unnecessary friction.\n"
+                f"• Focused on delivering consistent, high-value outcomes."
             )
+            cta_text = f"👉 Ready to try it? Learn more about {brand_name} today!"
+        elif "education" in goal_lower or "learn" in goal_lower or "teach" in goal_lower:
+            hook = f"Here's what every {audience} should keep in mind about {topic}:"
+            body = (
+                f"Understanding {topic} is essential in {industry}. "
+                f"Here are 3 core principles we focus on at {brand_name}:\n\n"
+                f"1. Start with clear objectives before taking action.\n"
+                f"2. Keep solutions focused on real user needs.\n"
+                f"3. Measure progress regularly and adjust as you grow."
+            )
+            cta_text = f"📌 Save this post for later or share it with your team!"
+        elif "engage" in goal_lower or "community" in goal_lower:
+            hook = f"What is your top priority when it comes to {topic}?"
+            body = (
+                f"We're having an ongoing conversation at {brand_name} about how {topic} is shaping work in {industry}.\n\n"
+                f"Whether you're just starting out or refining your existing setup for {audience}, "
+                f"having the right strategy makes all the difference."
+            )
+            cta_text = f"💬 Tell us your perspective in the comments below!"
+        elif "traffic" in goal_lower:
+            hook = f"Want to get more out of {topic}?"
+            body = (
+                f"We've broken down everything {audience} needs to know about {topic} in {industry}.\n\n"
+                f"Discover practical strategies and step-by-step guidance tailored by {brand_name}."
+            )
+            cta_text = f"🔗 Tap the link to explore the full guide now!"
+        else:  # Brand awareness & general
+            if platform == "instagram":
+                hook = f"✨ Spotlight on {topic} for {audience}."
+                body = (
+                    f"At {brand_name}, we're continually innovating in {industry}.\n\n"
+                    f"When focusing on {topic}, quality and consistency come first. "
+                    f"Here is to building smarter solutions for {audience} everywhere."
+                )
+            elif platform == "facebook":
+                hook = f"We are excited to highlight our latest work on {topic}."
+                body = (
+                    f"At {brand_name}, we believe {industry} moves best when solutions are tailored for {audience}.\n\n"
+                    f"Our focus on {topic} is all about bringing practical value and reliability to every step."
+                )
+            else:
+                hook = f"🚀 Unlocking new opportunities with {topic}."
+                body = (
+                    f"At {brand_name}, we are focused on empowering {audience} across {industry}.\n\n"
+                    f"Our latest work on {topic} provides the clarity and execution needed to succeed."
+                )
+            cta_text = f"✨ Follow {brand_name} for more updates and insights!"
+
+        # Handle custom instructions (e.g. no emojis)
+        if "no emoji" in instructions_lower or "without emoji" in instructions_lower or "no emojis" in instructions_lower:
+            hook = re.sub(r'[^\x00-\x7F]+', '', hook).strip()
+            body = re.sub(r'[^\x00-\x7F]+', '', body).strip()
+            cta_text = re.sub(r'[^\x00-\x7F]+', '', cta_text).strip()
+
+        caption = f"{hook}\n\n{body}"
+
+        # Generate hashtags cleanly
+        topic_words = re.findall(r'\b[A-Za-z0-9]+\b', topic)
+        topic_tags = [f"#{w.capitalize()}" for w in topic_words if len(w) > 3][:3]
+        clean_brand = re.sub(r'[^A-Za-z0-9]', '', brand_name)
+        clean_industry = re.sub(r'[^A-Za-z0-9]', '', industry)
+
+        raw_tags = [f"#{clean_brand}"]
+        if clean_industry:
+            raw_tags.append(f"#{clean_industry}")
+        raw_tags.extend(topic_tags)
+        raw_tags.extend(["#Strategy", "#Growth"])
+
+        hashtags = normalize_hashtags(raw_tags)
+
+        seo_keywords = list(dict.fromkeys([
+            topic.lower(),
+            brand_name.lower(),
+            industry.lower(),
+            "content strategy",
+            "social media reach"
+        ]))[:5]
+
+        brand_colors = brand.brand_colors if brand and brand.brand_colors else ["#4F46E5", "#06B6D4"]
+        colors_str = ", ".join(brand_colors)
+
+        image_prompt = (
+            f"A modern visual composition illustrating '{topic}' in the context of {industry}. "
+            f"Clean presentation, studio lighting in colors {colors_str}, crisp focus, professional photography style."
+        )
+
+        return AIGenerateResponse(
+            caption=caption,
+            hashtags=hashtags,
+            cta=cta_text,
+            seo_keywords=seo_keywords,
+            image_prompt=image_prompt
         )
 
     def generate_image(self, request: AIImageGenerateRequest) -> AIImageGenerateResponse:
