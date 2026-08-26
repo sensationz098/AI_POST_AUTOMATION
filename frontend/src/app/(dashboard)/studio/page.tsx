@@ -541,11 +541,12 @@ export default function AIStudioPage() {
     setIsGeneratingContent(true);
     setStatusNotification(null);
     try {
+      const promptText = topic.trim();
       const res = await apiClient.post('/ai/generate-content', {
         brand_id: selectedBrand.id,
-        topic,
+        topic: promptText,
         campaign_goal: campaignGoal,
-        custom_instructions: customInstructions,
+        custom_instructions: promptText,
         platform: previewPlatform,
       });
       const data = res.data;
@@ -1056,20 +1057,29 @@ export default function AIStudioPage() {
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">Optional</span>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Describe your post topic and let AI write a high-converting caption, hashtags & CTA for your image.
+                  Describe what you want to create and let AI write a high-converting caption, hashtags & CTA for your post.
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    type="text"
+
+                {/* Single Multiline Prompt Input */}
+                <div>
+                  <textarea
+                    rows={4}
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
-                    placeholder="e.g. Summer sale, Product launch, Event promo..."
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    placeholder="Tell AI what you want to create — describe your post, product, audience, tone, key points, or anything else you want it to focus on..."
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500 transition resize-y"
                   />
+                </div>
+
+                {/* Campaign Goal Dropdown */}
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                    Campaign Goal
+                  </label>
                   <select
                     value={campaignGoal}
                     onChange={(e) => setCampaignGoal(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
                   >
                     <option>Lead Generation & Brand Awareness</option>
                     <option>Product Launch & Direct Sales</option>
@@ -1077,17 +1087,11 @@ export default function AIStudioPage() {
                     <option>Educational / Thought Leadership</option>
                   </select>
                 </div>
-                <input
-                  type="text"
-                  value={customInstructions}
-                  onChange={(e) => setCustomInstructions(e.target.value)}
-                  placeholder="Optional custom instructions (e.g. 'Short & witty', 'No emojis', 'Focus on feature X')..."
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                />
+
                 <button
                   onClick={handleGenerateContent}
-                  disabled={isGeneratingContent || !topic}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold text-xs flex items-center justify-center space-x-2 hover:opacity-90 transition disabled:opacity-40 shadow-lg shadow-indigo-500/20"
+                  disabled={isGeneratingContent || !topic.trim()}
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold text-xs flex items-center justify-center space-x-2 hover:opacity-90 transition disabled:opacity-40 shadow-lg shadow-indigo-500/20 cursor-pointer"
                 >
                   {isGeneratingContent ? (
                     <>

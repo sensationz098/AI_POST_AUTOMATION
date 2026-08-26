@@ -34,45 +34,67 @@ def normalize_hashtags(raw_hashtags: List[Any]) -> List[str]:
 
 
 def extract_and_parse_json(text: str) -> dict:
-    """Extract and parse JSON from AI model response safely."""
+    """Extract and parse JSON from AI model response safely across multiple formats."""
+    if not text or not isinstance(text, str):
+        raise ValueError("Response text is empty or not a string")
+
     text = text.strip()
 
-    # 1. Check if enclosed in markdown code fences ```json ... ```
-    match_fence = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
-    if match_fence:
-        return json.loads(match_fence.group(1))
-
-    # 2. Try parsing raw text directly
+    # 1. Try parsing raw text directly (if model returned clean JSON)
     try:
-        return json.loads(text)
-    except json.JSONDecodeError:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return data
+    except Exception:
         pass
 
-    # 3. Fallback regex to find outermost JSON object {}
-    match_obj = re.search(r'\{.*\}', text, re.DOTALL)
-    if match_obj:
-        return json.loads(match_obj.group(0))
+    # 2. Extract content inside markdown code fences ```json ... ``` or ``` ... ```
+    fence_match = re.search(r'```(?:json)?\s*(\{.*\})\s*```', text, re.DOTALL)
+    if fence_match:
+        try:
+            data = json.loads(fence_match.group(1).strip())
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
 
-    raise ValueError("Could not parse valid JSON from response")
+    # 3. Outer brace extraction: find first '{' and last '}'
+    start_idx = text.find('{')
+    end_idx = text.rfind('}')
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        json_str = text[start_idx:end_idx + 1]
+        try:
+            data = json.loads(json_str)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+
+    raise ValueError(f"Could not parse valid JSON object from model response (raw text length: {len(text)})")
 
 
 class AIService:
     def __init__(self):
         self.api_key = settings.OPENAI_API_KEY
-        self.base_url = settings.OPENAI_BASE_URL  # e.g. "https://openrouter.ai/api/v1"
+        self.base_url = settings.OPENAI_BASE_URL
+        self.client = self._get_client()
 
-        if self.api_key:
-            client_kwargs = {"api_key": self.api_key}
-            if self.base_url:
-                # OpenRouter requires base_url and a custom Referer header
-                client_kwargs["base_url"] = self.base_url
-                client_kwargs["default_headers"] = {
-                    "HTTP-Referer": "http://localhost:3001",
-                    "X-Title": "SocialAI Automation Platform",
-                }
-            self.client = OpenAI(**client_kwargs)
-        else:
-            self.client = None
+    def _get_client(self) -> Optional[OpenAI]:
+        api_key = settings.OPENAI_API_KEY
+        base_url = settings.OPENAI_BASE_URL
+
+        if not api_key:
+            return None
+
+        client_kwargs = {"api_key": api_key}
+        if base_url:
+            clean_base_url = base_url.strip().rstrip('/')
+            client_kwargs["base_url"] = clean_base_url
+            client_kwargs["default_headers"] = {
+                "HTTP-Referer": getattr(settings, "FRONTEND_URL", "http://localhost:3000"),
+                "X-Title": getattr(settings, "PROJECT_NAME", "Social AI Automation Platform"),
+            }
+        return OpenAI(**client_kwargs)
 
     def generate_content(self, brand: BrandProfile, request: AIGenerateRequest) -> AIGenerateResponse:
         """
@@ -89,6 +111,29 @@ class AIService:
 
         platform = (request.platform or "all").lower()
         campaign_goal = request.campaign_goal or "Brand Awareness & Lead Generation"
+
+        client = self._get_client()
+        is_client_configured = client is not None
+        base_url_str = (settings.OPENAI_BASE_URL.strip().rstrip('/') if settings.OPENAI_BASE_URL else "Default OpenAI Base URL")
+        model_name = settings.OPENAI_MODEL
+
+        logger.info(
+            f"AI Generation Request received | "
+            f"client_configured={is_client_configured} | "
+            f"base_url={base_url_str} | "
+            f"model={model_name} | "
+            f"platform={platform} | "
+            f"campaign_goal={campaign_goal} | "
+            f"topic_length={len(request.topic or '')} | "
+            f"has_custom_instructions={bool(request.custom_instructions)}"
+        )
+
+        if not is_client_configured:
+            logger.warning(
+                "AI provider client is not configured (OPENAI_API_KEY is missing or empty). "
+                "AI fallback reason: unconfigured provider client."
+            )
+            return self._smart_fallback_generation(brand, request)
 
         system_prompt = (
             "You are an expert social media strategist and elite conversion copywriter.\n"
@@ -157,47 +202,88 @@ class AIService:
         if request.custom_instructions:
             user_prompt += f"CUSTOM INSTRUCTIONS (MUST FOLLOW STRICTLY): {request.custom_instructions}\n"
 
-        if self.client:
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7
+            )
+            logger.info("AI provider API request succeeded.")
+
+            if not response or not getattr(response, "choices", None):
+                logger.error("AI fallback reason: response choices empty or missing.")
+                return self._smart_fallback_generation(brand, request)
+
+            raw_text = (response.choices[0].message.content or "").strip()
+            if not raw_text:
+                logger.error("AI fallback reason: response content empty.")
+                return self._smart_fallback_generation(brand, request)
+
+            logger.info(f"AI raw response received | length={len(raw_text)}")
+
             try:
-                response = self.client.chat.completions.create(
-                    model=settings.OPENAI_MODEL,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=0.7
-                )
-                raw_text = response.choices[0].message.content or ""
                 data = extract_and_parse_json(raw_text)
+                logger.info("AI JSON parsing succeeded.")
+            except Exception as parse_err:
+                logger.error(f"AI fallback reason: JSON parse failure | error={parse_err} | snippet={raw_text[:200]!r}")
+                return self._smart_fallback_generation(brand, request)
 
-                caption = str(data.get("caption", "")).strip()
-                raw_hashtags = data.get("hashtags", [])
-                if not isinstance(raw_hashtags, list):
-                    raw_hashtags = []
-                hashtags = normalize_hashtags(raw_hashtags)
+            # Robust key extraction with aliasing
+            caption = str(
+                data.get("caption") or data.get("post_caption") or data.get("content") or data.get("post") or ""
+            ).strip()
 
-                cta = str(data.get("cta", "")).strip()
+            raw_hashtags = data.get("hashtags") or data.get("hash_tags") or data.get("tags") or []
+            if not isinstance(raw_hashtags, list):
+                raw_hashtags = [str(raw_hashtags)] if raw_hashtags else []
+            hashtags = normalize_hashtags(raw_hashtags)
 
-                raw_keywords = data.get("seo_keywords", [])
-                if not isinstance(raw_keywords, list):
-                    raw_keywords = []
-                seo_keywords = [str(k).strip() for k in raw_keywords if k]
+            # If hashtags empty, extract from caption or generate tags
+            if not hashtags and caption:
+                caption_tags = re.findall(r'#\w+', caption)
+                if caption_tags:
+                    hashtags = normalize_hashtags(caption_tags)
 
-                image_prompt = str(data.get("image_prompt", "")).strip()
+            cta = str(
+                data.get("cta") or data.get("call_to_action") or data.get("callToAction") or data.get("action") or ""
+            ).strip()
 
-                if caption and hashtags and cta:
-                    return AIGenerateResponse(
-                        caption=caption,
-                        hashtags=hashtags,
-                        cta=cta,
-                        seo_keywords=seo_keywords,
-                        image_prompt=image_prompt or f"A high-quality visual representation of {request.topic} for {brand_name}"
-                    )
-            except Exception as e:
-                logger.error(f"AI content generation failed: {e}. Falling back to smart fallback generator.")
+            raw_keywords = data.get("seo_keywords") or data.get("keywords") or data.get("seoKeywords") or []
+            if not isinstance(raw_keywords, list):
+                raw_keywords = [str(raw_keywords)] if raw_keywords else []
+            seo_keywords = [str(k).strip() for k in raw_keywords if k]
 
-        # Smart fallback generator when API client is not configured or fails
-        return self._smart_fallback_generation(brand, request)
+            image_prompt = str(
+                data.get("image_prompt") or data.get("imagePrompt") or data.get("visual_prompt") or ""
+            ).strip()
+
+            missing_fields = []
+            if not caption:
+                missing_fields.append("caption")
+            if not hashtags:
+                missing_fields.append("hashtags")
+            if not cta:
+                missing_fields.append("cta")
+
+            if missing_fields:
+                logger.error(f"AI fallback reason: missing required fields in parsed JSON | missing={missing_fields}")
+                return self._smart_fallback_generation(brand, request)
+
+            logger.info("AI response validation succeeded. Returning real model response.")
+            return AIGenerateResponse(
+                caption=caption,
+                hashtags=hashtags,
+                cta=cta,
+                seo_keywords=seo_keywords,
+                image_prompt=image_prompt or f"A high-quality visual representation of {request.topic} for {brand_name}"
+            )
+
+        except Exception as e:
+            logger.exception(f"AI content generation provider exception: type={type(e).__name__} | message={e}")
+            return self._smart_fallback_generation(brand, request)
 
     def _smart_fallback_generation(self, brand: BrandProfile, request: AIGenerateRequest) -> AIGenerateResponse:
         """
