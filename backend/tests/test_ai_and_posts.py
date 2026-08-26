@@ -166,3 +166,102 @@ def test_extract_and_parse_json_and_hashtag_normalization():
     norm = normalize_hashtags(tags)
     assert norm == ["#Marketing", "#GrowthHacking", "#AI_Tool"]
 
+
+def test_mock_ai_provider_success():
+    import json
+    from unittest.mock import MagicMock, patch
+    from app.schemas.ai import AIGenerateRequest
+    from app.models.brand import BrandProfile
+    from app.services.ai_service import AIService
+
+    service = AIService()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = json.dumps({
+        "caption": "Custom AI Model Generated Caption ✨",
+        "hashtags": ["#AIModel", "#Success"],
+        "cta": "Click now to learn more!",
+        "seo_keywords": ["ai", "model"],
+        "image_prompt": "An abstract 3D visual of success"
+    })
+    mock_response.choices = [mock_choice]
+    mock_client.chat.completions.create.return_value = mock_response
+
+    brand = BrandProfile(id=1, name="Test Brand")
+    req = AIGenerateRequest(brand_id=1, topic="Test Topic", campaign_goal="Awareness", platform="instagram")
+
+    with patch.object(service, '_get_client', return_value=mock_client), \
+         patch.object(service, '_smart_fallback_generation') as mock_fallback:
+        res = service.generate_content(brand, req)
+        
+        assert res.caption == "Custom AI Model Generated Caption ✨"
+        assert res.hashtags == ["#AIModel", "#Success"]
+        assert res.cta == "Click now to learn more!"
+        assert res.seo_keywords == ["ai", "model"]
+        assert res.image_prompt == "An abstract 3D visual of success"
+        mock_fallback.assert_not_called()
+
+
+def test_mock_ai_provider_malformed_json_triggers_fallback():
+    from unittest.mock import MagicMock, patch
+    from app.schemas.ai import AIGenerateRequest
+    from app.models.brand import BrandProfile
+    from app.services.ai_service import AIService
+
+    service = AIService()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = "INVALID_NON_JSON_CONTENT"
+    mock_response.choices = [mock_choice]
+    mock_client.chat.completions.create.return_value = mock_response
+
+    brand = BrandProfile(id=1, name="Test Brand")
+    req = AIGenerateRequest(brand_id=1, topic="Test Topic")
+
+    with patch.object(service, '_get_client', return_value=mock_client):
+        res = service.generate_content(brand, req)
+        assert res.caption is not None
+
+
+def test_mock_ai_provider_empty_response_triggers_fallback():
+    from unittest.mock import MagicMock, patch
+    from app.schemas.ai import AIGenerateRequest
+    from app.models.brand import BrandProfile
+    from app.services.ai_service import AIService
+
+    service = AIService()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = ""
+    mock_response.choices = [mock_choice]
+    mock_client.chat.completions.create.return_value = mock_response
+
+    brand = BrandProfile(id=1, name="Test Brand")
+    req = AIGenerateRequest(brand_id=1, topic="Test Topic")
+
+    with patch.object(service, '_get_client', return_value=mock_client):
+        res = service.generate_content(brand, req)
+        assert res.caption is not None
+
+
+def test_mock_ai_provider_exception_triggers_fallback():
+    from unittest.mock import MagicMock, patch
+    from app.schemas.ai import AIGenerateRequest
+    from app.models.brand import BrandProfile
+    from app.services.ai_service import AIService
+
+    service = AIService()
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError("Provider API Error 500")
+
+    brand = BrandProfile(id=1, name="Test Brand")
+    req = AIGenerateRequest(brand_id=1, topic="Test Topic")
+
+    with patch.object(service, '_get_client', return_value=mock_client):
+        res = service.generate_content(brand, req)
+        assert res.caption is not None
+
+
