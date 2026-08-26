@@ -660,6 +660,10 @@ export default function AIStudioPage() {
   };
 
   const handlePublishNow = async () => {
+    if (selectedAccountIds.length === 0) {
+      setStatusNotification('⚠️ Please select at least one account to publish.');
+      return;
+    }
     setIsPublishing(true);
     setStatusNotification(null);
     const isVideo = imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.endsWith('.webm') || imageUrl.endsWith('.m4v') || imageUrl.startsWith('data:video/'));
