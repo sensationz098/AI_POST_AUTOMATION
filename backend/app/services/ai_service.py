@@ -208,8 +208,7 @@ class AIService:
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.7
+                ]
             )
             logger.info("AI provider API request succeeded.")
 
