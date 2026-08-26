@@ -548,6 +548,7 @@ export default function AIStudioPage() {
         topic,
         campaign_goal: campaignGoal,
         custom_instructions: customInstructions,
+        platform: previewPlatform,
       });
       const data = res.data;
       setCaption(data.caption);
@@ -1058,6 +1059,13 @@ export default function AIStudioPage() {
                     <option>Educational / Thought Leadership</option>
                   </select>
                 </div>
+                <input
+                  type="text"
+                  value={customInstructions}
+                  onChange={(e) => setCustomInstructions(e.target.value)}
+                  placeholder="Optional custom instructions (e.g. 'Short & witty', 'No emojis', 'Focus on feature X')..."
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
                 <button
                   onClick={handleGenerateContent}
                   disabled={isGeneratingContent || !topic}

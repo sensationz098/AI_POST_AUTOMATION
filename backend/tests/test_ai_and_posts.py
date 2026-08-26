@@ -66,3 +66,103 @@ def test_ai_generation_and_post_lifecycle(client):
     assert res_pub.status_code == 200
     assert res_pub.json()["status"] == "PUBLISHED"
     assert res_pub.json()["fb_post_id"] is not None
+
+
+def test_improved_ai_content_generation_scenarios(client):
+    headers, brand_id = get_auth_token_and_brand(client)
+
+    # 1. Product promo + Instagram
+    res1 = client.post("/api/v1/ai/generate-content", json={
+        "brand_id": brand_id,
+        "topic": "Wireless Noise Canceling Headphones",
+        "campaign_goal": "Product Promotion",
+        "platform": "instagram"
+    }, headers=headers)
+    assert res1.status_code == 200
+    d1 = res1.json()
+    assert d1["caption"] and len(d1["hashtags"]) > 0 and d1["cta"] and d1["seo_keywords"] and d1["image_prompt"]
+    assert all(tag.startswith("#") and " " not in tag for tag in d1["hashtags"])
+
+    # 2. Educational + Facebook
+    res2 = client.post("/api/v1/ai/generate-content", json={
+        "brand_id": brand_id,
+        "topic": "5 Essential Cybersecurity Habits for Small Businesses",
+        "campaign_goal": "Educational",
+        "platform": "facebook"
+    }, headers=headers)
+    assert res2.status_code == 200
+    d2 = res2.json()
+    assert d2["caption"] and d2["cta"]
+
+    # 3. Brand Awareness + All
+    res3 = client.post("/api/v1/ai/generate-content", json={
+        "brand_id": brand_id,
+        "topic": "Our 10-Year Journey in Cloud Innovation",
+        "campaign_goal": "Brand Awareness",
+        "platform": "all"
+    }, headers=headers)
+    assert res3.status_code == 200
+    d3 = res3.json()
+    assert d3["caption"] and d3["image_prompt"]
+
+    # 4. Engagement Post
+    res4 = client.post("/api/v1/ai/generate-content", json={
+        "brand_id": brand_id,
+        "topic": "Tabs vs Spaces: The Ultimate Developer Debate",
+        "campaign_goal": "Engagement",
+        "platform": "facebook"
+    }, headers=headers)
+    assert res4.status_code == 200
+
+    # 5. Lead Generation + Custom Instructions
+    res5 = client.post("/api/v1/ai/generate-content", json={
+        "brand_id": brand_id,
+        "topic": "Free E-Book: Scaling SaaS Infrastructure in 2026",
+        "campaign_goal": "Lead Generation",
+        "platform": "instagram",
+        "custom_instructions": "Make it short, urgent, and do not use emojis"
+    }, headers=headers)
+    assert res5.status_code == 200
+    d5 = res5.json()
+    assert d5["caption"] and d5["cta"]
+
+
+def test_ai_generation_missing_brand_fields(client):
+    # Create brand with minimal fields
+    email = f"minimalbrand_{datetime.utcnow().timestamp()}@socialai.com"
+    client.post("/api/v1/auth/register", json={"email": email, "password": "Password123!", "full_name": "Min Brand", "role": "Admin"})
+    login_res = client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    brand_res = client.post("/api/v1/brands/", json={"name": "Minimalist Co"}, headers=headers)
+    brand_id = brand_res.json()["id"]
+
+    res = client.post("/api/v1/ai/generate-content", json={
+        "brand_id": brand_id,
+        "topic": "Organic Green Tea Launch",
+        "campaign_goal": "Traffic"
+    }, headers=headers)
+    assert res.status_code == 200
+    d = res.json()
+    assert d["caption"] and d["cta"] and len(d["hashtags"]) > 0
+
+
+def test_extract_and_parse_json_and_hashtag_normalization():
+    from app.services.ai_service import extract_and_parse_json, normalize_hashtags
+
+    # Markdown code fence JSON
+    raw_markdown = "Here is your response:\n```json\n{\"caption\": \"Test copy\", \"hashtags\": [\"#Tag1\"], \"cta\": \"Click here\", \"seo_keywords\": [\"seo\"], \"image_prompt\": \"Prompt\"}\n```"
+    parsed = extract_and_parse_json(raw_markdown)
+    assert parsed["caption"] == "Test copy"
+
+    # Raw JSON
+    raw_json = '{"caption": "Raw JSON copy"}'
+    parsed2 = extract_and_parse_json(raw_json)
+    assert parsed2["caption"] == "Raw JSON copy"
+
+    # Hashtag normalization
+    tags = ["#Marketing ", "  #marketing", "Growth Hacking!", "#AI_Tool", 123, ""]
+    norm = normalize_hashtags(tags)
+    assert norm == ["#Marketing", "#GrowthHacking", "#AI_Tool"]
+
