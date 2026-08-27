@@ -12,6 +12,9 @@ class PostCreate(BaseModel):
     image_prompt: Optional[str] = None
     image_url: Optional[str] = None
     media_type: Optional[str] = Field(default=None, description="'image' or 'video'")
+    thumbnail_url: Optional[str] = None
+    thumbnail_type: Optional[str] = Field(default="NONE", description="'NONE', 'FRAME', or 'CUSTOM'")
+    thumbnail_offset_ms: Optional[int] = None
     platforms: List[str] = Field(default_factory=lambda: ["facebook", "instagram"])
     status: Optional[str] = "DRAFT"
     scheduled_at: Optional[datetime] = None
@@ -24,6 +27,9 @@ class PostUpdate(BaseModel):
     seo_keywords: Optional[List[str]] = None
     image_url: Optional[str] = None
     media_type: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    thumbnail_type: Optional[str] = None
+    thumbnail_offset_ms: Optional[int] = None
     platforms: Optional[List[str]] = None
     status: Optional[str] = None
     scheduled_at: Optional[datetime] = None
@@ -43,6 +49,9 @@ class PostResponse(BaseModel):
     image_prompt: Optional[str]
     image_url: Optional[str]
     media_type: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    thumbnail_type: Optional[str] = "NONE"
+    thumbnail_offset_ms: Optional[int] = None
     platforms: List[str]
     status: str
     scheduled_at: Optional[datetime]
