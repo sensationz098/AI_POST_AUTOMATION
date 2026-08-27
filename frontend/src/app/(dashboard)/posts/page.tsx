@@ -10,7 +10,10 @@ import {
   AlertTriangle, 
   FileEdit,
   Plus,
-  Filter
+  Filter,
+  Trash2,
+  Loader2,
+  X
 } from 'lucide-react';
 import { PostStatusBadge } from '@/components/PostStatusBadge';
 import { SocialPost } from '@/lib/types';
@@ -95,6 +98,15 @@ export default function PostSchedulerPage() {
   const [posts, setPosts] = useState<SocialPost[]>(samplePosts);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
+  // Deletion UI State
+  const [deletingPostId, setDeletingPostId] = useState<number | null>(null);
+  const [confirmDeletePost, setConfirmDeletePost] = useState<SocialPost | null>(null);
+  const [deleteStatusMessage, setDeleteStatusMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+    details?: any[];
+  } | null>(null);
+
   useEffect(() => {
     async function fetchPosts() {
       let localQueue: SocialPost[] = [];
@@ -142,6 +154,50 @@ export default function PostSchedulerPage() {
     );
   };
 
+  const handleDeletePost = async (postId: number) => {
+    setDeletingPostId(postId);
+    setDeleteStatusMessage(null);
+    try {
+      const res = await apiClient.delete(`/posts/${postId}`);
+      const data = res.data;
+
+      if (data && data.success === true) {
+        // Successful deletion across all targets
+        setPosts((prev) => prev.filter((p) => p.id !== postId));
+
+        // Remove from local storage queue if present
+        try {
+          const stored = localStorage.getItem('local_posts_queue');
+          if (stored) {
+            const queue: SocialPost[] = JSON.parse(stored);
+            const updatedQueue = queue.filter((p) => p.id !== postId);
+            localStorage.setItem('local_posts_queue', JSON.stringify(updatedQueue));
+          }
+        } catch {}
+
+        setDeleteStatusMessage({
+          type: 'success',
+          text: data.message || 'Post and external targets deleted successfully.',
+        });
+        setConfirmDeletePost(null);
+      } else {
+        // Partial or total failure - DO NOT remove local post from list
+        setDeleteStatusMessage({
+          type: 'error',
+          text: data?.message || 'Deletion failed for one or more external targets.',
+          details: data?.details || [],
+        });
+      }
+    } catch (e: any) {
+      const errorMsg = e.response?.data?.detail || e.message || 'Failed to delete post.';
+      setDeleteStatusMessage({
+        type: 'error',
+        text: `Deletion request failed: ${errorMsg}`,
+      });
+    } finally {
+      setDeletingPostId(null);
+    }
+  };
 
   const userTimeZone = typeof window !== 'undefined'
     ? Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -189,6 +245,22 @@ export default function PostSchedulerPage() {
           <span>+ Create Post</span>
         </Link>
       </div>
+
+      {/* Global Success / Deletion Message Banner */}
+      {deleteStatusMessage && deleteStatusMessage.type === 'success' && (
+        <div className="p-3 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-emerald-200 text-xs flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <CheckCircle className="w-4 h-4 text-emerald-400" />
+            <span>{deleteStatusMessage.text}</span>
+          </div>
+          <button
+            onClick={() => setDeleteStatusMessage(null)}
+            className="text-emerald-400 hover:text-emerald-200 transition"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex items-center space-x-1.5 overflow-x-auto pb-1">
@@ -281,25 +353,42 @@ export default function PostSchedulerPage() {
                     )}
                   </td>
                   <td className="p-3 text-right">
-                    {post.status === 'FAILED' ? (
+                    <div className="flex items-center justify-end space-x-1.5">
+                      {post.status === 'FAILED' ? (
+                        <button
+                          onClick={() => handleRetry(post.id)}
+                          className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          <span>Retry</span>
+                        </button>
+                      ) : post.status === 'APPROVED' ? (
+                        <button
+                          onClick={() => handleRetry(post.id)}
+                          className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+                        >
+                          <Send className="w-3 h-3" />
+                          <span>Publish Now</span>
+                        </button>
+                      ) : null}
+
                       <button
-                        onClick={() => handleRetry(post.id)}
-                        className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-semibold text-[10px] transition flex items-center space-x-1 ml-auto focus-ring"
+                        disabled={deletingPostId === post.id}
+                        onClick={() => {
+                          setDeleteStatusMessage(null);
+                          setConfirmDeletePost(post);
+                        }}
+                        className="px-2 py-1 rounded bg-slate-900 hover:bg-rose-950/60 border border-slate-800 hover:border-rose-800/60 text-slate-400 hover:text-rose-300 font-semibold text-[10px] transition flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Delete post"
                       >
-                        <RefreshCw className="w-3 h-3" />
-                        <span>Retry</span>
+                        {deletingPostId === post.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                        ) : (
+                          <Trash2 className="w-3 h-3" />
+                        )}
+                        <span>Delete</span>
                       </button>
-                    ) : post.status === 'APPROVED' ? (
-                      <button
-                        onClick={() => handleRetry(post.id)}
-                        className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[10px] transition flex items-center space-x-1 ml-auto focus-ring"
-                      >
-                        <Send className="w-3 h-3" />
-                        <span>Publish Now</span>
-                      </button>
-                    ) : (
-                      <span className="text-slate-500 text-[10px] font-mono">Ready</span>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -307,6 +396,102 @@ export default function PostSchedulerPage() {
           </table>
         </div>
       </div>
+
+      {/* Confirmation & Deletion Dialog Modal */}
+      {confirmDeletePost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-2 text-rose-400">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                <h3 className="text-sm font-bold text-slate-100">
+                  Delete Post #{confirmDeletePost.id}
+                </h3>
+              </div>
+              <button
+                disabled={deletingPostId !== null}
+                onClick={() => setConfirmDeletePost(null)}
+                className="text-slate-500 hover:text-slate-300 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-300">
+              <p className="font-medium text-slate-200">
+                Are you sure you want to delete this post?
+              </p>
+
+              {confirmDeletePost.status === 'PUBLISHED' && (
+                <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800/50 text-rose-200 space-y-1 text-[11px]">
+                  <p className="font-bold flex items-center space-x-1 text-rose-300">
+                    <span>⚠️ External Platform Removal Warning</span>
+                  </p>
+                  <p>
+                    This post has been published. Deleting it will attempt to remove the published media directly from connected social platforms (Facebook / Instagram), not merely from this database.
+                  </p>
+                  {confirmDeletePost.platforms && confirmDeletePost.platforms.length > 1 && (
+                    <p className="font-semibold text-rose-300 mt-1">
+                      Target platforms: {confirmDeletePost.platforms.join(', ')}. All applicable published targets will be attempted.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {confirmDeletePost.status === 'SCHEDULED' && (
+                <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-800/50 text-amber-200 text-[11px]">
+                  <span>🕒 Deleting this post will safely cancel its scheduled execution and remove it.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Error / Status message inside modal */}
+            {deleteStatusMessage && deleteStatusMessage.type === 'error' && (
+              <div className="p-3 rounded-lg bg-rose-950/50 border border-rose-800/80 text-rose-200 text-[11px] space-y-1">
+                <p className="font-bold text-rose-300">{deleteStatusMessage.text}</p>
+                {deleteStatusMessage.details && deleteStatusMessage.details.length > 0 && (
+                  <ul className="list-disc pl-4 space-y-0.5 text-[10px]">
+                    {deleteStatusMessage.details.map((d: any, idx: number) => (
+                      <li key={idx}>
+                        {d.platform} ({d.external_post_id}): {d.error || (d.success ? 'Deleted' : 'Failed')}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                disabled={deletingPostId !== null}
+                onClick={() => setConfirmDeletePost(null)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingPostId !== null}
+                onClick={() => handleDeletePost(confirmDeletePost.id)}
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition flex items-center space-x-1.5 shadow-md shadow-rose-900/40 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deletingPostId === confirmDeletePost.id ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting External & Local...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

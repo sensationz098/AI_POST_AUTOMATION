@@ -417,4 +417,216 @@ class PostService:
                 pass
             return []
 
+    def delete_post(self, db: Session, post_id: int, user_id: int) -> dict:
+        """
+        Safely delete a post by ID.
+        - Verifies user ownership (returns 404 if post not found or owned by another user).
+        - For scheduled posts: cancels scheduled execution safely, then deletes.
+        - For published posts: finds all associated PublishingJob / external post records,
+          attempts external Meta Graph API deletion for each published target, and handles partial failures.
+        - If all external deletions succeed: removes local post and associated records.
+        - If any external deletion fails: retains local post and returns partial failure details.
+        """
+        from app.models.publishing_batch import PublishingBatch, PublishingJob, JobStatus
+        from app.models.social_account import SocialAccount
+        from app.core.security_encryption import decrypt_token
+
+        post = post_repo.get(db, post_id)
+        if not post or post.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Post not found or access denied"
+            )
+
+        # 1. Gather all external targets for this post
+        targets = []
+        target_keys = set()  # (platform, external_post_id)
+
+        # Find PublishingBatch records for this post
+        batches = db.query(PublishingBatch).filter(PublishingBatch.post_id == post.id).all()
+        batch_ids = [b.id for b in batches]
+
+        if batch_ids:
+            jobs = db.query(PublishingJob).filter(
+                PublishingJob.batch_id.in_(batch_ids),
+                PublishingJob.status == JobStatus.SUCCESS.value,
+                PublishingJob.external_post_id.isnot(None)
+            ).all()
+            for job in jobs:
+                key = (job.platform, job.external_post_id)
+                if key not in target_keys:
+                    target_keys.add(key)
+                    targets.append({
+                        "platform": job.platform,
+                        "social_account_id": job.social_account_id,
+                        "external_post_id": job.external_post_id,
+                        "job": job
+                    })
+
+        # Also check post fields fb_post_id and ig_media_id if not already covered by jobs
+        if post.fb_post_id:
+            key = ("facebook", post.fb_post_id)
+            if key not in target_keys:
+                user_accs = db.query(SocialAccount).filter(
+                    SocialAccount.user_id == user_id,
+                    SocialAccount.platform == "facebook"
+                ).all()
+                fb_acc = next((a for a in user_accs if a.brand_id == post.brand_id), None) or (user_accs[0] if user_accs else None)
+                target_keys.add(key)
+                targets.append({
+                    "platform": "facebook",
+                    "social_account_id": fb_acc.id if fb_acc else None,
+                    "external_post_id": post.fb_post_id,
+                    "job": None
+                })
+
+        if post.ig_media_id:
+            key = ("instagram", post.ig_media_id)
+            if key not in target_keys:
+                user_accs = db.query(SocialAccount).filter(
+                    SocialAccount.user_id == user_id,
+                    SocialAccount.platform == "instagram"
+                ).all()
+                ig_acc = next((a for a in user_accs if a.brand_id == post.brand_id), None) or (user_accs[0] if user_accs else None)
+                target_keys.add(key)
+                targets.append({
+                    "platform": "instagram",
+                    "social_account_id": ig_acc.id if ig_acc else None,
+                    "external_post_id": post.ig_media_id,
+                    "job": None
+                })
+
+        # 2. If scheduled, cancel scheduled state before proceeding
+        if post.status == PostStatus.SCHEDULED.value:
+            logger.info(f"[DELETE_TRACE] Cancelling scheduled post ID={post.id}")
+            post.scheduled_at = None
+            post.status = PostStatus.DRAFT.value
+            db.commit()
+
+        # 3. Attempt external deletion for all targets
+        details = []
+        deleted_count = 0
+        failed_count = 0
+
+        for t in targets:
+            platform = t["platform"]
+            ext_id = t["external_post_id"]
+            acc_id = t["social_account_id"]
+
+            soc_acc = db.query(SocialAccount).filter(SocialAccount.id == acc_id).first() if acc_id else None
+            account_name = soc_acc.account_name if soc_acc else None
+
+            if not soc_acc or not soc_acc.access_token:
+                err_msg = "Social account not found or access token unavailable"
+                logger.error(f"[DELETE_TRACE] Target deletion failed for {platform} {ext_id}: {err_msg}")
+                failed_count += 1
+                details.append({
+                    "platform": platform,
+                    "account_id": soc_acc.account_id if soc_acc else (str(acc_id) if acc_id else None),
+                    "account_name": account_name,
+                    "external_post_id": ext_id,
+                    "success": False,
+                    "error": err_msg
+                })
+                continue
+
+            raw_token = decrypt_token(soc_acc.access_token)
+            if not raw_token:
+                err_msg = "Failed to decrypt social account access token"
+                logger.error(f"[DELETE_TRACE] Target deletion failed for {platform} {ext_id}: {err_msg}")
+                failed_count += 1
+                details.append({
+                    "platform": platform,
+                    "account_id": soc_acc.account_id,
+                    "account_name": account_name,
+                    "external_post_id": ext_id,
+                    "success": False,
+                    "error": err_msg
+                })
+                continue
+
+            try:
+                if platform == "facebook":
+                    res = meta_service.delete_facebook_post(ext_id, raw_token)
+                elif platform == "instagram":
+                    res = meta_service.delete_instagram_media(ext_id, raw_token)
+                else:
+                    raise Exception(f"Unsupported platform: {platform}")
+
+                deleted_count += 1
+                details.append({
+                    "platform": platform,
+                    "account_id": soc_acc.account_id,
+                    "account_name": account_name,
+                    "external_post_id": ext_id,
+                    "success": True,
+                    "error": None
+                })
+            except Exception as delete_err:
+                err_str = str(delete_err)
+                logger.error(f"[DELETE_TRACE] External deletion error for {platform} target {ext_id}: {err_str}")
+                failed_count += 1
+                details.append({
+                    "platform": platform,
+                    "account_id": soc_acc.account_id,
+                    "account_name": account_name,
+                    "external_post_id": ext_id,
+                    "success": False,
+                    "error": err_str
+                })
+
+        # 4. Handle Deletion Outcome
+        if failed_count > 0:
+            # Partial or total external deletion failure: DO NOT delete local post
+            post.last_error = f"Deletion failed for {failed_count} external target(s)."
+            db.commit()
+
+            audit_repo.log(
+                db=db,
+                user_id=user_id,
+                action="POST_DELETE_FAILED",
+                resource_type="Post",
+                resource_id=post.id,
+                details={"deleted_targets": deleted_count, "failed_targets": failed_count, "target_details": details}
+            )
+
+            return {
+                "success": False,
+                "message": f"Failed to delete {failed_count} of {len(targets)} external target(s). Local post retained.",
+                "post_id": post_id,
+                "deleted_external_targets": deleted_count,
+                "failed_external_targets": failed_count,
+                "details": details
+            }
+
+        # All external targets succeeded (or no external targets existed)
+        # Delete local post and associated records safely
+        if hasattr(post, "analytics") and post.analytics:
+            db.delete(post.analytics)
+
+        for b in batches:
+            db.delete(b)
+
+        audit_repo.log(
+            db=db,
+            user_id=user_id,
+            action="POST_DELETED",
+            resource_type="Post",
+            resource_id=post_id,
+            details={"deleted_external_targets": deleted_count, "target_details": details}
+        )
+
+        db.delete(post)
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Post and external targets deleted successfully." if targets else "Post deleted successfully.",
+            "post_id": post_id,
+            "deleted_external_targets": deleted_count,
+            "failed_external_targets": 0,
+            "details": details
+        }
+
 post_service = PostService()
+

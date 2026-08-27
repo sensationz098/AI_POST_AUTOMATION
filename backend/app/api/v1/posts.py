@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, status, Query, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
-from app.schemas.post import PostCreate, PostUpdate, PostResponse, SchedulePostRequest
+from app.schemas.post import PostCreate, PostUpdate, PostResponse, SchedulePostRequest, PostDeleteResponse
 from app.schemas.social_account import MultiPublishRequest, PublishingBatchResponse
 from app.services.post_service import post_service
 from app.services.publisher_service import publishing_engine
@@ -348,4 +348,21 @@ def retry_failed_batch_jobs(
     )
 
     return publishing_repo.get_batch(db, batch.id)
+
+
+@router.delete("/{post_id}", response_model=PostDeleteResponse)
+def delete_post(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Safely delete a post by ID.
+    - Ownership is verified (returns 404 if not found or unauthorized).
+    - For scheduled posts: cancels scheduled execution safely.
+    - For published posts: attempts external Meta Graph API deletion for all targets.
+    - Handles partial failure safely without removing local post if external deletion fails.
+    """
+    return post_service.delete_post(db, post_id, current_user.id)
+
 
