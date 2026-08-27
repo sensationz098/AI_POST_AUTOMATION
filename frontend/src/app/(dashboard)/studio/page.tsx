@@ -171,19 +171,7 @@ export default function AIStudioPage() {
 
   // Brand Profiles state
   const [brands, setBrands] = useState<BrandProfile[]>([]);
-  const [selectedBrand, setSelectedBrand] = useState<BrandProfile>({
-    id: 1,
-    name: 'Apex Innovations',
-    logo_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80',
-    brand_colors: ['#6366F1', '#06B6D4'],
-    tone_of_voice: 'Professional, Energetic & Visionary',
-    target_audience: 'Tech-savvy entrepreneurs, developers & agency leads',
-    cta_style: 'Urgency-driven & Value focused',
-    industry: 'AI & Software',
-    user_id: 1,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  });
+  const [selectedBrand, setSelectedBrand] = useState<BrandProfile | null>(null);
 
   // Fetch brand profiles from backend and merge Meta account data
   useEffect(() => {
@@ -216,7 +204,7 @@ export default function AIStudioPage() {
 
       if (metaAccountLocal && metaAccountLocal.is_connected) {
         const defaultMeta = metaAccountLocal;
-        const metaName = defaultMeta.facebook_page_name || 'Apex Innovations';
+        const metaName = defaultMeta.facebook_page_name || 'SocialAI Workspace';
         const metaLogo = (defaultMeta as any).logo_url || (defaultMeta.facebook_page_id ? `https://graph.facebook.com/v19.0/${defaultMeta.facebook_page_id}/picture?type=large` : 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80');
 
         const fallbackBrand: BrandProfile = {
@@ -542,8 +530,10 @@ export default function AIStudioPage() {
     setStatusNotification(null);
     try {
       const promptText = topic.trim();
+      const currentBrandName = selectedBrand?.name || 'SocialAI';
+      const currentAudience = selectedBrand?.target_audience || 'our community';
       const res = await apiClient.post('/ai/generate-content', {
-        brand_id: selectedBrand.id,
+        brand_id: selectedBrand?.id || 1,
         topic: promptText,
         campaign_goal: campaignGoal,
         custom_instructions: promptText,
@@ -557,17 +547,18 @@ export default function AIStudioPage() {
       setImagePrompt(data.image_prompt || '');
       setStatusNotification('AI Content generated successfully!');
     } catch (e) {
+      const fallbackName = selectedBrand?.name || 'SocialAI';
       setCaption(
-        `🚀 Elevate your social presence with ${selectedBrand.name}!\n\n` +
-        `We are thrilled to unveil our latest release around '${topic}'. Built specifically for ${selectedBrand.target_audience}, ` +
+        `🚀 Elevate your social presence with ${fallbackName}!\n\n` +
+        `We are thrilled to unveil our latest release around '${topic}'. Built specifically for ${selectedBrand?.target_audience || 'our community'}, ` +
         `this tool empowers teams to streamline content creation effortlessly.\n\n` +
         `✨ Why you'll love it:\n` +
         `• 10x faster AI caption & hashtag creation.\n` +
         `• Instant multi-platform posting to FB & IG.\n` +
         `• Real-time reach & engagement analytics.`
       );
-      setHashtags(['#AIAutomation', '#Growth', '#MetaAPI', `#${selectedBrand.name.replace(/\s+/g, '')}`]);
-      setCta(`👉 Link in bio to explore ${selectedBrand.name}!`);
+      setHashtags(['#AIAutomation', '#Growth', '#MetaAPI', `#${fallbackName.replace(/\s+/g, '')}`]);
+      setCta(`👉 Link in bio to explore ${fallbackName}!`);
       setStatusNotification('AI Content generated via Smart Engine!');
     } finally {
       setIsGeneratingContent(false);
@@ -607,7 +598,7 @@ export default function AIStudioPage() {
     const detectedMediaType = isVideo ? 'video' : 'image';
     try {
       await apiClient.post('/posts/', {
-        brand_id: selectedBrand.id,
+        brand_id: selectedBrand?.id || 1,
         title: topic,
         caption,
         hashtags,
@@ -638,7 +629,7 @@ export default function AIStudioPage() {
     try {
       // Create post with SCHEDULED status
       const postRes = await apiClient.post('/posts/', {
-        brand_id: selectedBrand.id,
+        brand_id: selectedBrand?.id || 1,
         title: topic,
         caption,
         hashtags,
@@ -811,7 +802,7 @@ export default function AIStudioPage() {
           <div className="flex items-center space-x-2 bg-slate-900/60 border border-slate-800 px-3 py-1 rounded">
             <span className="text-[10px] text-slate-400">Brand Persona:</span>
             <select
-              value={selectedBrand.id}
+              value={selectedBrand?.id || ''}
               onChange={(e) => {
                 const b = brands.find((x) => x.id === Number(e.target.value));
                 if (b) setSelectedBrand(b);

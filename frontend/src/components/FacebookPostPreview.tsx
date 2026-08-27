@@ -20,7 +20,9 @@ export const FacebookPostPreview: React.FC<Props> = ({
   imageUrl,
 }) => {
   const metaAcc = brand?.meta_account;
-  const brandName = metaAcc?.facebook_page_name || brand?.name || 'Apex Innovations';
+  const brandName = metaAcc?.facebook_page_name
+    || brand?.name
+    || (brand === null ? 'No account connected' : 'Loading...');
   const logoUrl =
     (metaAcc as any)?.logo_url ||
     (metaAcc?.facebook_page_id ? `https://graph.facebook.com/v19.0/${metaAcc.facebook_page_id}/picture?type=large` : null) ||
