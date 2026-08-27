@@ -58,3 +58,22 @@ class PostResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TargetDeleteDetail(BaseModel):
+    platform: str
+    account_id: Optional[str] = None
+    account_name: Optional[str] = None
+    external_post_id: str
+    success: bool
+    error: Optional[str] = None
+
+
+class PostDeleteResponse(BaseModel):
+    success: bool
+    message: str
+    post_id: int
+    deleted_external_targets: int = 0
+    failed_external_targets: int = 0
+    details: List[TargetDeleteDetail] = Field(default_factory=list)
+

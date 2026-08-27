@@ -508,4 +508,93 @@ class MetaGraphService:
             "instagram_accounts": ig_accounts
         }
 
+    def delete_facebook_post(self, external_post_id: str, access_token: str) -> Dict[str, Any]:
+        """Delete a Facebook post or video from Meta Graph API."""
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if is_mock_allowed and (not external_post_id or not access_token or external_post_id.startswith("mock") or external_post_id.startswith("fb_mock") or access_token.startswith("sandbox") or access_token.startswith("mock")):
+            logger.info(f"[FB_DELETE] Executing Sandbox Facebook Delete Simulation for object ID: {external_post_id}")
+            return {"success": True, "status": "deleted_sandbox"}
+
+        if not external_post_id or not access_token:
+            raise Exception("External Post ID and valid Access Token are required for Facebook deletion.")
+
+        try:
+            logger.info(f"[DELETE_TRACE] FACEBOOK_DELETE_STARTED | external_post_id={external_post_id}")
+            url = f"{self.BASE_URL}/{external_post_id}"
+            params = {"access_token": access_token}
+            response = requests.delete(url, params=params, timeout=20)
+            res_data = response.json()
+            logger.info(f"[DELETE_TRACE] FACEBOOK_DELETE_RESPONSE | external_post_id={external_post_id} | status_code={response.status_code}")
+
+            if response.status_code != 200:
+                err_dict = res_data.get("error", {})
+                error_msg = err_dict.get("message", "Facebook API Delete Error")
+                err_code = err_dict.get("code")
+                err_subcode = err_dict.get("error_subcode")
+
+                # Check for idempotent / already deleted object indication
+                msg_lower = error_msg.lower()
+                is_already_deleted = (
+                    err_code in [100, 10, 200, 210] and
+                    ("does not exist" in msg_lower or "unsupported delete" in msg_lower or "cannot be loaded" in msg_lower or "unknown path" in msg_lower)
+                ) or ("does not exist" in msg_lower or "not found" in msg_lower)
+
+                if is_already_deleted:
+                    logger.info(f"[DELETE_TRACE] FACEBOOK_DELETE_IDEMPOTENT | external_post_id={external_post_id} | message={error_msg}")
+                    return {"success": True, "already_deleted": True, "status": "already_deleted"}
+
+                logger.error(f"[DELETE_TRACE] FACEBOOK_DELETE_FAILED | external_post_id={external_post_id} | status_code={response.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={error_msg}")
+                raise Exception(f"Facebook Graph API Delete Error ({response.status_code}) [code={err_code}, subcode={err_subcode}]: {error_msg}")
+
+            logger.info(f"[DELETE_TRACE] FACEBOOK_DELETE_SUCCESS | external_post_id={external_post_id}")
+            return {"success": True, "status": "deleted"}
+        except Exception as e:
+            logger.error(f"[FB_DELETE] Meta Service Facebook delete error: {e}")
+            raise e
+
+    def delete_instagram_media(self, external_media_id: str, access_token: str) -> Dict[str, Any]:
+        """Delete an Instagram media post from Meta Graph API."""
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if is_mock_allowed and (not external_media_id or not access_token or external_media_id.startswith("mock") or external_media_id.startswith("ig_media_mock") or access_token.startswith("sandbox") or access_token.startswith("mock")):
+            logger.info(f"[IG_DELETE] Executing Sandbox Instagram Delete Simulation for media ID: {external_media_id}")
+            return {"success": True, "status": "deleted_sandbox"}
+
+        if not external_media_id or not access_token:
+            raise Exception("External Media ID and valid Access Token are required for Instagram deletion.")
+
+        try:
+            logger.info(f"[DELETE_TRACE] INSTAGRAM_DELETE_STARTED | external_media_id={external_media_id}")
+            url = f"{self.BASE_URL}/{external_media_id}"
+            params = {"access_token": access_token}
+            response = requests.delete(url, params=params, timeout=20)
+            res_data = response.json()
+            logger.info(f"[DELETE_TRACE] INSTAGRAM_DELETE_RESPONSE | external_media_id={external_media_id} | status_code={response.status_code}")
+
+            if response.status_code != 200:
+                err_dict = res_data.get("error", {})
+                error_msg = err_dict.get("message", "Instagram API Delete Error")
+                err_code = err_dict.get("code")
+                err_subcode = err_dict.get("error_subcode")
+
+                # Check for idempotent / already deleted object indication
+                msg_lower = error_msg.lower()
+                is_already_deleted = (
+                    err_code in [100, 10, 200, 210] and
+                    ("does not exist" in msg_lower or "unsupported delete" in msg_lower or "cannot be loaded" in msg_lower or "unknown path" in msg_lower)
+                ) or ("does not exist" in msg_lower or "not found" in msg_lower)
+
+                if is_already_deleted:
+                    logger.info(f"[DELETE_TRACE] INSTAGRAM_DELETE_IDEMPOTENT | external_media_id={external_media_id} | message={error_msg}")
+                    return {"success": True, "already_deleted": True, "status": "already_deleted"}
+
+                logger.error(f"[DELETE_TRACE] INSTAGRAM_DELETE_FAILED | external_media_id={external_media_id} | status_code={response.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={error_msg}")
+                raise Exception(f"Instagram Graph API Delete Error ({response.status_code}) [code={err_code}, subcode={err_subcode}]: {error_msg}")
+
+            logger.info(f"[DELETE_TRACE] INSTAGRAM_DELETE_SUCCESS | external_media_id={external_media_id}")
+            return {"success": True, "status": "deleted"}
+        except Exception as e:
+            logger.error(f"[IG_DELETE] Meta Service Instagram delete error: {e}")
+            raise e
+
 meta_service = MetaGraphService()
+
