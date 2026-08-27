@@ -65,7 +65,7 @@ export default function LoginPage() {
             <span>SocialAI Pro Automation</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-            Welcome Back
+            Welcome Back To Sensationz
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
             Sign in to manage multi-brand AI workflows & Meta Graph publishing
