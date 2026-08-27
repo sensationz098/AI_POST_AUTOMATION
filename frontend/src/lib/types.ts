@@ -35,6 +35,10 @@ export interface SocialPost {
   seo_keywords: string[];
   image_prompt?: string;
   image_url?: string;
+  media_type?: 'image' | 'video' | string;
+  thumbnail_url?: string;
+  thumbnail_type?: 'NONE' | 'FRAME' | 'CUSTOM' | string;
+  thumbnail_offset_ms?: number;
   platforms: ('facebook' | 'instagram')[];
   status: PostStatus;
   scheduled_at?: string;

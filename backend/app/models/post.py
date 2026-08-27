@@ -32,6 +32,10 @@ class Post(Base):
     image_url = Column(Text, nullable=True)
     media_type = Column(String(50), nullable=True)  # "image" or "video"
     
+    thumbnail_url = Column(Text, nullable=True)
+    thumbnail_type = Column(String(50), nullable=True, default="NONE")  # "NONE", "FRAME", "CUSTOM"
+    thumbnail_offset_ms = Column(Integer, nullable=True)
+
     platforms = Column(JSON, default=list)  # ["facebook", "instagram"]
     status = Column(String(50), default=PostStatus.DRAFT.value, index=True)
     

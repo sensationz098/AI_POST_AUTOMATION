@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Sparkles, 
@@ -22,7 +22,10 @@ import {
   CheckSquare,
   Square,
   AlertTriangle,
-  Share2
+  Share2,
+  Film,
+  Camera,
+  Upload
 } from 'lucide-react';
 import { FacebookPostPreview } from '@/components/FacebookPostPreview';
 import { InstagramPostPreview } from '@/components/InstagramPostPreview';
@@ -513,6 +516,71 @@ export default function AIStudioPage() {
   const [musicArtist, setMusicArtist] = useState('');
   const [isMusicSectionOpen, setIsMusicSectionOpen] = useState(false);
 
+  // Video Thumbnail State
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [thumbnailType, setThumbnailType] = useState<'NONE' | 'FRAME' | 'CUSTOM'>('NONE');
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [thumbnailOffsetMs, setThumbnailOffsetMs] = useState<number | null>(null);
+  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
+
+  const captureFrameFromVideo = async () => {
+    if (!videoRef.current) return;
+    setIsCapturingFrame(true);
+    try {
+      const vid = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = vid.videoWidth || 1280;
+      canvas.height = vid.videoHeight || 720;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        try {
+          const blob = await (await fetch(dataUrl)).blob();
+          const file = new File([blob], `frame_thumb_${Date.now()}.jpg`, { type: 'image/jpeg' });
+          const formData = new FormData();
+          formData.append('file', file);
+          const res = await apiClient.post('/posts/upload-media', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          if (res.data?.image_url) {
+            setThumbnailUrl(res.data.image_url);
+          } else {
+            setThumbnailUrl(dataUrl);
+          }
+        } catch {
+          setThumbnailUrl(dataUrl);
+        }
+        setThumbnailOffsetMs(Math.round(vid.currentTime * 1000));
+        setStatusNotification('📷 Frame captured and set as video thumbnail!');
+      }
+    } catch (e) {
+      console.error('Frame capture error:', e);
+      setStatusNotification('⚠️ Could not capture frame directly from cross-origin video.');
+    } finally {
+      setIsCapturingFrame(false);
+    }
+  };
+
+  const handleThumbnailImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await apiClient.post('/posts/upload-media', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (res.data?.image_url) {
+        setThumbnailUrl(res.data.image_url);
+        setThumbnailOffsetMs(null);
+        setStatusNotification('Custom thumbnail cover uploaded successfully!');
+      }
+    } catch (err) {
+      setStatusNotification('❌ Thumbnail upload failed.');
+    }
+  };
+
   const handleMusicFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -607,6 +675,9 @@ export default function AIStudioPage() {
         image_prompt: imagePrompt,
         image_url: imageUrl,
         media_type: detectedMediaType,
+        thumbnail_url: thumbnailType === 'NONE' ? null : thumbnailUrl,
+        thumbnail_type: thumbnailType,
+        thumbnail_offset_ms: thumbnailType === 'NONE' ? null : thumbnailOffsetMs,
         platforms: ['facebook', 'instagram'],
         status: 'DRAFT',
       });
@@ -638,6 +709,9 @@ export default function AIStudioPage() {
         image_prompt: imagePrompt,
         image_url: imageUrl,
         media_type: detectedMediaType,
+        thumbnail_url: thumbnailType === 'NONE' ? null : thumbnailUrl,
+        thumbnail_type: thumbnailType,
+        thumbnail_offset_ms: thumbnailType === 'NONE' ? null : thumbnailOffsetMs,
         platforms: ['facebook', 'instagram'],
         status: 'SCHEDULED',
         scheduled_at: new Date(scheduledDateTime).toISOString(),
@@ -688,6 +762,9 @@ export default function AIStudioPage() {
         image_prompt: imagePrompt,
         image_url: imageUrl,
         media_type: detectedMediaType,
+        thumbnail_url: thumbnailType === 'NONE' ? null : thumbnailUrl,
+        thumbnail_type: thumbnailType,
+        thumbnail_offset_ms: thumbnailType === 'NONE' ? null : thumbnailOffsetMs,
         platforms: ['facebook', 'instagram'],
         status: 'DRAFT',
       }, { timeout: PUBLISHING_TIMEOUT_MS });
@@ -909,6 +986,147 @@ export default function AIStudioPage() {
                   </div>
                 </div>
               </div>
+
+              {/* 🎬 Optional Video Thumbnail Control Card */}
+              {(uploadState.mediaType === 'video' || (imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.endsWith('.webm') || imageUrl.endsWith('.m4v') || imageUrl.startsWith('data:video/')))) && (
+                <div className="p-4 rounded-2xl border border-indigo-500/30 bg-slate-900/80 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <h3 className="text-xs font-bold text-white flex items-center space-x-2">
+                      <Film className="w-4 h-4 text-indigo-400" />
+                      <span>🎬 Video Thumbnail (Reel Cover)</span>
+                    </h3>
+                    <span className="text-[10px] text-slate-400 font-medium">Optional</span>
+                  </div>
+
+                  {/* Radio choices */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setThumbnailType('NONE');
+                        setThumbnailUrl(null);
+                        setThumbnailOffsetMs(null);
+                      }}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${
+                        thumbnailType === 'NONE'
+                          ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
+                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>○ Automatic</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setThumbnailType('FRAME')}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${
+                        thumbnailType === 'FRAME'
+                          ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
+                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>○ Choose frame</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setThumbnailType('CUSTOM')}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${
+                        thumbnailType === 'CUSTOM'
+                          ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
+                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>○ Upload custom</span>
+                    </button>
+                  </div>
+
+                  {/* OPTION 1: NO THUMBNAIL */}
+                  {thumbnailType === 'NONE' && (
+                    <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-center space-x-2">
+                      <span className="w-2 h-2 rounded-full bg-slate-500 flex-shrink-0" />
+                      <span>Default video frame will be automatically generated by Meta upon publishing.</span>
+                    </div>
+                  )}
+
+                  {/* OPTION 2: CHOOSE FRAME */}
+                  {thumbnailType === 'FRAME' && (
+                    <div className="space-y-3 p-3 bg-slate-950/60 rounded-xl border border-indigo-900/50">
+                      <div className="text-xs font-bold text-slate-200">Scrub video to select cover timestamp:</div>
+                      <div className="relative rounded-xl overflow-hidden bg-black border border-slate-800 aspect-video flex items-center justify-center">
+                        <video
+                          ref={videoRef}
+                          src={imageUrl}
+                          crossOrigin="anonymous"
+                          controls
+                          onTimeUpdate={() => {
+                            if (videoRef.current) {
+                              setThumbnailOffsetMs(Math.round(videoRef.current.currentTime * 1000));
+                            }
+                          }}
+                          className="max-h-56 w-full object-contain"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={captureFrameFromVideo}
+                          disabled={isCapturingFrame}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow transition flex items-center space-x-1.5 disabled:opacity-50"
+                        >
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>{isCapturingFrame ? 'Extracting & Uploading Frame...' : '📷 Capture Selected Frame'}</span>
+                        </button>
+                        {thumbnailOffsetMs !== null && (
+                          <span className="text-[11px] font-mono text-indigo-300 bg-indigo-950/80 border border-indigo-800/60 px-2.5 py-1 rounded-lg">
+                            Timestamp: {(thumbnailOffsetMs / 1000).toFixed(1)}s
+                          </span>
+                        )}
+                      </div>
+
+                      {thumbnailUrl && (
+                        <div className="pt-2 border-t border-slate-800 space-y-2">
+                          <span className="text-[11px] font-bold text-emerald-400 flex items-center space-x-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Selected Frame Image Preview:</span>
+                          </span>
+                          <div className="relative w-36 aspect-video rounded-xl overflow-hidden border border-emerald-500/40 shadow-lg">
+                            <img src={thumbnailUrl} alt="Frame Thumbnail Preview" className="w-full h-full object-cover" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* OPTION 3: UPLOAD CUSTOM THUMBNAIL */}
+                  {thumbnailType === 'CUSTOM' && (
+                    <div className="space-y-3 p-3 bg-slate-950/60 rounded-xl border border-indigo-900/50">
+                      <label className="flex items-center justify-center p-3 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl bg-slate-900/60 cursor-pointer transition text-center group">
+                        <Upload className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 mr-2" />
+                        <span className="text-xs font-bold text-slate-200">Select Custom Thumbnail Cover Image</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleThumbnailImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {thumbnailUrl && (
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-bold text-emerald-400 flex items-center space-x-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Custom Thumbnail Cover Preview:</span>
+                          </span>
+                          <div className="relative w-36 aspect-video rounded-xl overflow-hidden border border-emerald-500/40 shadow-lg">
+                            <img src={thumbnailUrl} alt="Custom Thumbnail Preview" className="w-full h-full object-cover" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Media Upload Progress UI Card */}
               {uploadState.stage !== 'IDLE' && (

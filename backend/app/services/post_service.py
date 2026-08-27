@@ -37,6 +37,15 @@ class PostService:
         )
         data["media_type"] = resolved_type
 
+        # Process thumbnail_url base64 upload if present
+        raw_thumb = data.get("thumbnail_url")
+        if raw_thumb and (raw_thumb.startswith("data:") or raw_thumb.startswith("blob:") or (";base64," in raw_thumb)):
+            logger.info(f"[MEDIA_TRACE] THUMBNAIL_BASE64_RECEIVED | source=data_url")
+            cdn_thumb = upload_media_to_cloudinary(raw_thumb, media_type="image")
+            if cdn_thumb:
+                data["thumbnail_url"] = cdn_thumb
+                logger.info(f"[MEDIA_TRACE] THUMBNAIL_CLOUDINARY_UPLOAD_SUCCESS | url={sanitize_url(cdn_thumb)}")
+
         if not raw_url:
             return data
 
@@ -282,6 +291,8 @@ class PostService:
         )
 
 
+        post_thumb_url = getattr(post, "thumbnail_url", None) if is_video else None
+
         is_sandbox_fb = False
         is_sandbox_ig = False
 
@@ -298,7 +309,8 @@ class PostService:
                             access_token=fb_token or "sandbox_token",
                             message=formatted_caption,
                             image_url=fb_media_url,
-                            is_video=is_video
+                            is_video=is_video,
+                            thumbnail_url=post_thumb_url
                         )
                         fb_id = res.get("id")
                         if not fb_id:
@@ -327,7 +339,8 @@ class PostService:
                             access_token=ig_token or "sandbox_token",
                             caption=formatted_caption,
                             image_url=ig_url,
-                            is_video=is_video
+                            is_video=is_video,
+                            thumbnail_url=post_thumb_url
                         )
                         post.ig_container_id = res.get("container_id")
                         published_ig_id = res.get("id")

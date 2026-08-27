@@ -10,7 +10,7 @@ class MetaGraphService:
     BASE_URL = f"https://graph.facebook.com/{settings.META_GRAPH_API_VERSION}"
 
     def publish_to_facebook_page(
-        self, page_id: str, access_token: str, message: str, image_url: Optional[str] = None, is_video: bool = False
+        self, page_id: str, access_token: str, message: str, image_url: Optional[str] = None, is_video: bool = False, thumbnail_url: Optional[str] = None
     ) -> Dict[str, Any]:
 
         """Publish a photo or video post to a Facebook Page via Meta Graph API."""
@@ -28,7 +28,7 @@ class MetaGraphService:
 
         try:
             is_video_media = is_video or (image_url and any(image_url.lower().endswith(ext) for ext in [".mp4", ".mov", ".webm", ".m4v"]))
-            logger.info(f"[PUBLISH_TRACE] FACEBOOK_PUBLISH_STARTED | page_id={page_id} | is_video={is_video_media} | media_url={sanitize_url(image_url)}")
+            logger.info(f"[PUBLISH_TRACE] FACEBOOK_PUBLISH_STARTED | page_id={page_id} | is_video={is_video_media} | media_url={sanitize_url(image_url)} | thumbnail_url={sanitize_url(thumbnail_url)}")
 
             if is_video_media and image_url:
                 url = f"{self.BASE_URL}/{page_id}/videos"
@@ -37,10 +37,22 @@ class MetaGraphService:
                     "description": message,
                     "access_token": access_token
                 }
+                files = None
+                if thumbnail_url:
+                    try:
+                        logger.info(f"[FB_PUBLISH] FETCHING_THUMBNAIL_BYTES | url={sanitize_url(thumbnail_url)}")
+                        t_res = requests.get(thumbnail_url, timeout=10)
+                        if t_res.status_code == 200:
+                            c_type = t_res.headers.get("Content-Type", "image/jpeg")
+                            files = {"thumb": ("thumbnail.jpg", t_res.content, c_type)}
+                            logger.info(f"[FB_PUBLISH] THUMBNAIL_BYTES_ATTACHED | size_bytes={len(t_res.content)}")
+                    except Exception as t_err:
+                        logger.warning(f"[FB_PUBLISH] Failed to fetch thumbnail_url for FB video upload: {t_err}")
+
                 video_timeout = settings.META_VIDEO_UPLOAD_TIMEOUT_SECONDS
                 logger.info(f"[FB_PUBLISH] VIDEO_UPLOAD_STARTED | page_id={page_id} | video_url={sanitize_url(image_url)} | timeout={video_timeout}s")
                 try:
-                    response = requests.post(url, data=payload, timeout=video_timeout)
+                    response = requests.post(url, data=payload, files=files, timeout=video_timeout)
                 except requests.exceptions.Timeout:
                     logger.error(f"[FB_PUBLISH] VIDEO_UPLOAD_TIMEOUT | page_id={page_id} | timeout={video_timeout}s")
                     raise Exception(f"Facebook video upload network HTTP timeout after {video_timeout} seconds.")
@@ -101,7 +113,7 @@ class MetaGraphService:
             raise e
 
     def publish_to_instagram_business(
-        self, ig_user_id: str, access_token: str, caption: str, image_url: str, is_video: bool = False
+        self, ig_user_id: str, access_token: str, caption: str, image_url: str, is_video: bool = False, thumbnail_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Publish Photo or Video Reel to Instagram Business Account via 2-Step Container Graph API flow:
@@ -124,7 +136,7 @@ class MetaGraphService:
         try:
             container_url = f"{self.BASE_URL}/{ig_user_id}/media"
             is_video_media = is_video or (image_url and any(image_url.lower().endswith(ext) for ext in [".mp4", ".mov", ".webm", ".m4v"]))
-            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_STARTED | ig_user_id={ig_user_id} | is_video={is_video_media} | media_url={sanitize_url(image_url)}")
+            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_STARTED | ig_user_id={ig_user_id} | is_video={is_video_media} | media_url={sanitize_url(image_url)} | thumbnail_url={sanitize_url(thumbnail_url)}")
 
             if is_video_media:
                 container_payload = {
@@ -133,6 +145,9 @@ class MetaGraphService:
                     "caption": caption,
                     "access_token": access_token
                 }
+                if thumbnail_url:
+                    container_payload["cover_url"] = thumbnail_url
+                    logger.info(f"[IG_PUBLISH] REEL_COVER_URL_ATTACHED | cover_url={sanitize_url(thumbnail_url)}")
                 logger.info(f"[IG_PUBLISH] VIDEO_UPLOAD_STARTED | ig_user_id={ig_user_id} | video_url={sanitize_url(image_url)}")
             else:
                 container_payload = {

@@ -37,8 +37,8 @@ def classify_error(err_str: str) -> tuple[str, str]:
     return "PLATFORM_ERROR", f"Meta Graph API error: {err_str[:200]}"
 
 class FacebookPublisher:
-    def publish(self, account: SocialAccount, caption: str, public_media_url: Optional[str], is_video: bool) -> str:
-        logger.info(f"[PUBLISH_TRACE] META_SERVICE_ENTERED | platform=facebook | account_id={account.account_id} | is_video={is_video}")
+    def publish(self, account: SocialAccount, caption: str, public_media_url: Optional[str], is_video: bool, thumbnail_url: Optional[str] = None) -> str:
+        logger.info(f"[PUBLISH_TRACE] META_SERVICE_ENTERED | platform=facebook | account_id={account.account_id} | is_video={is_video} | thumbnail_url={sanitize_url(thumbnail_url)}")
         final_url = public_media_url
         if is_video:
             if not final_url or final_url.startswith("blob:") or final_url.startswith("data:") or not (final_url.startswith("http://") or final_url.startswith("https://")):
@@ -58,7 +58,8 @@ class FacebookPublisher:
             access_token=token,
             message=caption,
             image_url=final_url,
-            is_video=is_video
+            is_video=is_video,
+            thumbnail_url=thumbnail_url
         )
         post_id = res.get("id")
         if not post_id:
@@ -66,8 +67,8 @@ class FacebookPublisher:
         return str(post_id)
 
 class InstagramPublisher:
-    def publish(self, account: SocialAccount, caption: str, public_media_url: Optional[str], is_video: bool) -> str:
-        logger.info(f"[PUBLISH_TRACE] META_SERVICE_ENTERED | platform=instagram | account_id={account.account_id} | is_video={is_video}")
+    def publish(self, account: SocialAccount, caption: str, public_media_url: Optional[str], is_video: bool, thumbnail_url: Optional[str] = None) -> str:
+        logger.info(f"[PUBLISH_TRACE] META_SERVICE_ENTERED | platform=instagram | account_id={account.account_id} | is_video={is_video} | thumbnail_url={sanitize_url(thumbnail_url)}")
         final_url = public_media_url
         if is_video:
             if not final_url or final_url.startswith("blob:") or final_url.startswith("data:") or not (final_url.startswith("http://") or final_url.startswith("https://")):
@@ -88,7 +89,8 @@ class InstagramPublisher:
             access_token=token,
             caption=caption,
             image_url=final_url,
-            is_video=is_video
+            is_video=is_video,
+            thumbnail_url=thumbnail_url
         )
         media_id = res.get("id")
         if not media_id:
@@ -109,7 +111,8 @@ class PublishingEngine:
         public_media_url: Optional[str],
         is_video: bool,
         batch_id: Optional[int] = None,
-        resolved_media_type: Optional[str] = None
+        resolved_media_type: Optional[str] = None,
+        thumbnail_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """Execute job in a dedicated thread-local database session."""
         start_time = time.time()
@@ -139,9 +142,9 @@ class PublishingEngine:
 
             try:
                 if acc.platform == "facebook":
-                    ext_id = self.fb_publisher.publish(acc, caption, public_media_url, is_video)
+                    ext_id = self.fb_publisher.publish(acc, caption, public_media_url, is_video, thumbnail_url=thumbnail_url)
                 elif acc.platform == "instagram":
-                    ext_id = self.ig_publisher.publish(acc, caption, public_media_url, is_video)
+                    ext_id = self.ig_publisher.publish(acc, caption, public_media_url, is_video, thumbnail_url=thumbnail_url)
                 else:
                     raise Exception(f"Unsupported platform: {acc.platform}")
 
@@ -200,15 +203,19 @@ class PublishingEngine:
         if raw_media_url and (raw_media_url.startswith("data:") or raw_media_url.startswith("blob:")):
             public_media_url = upload_base64_to_public_https(raw_media_url) or raw_media_url
 
-        # Retrieve stored media_type from Post model if available
+        # Retrieve stored media_type & thumbnail_url from Post model if available
         post = db.query(Post).filter(Post.id == batch.post_id).first()
         stored_type = getattr(post, "media_type", None) if post else None
+        thumbnail_url = getattr(post, "thumbnail_url", None) if post else None
 
         resolved_media_type, is_video = resolve_media_type(
             explicit_media_type=media_type,
             stored_media_type=stored_type,
             media_url=raw_media_url or public_media_url
         )
+
+        # Only pass thumbnail_url if it's a video
+        effective_thumb_url = thumbnail_url if is_video else None
 
         jobs = db.query(PublishingJob).filter(
             PublishingJob.batch_id == batch_id
@@ -217,7 +224,8 @@ class PublishingEngine:
         logger.info(f"[PUBLISH_TRACE] BATCH_EXECUTION_STARTED | batch_id={batch_id} | post_id={batch.post_id} | total_jobs={len(jobs)}")
         logger.info(
             f"[PUBLISH_TRACE] MEDIA_TYPE_RESOLVED | batch_id={batch_id} | post_id={batch.post_id} | "
-            f"resolved_media_type={resolved_media_type} | is_video={is_video} | media_url={sanitize_url(public_media_url)}"
+            f"resolved_media_type={resolved_media_type} | is_video={is_video} | media_url={sanitize_url(public_media_url)} | "
+            f"thumbnail_url={sanitize_url(effective_thumb_url)}"
         )
 
         account_map = {acc.id: acc for acc in accounts}
@@ -230,7 +238,7 @@ class PublishingEngine:
                     future = executor.submit(
                         self.process_single_job_in_thread,
                         job.id, acc.id, post_caption, public_media_url, is_video,
-                        batch_id, resolved_media_type
+                        batch_id, resolved_media_type, effective_thumb_url
                     )
                     future_to_job[future] = job.id
 
