@@ -826,7 +826,7 @@ export default function AIStudioPage() {
                 ))
               ) : (
                 <option value={1} className="bg-slate-900 text-slate-100">
-                  Apex Innovations (AI & Software)
+                  Default Brand
                 </option>
               )}
             </select>
@@ -863,9 +863,6 @@ export default function AIStudioPage() {
                   <ImageIcon className="w-4 h-4 text-indigo-400" />
                   <span>Upload Custom Graphic & Post Copy</span>
                 </h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-mono">
-                  Custom Post Mode
-                </span>
               </div>
 
               {/* Photo & Video Media Upload Box */}
@@ -1091,7 +1088,7 @@ export default function AIStudioPage() {
                 <button
                   onClick={handleGenerateContent}
                   disabled={isGeneratingContent || !topic.trim()}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold text-xs flex items-center justify-center space-x-2 hover:opacity-90 transition disabled:opacity-40 shadow-lg shadow-indigo-500/20 cursor-pointer"
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center justify-center space-x-2 transition disabled:opacity-40 shadow-sm cursor-pointer"
                 >
                   {isGeneratingContent ? (
                     <>
@@ -1139,7 +1136,7 @@ export default function AIStudioPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Call To Action (CTA)</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Call To Action</label>
                   <input
                     type="text"
                     value={cta}

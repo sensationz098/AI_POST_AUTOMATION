@@ -22,7 +22,7 @@ interface ActivityItem {
 }
 
 export const Header: React.FC<Props> = ({
-  brandName = 'Apex Innovations',
+  brandName,
   userRole
 }) => {
   const { theme, toggleTheme } = useTheme();
@@ -100,8 +100,12 @@ export const Header: React.FC<Props> = ({
       <div className="flex items-center space-x-3 min-w-0">
         <div className="flex items-center space-x-1.5 text-slate-400 text-[11px] font-medium">
           <span>SocialAI</span>
-          <span>/</span>
-          <span className="text-slate-200 font-semibold">{brandName}</span>
+          {brandName && brandName !== 'Apex Innovations' && (
+            <>
+              <span>/</span>
+              <span className="text-slate-200 font-semibold">{brandName}</span>
+            </>
+          )}
         </div>
 
         <div className="h-3.5 w-[1px] bg-slate-800" />
