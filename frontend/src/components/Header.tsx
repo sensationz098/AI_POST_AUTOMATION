@@ -216,14 +216,9 @@ export const Header: React.FC<Props> = ({
 
             {/* Popover Footer */}
             <div className="p-2.5 border-t border-slate-800 bg-slate-900/60 text-center">
-              <Link
-                href="/audit"
-                onClick={() => setIsOpen(false)}
-                className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center justify-center space-x-1 transition"
-              >
-                <span>View All System Audit Logs</span>
-                <ExternalLink className="w-3 h-3" />
-              </Link>
+              <span className="text-[11px] font-semibold text-slate-400">
+                System Activity Log Active
+              </span>
             </div>
           </div>
         )}

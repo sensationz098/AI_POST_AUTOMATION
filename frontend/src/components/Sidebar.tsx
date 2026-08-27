@@ -48,12 +48,6 @@ const navGroups: NavGroup[] = [
       { name: 'Meta Accounts', href: '/meta-connect', icon: Share2, isMeta: true },
     ],
   },
-  {
-    title: 'Management',
-    items: [
-      { name: 'Audit Logs', href: '/audit', icon: ShieldCheck },
-    ],
-  },
 ];
 
 export const Sidebar = () => {
