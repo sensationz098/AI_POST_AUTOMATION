@@ -22,7 +22,11 @@ export const InstagramPostPreview: React.FC<Props> = ({
   const metaAcc = brand?.meta_account;
   const username = metaAcc?.instagram_username
     ? metaAcc.instagram_username
-    : (brand?.name ? brand.name.toLowerCase().replace(/\s+/g, '_') : 'apex_innovations');
+    : brand?.name
+    ? brand.name.toLowerCase().replace(/\s+/g, '_')
+    : brand === null
+    ? 'No account connected'
+    : 'Loading...';
     
   const logoUrl =
     (metaAcc as any)?.logo_url ||
