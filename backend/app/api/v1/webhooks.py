@@ -3,8 +3,11 @@ import hmac
 import hashlib
 import logging
 from typing import Optional
-from fastapi import APIRouter, Query, Request, Response, HTTPException, status
+from fastapi import APIRouter, Query, Request, Response, HTTPException, status, Depends
+from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.core.database import get_db
+from app.services.comment_ingestion_service import meta_comment_ingestion_service
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +62,7 @@ def verify_meta_webhook(
     )
 
 @router.post("/meta", status_code=status.HTTP_200_OK)
-async def receive_meta_webhook(request: Request):
+async def receive_meta_webhook(request: Request, db: Session = Depends(get_db)):
     """
     Meta Webhook Event Receiver Endpoint (POST /api/v1/webhooks/meta).
     Validates payload integrity using X-Hub-Signature-256.
@@ -105,6 +108,11 @@ async def receive_meta_webhook(request: Request):
             logger.info(f"[META_WEBHOOK] Validated Meta {obj_type.upper()} webhook event. Entry count: {entry_count}{event_str}")
         else:
             logger.info(f"[META_WEBHOOK] Validated Meta webhook event with object type: {obj_type}. Entry count: {entry_count}{event_str}")
+
+        # Ingest comment events safely into database
+        ingested = meta_comment_ingestion_service.parse_and_ingest_payload(db, payload)
+        if ingested:
+            logger.info(f"[META_WEBHOOK] Ingested {len(ingested)} comment event(s) into database.")
     except Exception as e:
         logger.error(f"[META_WEBHOOK] Error parsing valid webhook JSON payload: {e}")
 

@@ -8,6 +8,8 @@ from app.models.social_account import SocialAccount
 from app.models.publishing_batch import PublishingBatch, PublishingJob, BatchStatus, JobStatus
 from app.models.refresh_token import RefreshToken
 
+from app.models.social_comment import SocialComment, CommentProcessingStatus
+
 __all__ = [
     "User", 
     "BrandProfile", 
@@ -21,6 +23,8 @@ __all__ = [
     "PublishingJob",
     "BatchStatus",
     "JobStatus",
-    "RefreshToken"
+    "RefreshToken",
+    "SocialComment",
+    "CommentProcessingStatus"
 ]
 

@@ -18,12 +18,14 @@ class SocialAccountRepository:
             SocialAccount.platform == platform
         ).all()
 
-    def get_by_account_id(self, db: Session, user_id: int, platform: str, account_id: str) -> Optional[SocialAccount]:
-        return db.query(SocialAccount).filter(
-            SocialAccount.user_id == user_id,
+    def get_by_account_id(self, db: Session, user_id: Optional[int], platform: str, account_id: str) -> Optional[SocialAccount]:
+        query = db.query(SocialAccount).filter(
             SocialAccount.platform == platform,
             SocialAccount.account_id == account_id
-        ).first()
+        )
+        if user_id is not None:
+            query = query.filter(SocialAccount.user_id == user_id)
+        return query.first()
 
     def create_or_update(
         self,
