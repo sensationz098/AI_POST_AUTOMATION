@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Dict, Any, List, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.models.publishing_batch import BatchStatus, JobStatus, PublishingJob
@@ -184,6 +184,9 @@ class PublishingEngine:
             except Exception as e:
                 err_str = str(e)
                 code, msg = classify_error(err_str)
+                if not isinstance(e, MetaPublishException) and (code in ["PUBLISH_FAILED", "PLATFORM_ERROR"] or not code):
+                    code = "UNEXPECTED_PUBLISH_ERROR"
+                    msg = f"Unexpected worker error: {err_str}"
                 if code == "TOKEN_EXPIRED":
                     social_account_repo.mark_status(thread_db, acc.id, "TOKEN_EXPIRED")
 
@@ -289,10 +292,21 @@ class PublishingEngine:
                     future_to_job[future] = job.id
 
             for future in as_completed(future_to_job):
+                j_id = future_to_job[future]
                 try:
                     future.result()
                 except Exception as e:
-                    logger.error(f"[PUBLISH_TRACE] Worker exception during batch publishing job: {e}")
+                    logger.error(f"[PUBLISH_TRACE] Worker exception during batch publishing job {j_id}: {e}")
+                    try:
+                        publishing_repo.update_job_status(
+                            db,
+                            j_id,
+                            JobStatus.FAILED.value,
+                            error_code="UNEXPECTED_PUBLISH_ERROR",
+                            error_message=f"Unexpected worker error: {str(e)}"
+                        )
+                    except Exception as fail_err:
+                        logger.error(f"[PUBLISH_TRACE] Failed to mark job {j_id} as FAILED: {fail_err}")
 
         db.expire_all()
         updated_batch = publishing_repo.update_batch_summary(db, batch_id)
