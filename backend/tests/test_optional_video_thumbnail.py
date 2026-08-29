@@ -113,11 +113,16 @@ def test_video_post_custom_thumbnail_publishing(client, db_session: Session):
         mock_get.return_value.status_code = 200
         mock_get.return_value.content = valid_jpg_bytes
         mock_get.return_value.headers = {"Content-Type": "image/jpeg"}
-        mock_get.return_value.json.return_value = {"status_code": "FINISHED"}
+        mock_get.return_value.json.return_value = {
+            "status_code": "FINISHED",
+            "status": {"video_status": "ready"},
+            "data": [{"id": "thumb_1", "is_preferred": True}]
+        }
 
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.side_effect = [
             {"id": "fb_vid_999"},
+            {"id": "fb_thumb_999", "success": True},
             {"id": "ig_container_999"},
             {"id": "ig_media_999"}
         ]

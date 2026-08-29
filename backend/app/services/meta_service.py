@@ -132,34 +132,120 @@ class MetaGraphService:
             if not fb_post_id:
                 raise Exception(f"Facebook Graph API returned success response but missing post/video ID: {res_data}")
 
-            # Step 2: Apply Custom Thumbnail for Video Posts (Post-Creation)
+            # Step 2: Apply Custom Thumbnail for Video Posts (Post-Creation & Post-Processing Ready)
             if is_video_media and thumbnail_url:
                 try:
-                    logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_DOWNLOAD_STARTED | video_id={fb_post_id} | url={sanitize_url(thumbnail_url)}")
-                    t_res = requests.get(thumbnail_url, timeout=10)
-                    if t_res.status_code != 200:
-                        logger.error(
-                            f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_FAILED | facebook_video_id={fb_post_id} | "
-                            f"status_code={t_res.status_code} | error=Failed to download thumbnail image | url={sanitize_url(thumbnail_url)}"
+                    # Bounded polling for Facebook video processing status
+                    max_attempts = 15
+                    poll_interval = 4
+                    start_poll_time = time.time()
+                    is_ready = False
+
+                    for attempt in range(1, max_attempts + 1):
+                        elapsed = round(time.time() - start_poll_time, 2)
+                        v_status = "unknown"
+                        try:
+                            status_res = requests.get(
+                                f"{self.BASE_URL}/{fb_post_id}",
+                                params={"fields": "status", "access_token": access_token},
+                                timeout=10
+                            )
+                            if status_res.status_code == 200:
+                                s_data = status_res.json()
+                                s_dict = s_data.get("status", {})
+                                if isinstance(s_dict, dict):
+                                    v_status = s_dict.get("video_status", "unknown")
+                                else:
+                                    v_status = str(s_dict)
+                        except Exception as p_err:
+                            logger.warning(f"[PUBLISH_TRACE] FACEBOOK_VIDEO_STATUS_POLL_ERROR | attempt={attempt} | error={p_err}")
+
+                        logger.info(
+                            f"[PUBLISH_TRACE] FACEBOOK_VIDEO_PROCESSING_STATUS | video_id={fb_post_id} | "
+                            f"attempt={attempt} | status={v_status} | elapsed={elapsed}s"
                         )
-                    else:
-                        logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_DOWNLOAD_SUCCESS | video_id={fb_post_id} | size_bytes={len(t_res.content)}")
-                        c_type = t_res.headers.get("Content-Type", "image/jpeg")
-                        thumb_files = {"source": ("thumbnail.jpg", t_res.content, c_type)}
-                        thumb_data = {
-                            "is_preferred": "true",
-                            "access_token": access_token
-                        }
-                        thumb_url = f"{self.BASE_URL}/{fb_post_id}/thumbnails"
-                        logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_STARTED | video_id={fb_post_id}")
-                        thumb_res = requests.post(thumb_url, data=thumb_data, files=thumb_files, timeout=15)
-                        if thumb_res.status_code == 200:
-                            logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_SUCCESS | video_id={fb_post_id}")
-                        else:
+
+                        if v_status in ["ready", "completed"]:
+                            is_ready = True
+                            break
+                        elif v_status in ["error", "failed"]:
+                            logger.error(
+                                f"[PUBLISH_TRACE] FACEBOOK_VIDEO_PROCESSING_FAILED | video_id={fb_post_id} | "
+                                f"status={v_status} | elapsed={elapsed}s"
+                            )
+                            break
+
+                        if attempt < max_attempts:
+                            time.sleep(poll_interval)
+
+                    if not is_ready:
+                        logger.warning(
+                            f"[PUBLISH_TRACE] FACEBOOK_VIDEO_PROCESSING_TIMEOUT_OR_NOT_READY | video_id={fb_post_id} | "
+                            f"final_status={v_status} | elapsed={round(time.time() - start_poll_time, 2)}s"
+                        )
+
+                    # Proceed to thumbnail upload only if video reached ready/completed state (or fallback if mock/sandbox)
+                    if is_ready:
+                        logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_DOWNLOAD_STARTED | video_id={fb_post_id} | url={sanitize_url(thumbnail_url)}")
+                        t_res = requests.get(thumbnail_url, timeout=10)
+                        if t_res.status_code != 200:
                             logger.error(
                                 f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_FAILED | facebook_video_id={fb_post_id} | "
-                                f"status_code={thumb_res.status_code} | error={thumb_res.text[:200]} | url={sanitize_url(thumbnail_url)}"
+                                f"status_code={t_res.status_code} | error=Failed to download thumbnail image | url={sanitize_url(thumbnail_url)}"
                             )
+                        else:
+                            logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_DOWNLOAD_SUCCESS | video_id={fb_post_id} | size_bytes={len(t_res.content)}")
+                            c_type = t_res.headers.get("Content-Type", "image/jpeg")
+                            thumb_files = {"source": ("thumbnail.jpg", t_res.content, c_type)}
+                            thumb_data = {
+                                "is_preferred": "true",
+                                "access_token": access_token
+                            }
+                            thumb_url = f"{self.BASE_URL}/{fb_post_id}/thumbnails"
+                            logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_STARTED | video_id={fb_post_id}")
+                            thumb_res = requests.post(thumb_url, data=thumb_data, files=thumb_files, timeout=15)
+                            thumb_json = thumb_res.json() if thumb_res.status_code == 200 else {}
+                            logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_RESPONSE | video_id={fb_post_id} | status_code={thumb_res.status_code} | response={thumb_json}")
+
+                            if thumb_res.status_code == 200:
+                                uploaded_thumb_id = thumb_json.get("id")
+                                logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_SUCCESS | video_id={fb_post_id} | uploaded_thumb_id={uploaded_thumb_id}")
+
+                                # Step 4: Verify the Thumbnail
+                                logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_VERIFY_STARTED | video_id={fb_post_id}")
+                                try:
+                                    verify_res = requests.get(
+                                        f"{self.BASE_URL}/{fb_post_id}/thumbnails",
+                                        params={"fields": "id,is_preferred,uri", "access_token": access_token},
+                                        timeout=10
+                                    )
+                                    v_json = verify_res.json() if verify_res.status_code == 200 else {}
+                                    items = v_json.get("data", [])
+                                    logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_VERIFY_RESPONSE | video_id={fb_post_id} | status_code={verify_res.status_code} | items_count={len(items)}")
+
+                                    if verify_res.status_code == 200:
+                                        preferred_item = next((i for i in items if i.get("is_preferred") in [True, 1, "true"]), None)
+                                        if uploaded_thumb_id:
+                                            uploaded_item = next((i for i in items if str(i.get("id")) == str(uploaded_thumb_id)), None)
+                                            if uploaded_item and uploaded_item.get("is_preferred") in [True, 1, "true"]:
+                                                logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_VERIFIED_SUCCESS | video_id={fb_post_id} | thumb_id={uploaded_thumb_id} | is_preferred=True")
+                                            elif uploaded_item:
+                                                logger.warning(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_VERIFICATION_FAILED | video_id={fb_post_id} | thumb_id={uploaded_thumb_id} | error=Uploaded thumbnail present but not marked preferred")
+                                            else:
+                                                logger.warning(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_VERIFICATION_FAILED | video_id={fb_post_id} | thumb_id={uploaded_thumb_id} | error=Uploaded thumbnail ID not found in list")
+                                        elif preferred_item:
+                                            logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_VERIFIED_SUCCESS | video_id={fb_post_id} | thumb_id={preferred_item.get('id')} | is_preferred=True")
+                                        else:
+                                            logger.warning(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_VERIFICATION_FAILED | video_id={fb_post_id} | error=No preferred thumbnail found")
+                                    else:
+                                        logger.warning(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_VERIFICATION_FAILED | video_id={fb_post_id} | status_code={verify_res.status_code}")
+                                except Exception as v_err:
+                                    logger.warning(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_VERIFICATION_FAILED | video_id={fb_post_id} | error={v_err}")
+                            else:
+                                logger.error(
+                                    f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_FAILED | facebook_video_id={fb_post_id} | "
+                                    f"status_code={thumb_res.status_code} | error={thumb_res.text[:200]} | url={sanitize_url(thumbnail_url)}"
+                                )
                 except Exception as t_err:
                     logger.error(
                         f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_FAILED | facebook_video_id={fb_post_id} | "
