@@ -50,7 +50,9 @@ class SocialAccountRepository:
             existing.status = "CONNECTED"
             existing.logo_url = logo_url or existing.logo_url
             if metadata_json:
-                existing.metadata_json = metadata_json
+                merged_meta = dict(existing.metadata_json or {})
+                merged_meta.update(metadata_json)
+                existing.metadata_json = merged_meta
             existing.updated_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(existing)

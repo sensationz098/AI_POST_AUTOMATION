@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, Callable, Tuple
 from datetime import datetime, timezone, timedelta
 from app.core.config import settings
 from app.core.logging_config import sanitize_url
+from app.core.security_encryption import decrypt_token
 
 logger = logging.getLogger(__name__)
 
@@ -1125,6 +1126,150 @@ class MetaGraphService:
             "inspection_status": inspection_status
         }
 
+    def subscribe_page_to_webhook(self, page_id: str, page_access_token: str) -> Dict[str, Any]:
+        """
+        Subscribe a Facebook Page to Meta App's webhook for the 'feed' field via POST /{page_id}/subscribed_apps.
+        Uses the provided Page access token. Decrypts token if Fernet encrypted.
+        NEVER logs or exposes access tokens or app secrets.
+        Returns structured non-sensitive result:
+        {
+            "page_id": page_id,
+            "subscription_status": "subscribed" | "failed",
+            "subscribed_fields": ["feed"],
+            "reason": None | "safe error message"
+        }
+        """
+        if not page_id or not page_access_token:
+            return {
+                "page_id": page_id or "",
+                "subscription_status": "failed",
+                "subscribed_fields": [],
+                "reason": "Missing page_id or page_access_token"
+            }
+
+        raw_token = decrypt_token(page_access_token) or page_access_token
+
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            logger.info(f"[META_WEBHOOK_SUB] Mock/sandbox token context for Page {page_id}. Simulating successful subscription.")
+            return {
+                "page_id": page_id,
+                "subscription_status": "subscribed",
+                "subscribed_fields": ["feed"],
+                "reason": None
+            }
+
+        url = f"{self.BASE_URL}/{page_id}/subscribed_apps"
+        params = {
+            "subscribed_fields": "feed",
+            "access_token": raw_token
+        }
+
+        try:
+            res = requests.post(url, params=params, timeout=15)
+            data = res.json()
+
+            if res.status_code == 200 and data.get("success") is True:
+                logger.info(f"[META_WEBHOOK_SUB] Successfully subscribed Facebook Page {page_id} to webhook 'feed' field.")
+                return {
+                    "page_id": page_id,
+                    "subscription_status": "subscribed",
+                    "subscribed_fields": ["feed"],
+                    "reason": None
+                }
+
+            err_data = data.get("error", {})
+            err_msg = err_data.get("message", f"HTTP {res.status_code} error")
+            err_code = err_data.get("code")
+
+            logger.warning(f"[META_WEBHOOK_SUB] Webhook subscription attempt for Page {page_id} status {res.status_code}: {err_msg}")
+            return {
+                "page_id": page_id,
+                "subscription_status": "failed",
+                "subscribed_fields": [],
+                "reason": f"Meta Graph API error (code {err_code}): {err_msg}" if err_code else err_msg
+            }
+        except Exception as e:
+            logger.error(f"[META_WEBHOOK_SUB] Exception during webhook subscription for Page {page_id}: {e}")
+            return {
+                "page_id": page_id,
+                "subscription_status": "failed",
+                "subscribed_fields": [],
+                "reason": "Network error during Page webhook subscription"
+            }
+
+    def subscribe_instagram_account_to_webhook(self, instagram_account_id: str, access_token: str) -> Dict[str, Any]:
+        """
+        Subscribe an Instagram Professional Account to Meta App's webhook for the 'comments' field via POST /{instagram_account_id}/subscribed_apps.
+        Uses the provided access token (Page access token associated with linked FB Page). Decrypts if Fernet encrypted.
+        NEVER logs or exposes access tokens or app secrets.
+        Returns structured non-sensitive result:
+        {
+            "instagram_account_id": instagram_account_id,
+            "subscription_status": "subscribed" | "failed",
+            "subscribed_fields": ["comments"],
+            "reason": None | "safe error message"
+        }
+        """
+        if not instagram_account_id or not access_token:
+            return {
+                "instagram_account_id": instagram_account_id or "",
+                "subscription_status": "failed",
+                "subscribed_fields": [],
+                "reason": "Missing instagram_account_id or access_token"
+            }
+
+        raw_token = decrypt_token(access_token) or access_token
+
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            logger.info(f"[META_WEBHOOK_SUB] Mock/sandbox token context for IG Account {instagram_account_id}. Simulating successful subscription.")
+            return {
+                "instagram_account_id": instagram_account_id,
+                "subscription_status": "subscribed",
+                "subscribed_fields": ["comments"],
+                "reason": None
+            }
+
+        url = f"{self.BASE_URL}/{instagram_account_id}/subscribed_apps"
+        params = {
+            "subscribed_fields": "comments",
+            "access_token": raw_token
+        }
+
+        try:
+            res = requests.post(url, params=params, timeout=15)
+            data = res.json()
+
+            if res.status_code == 200 and data.get("success") is True:
+                logger.info(f"[META_WEBHOOK_SUB] Successfully subscribed Instagram Account {instagram_account_id} to webhook 'comments' field.")
+                return {
+                    "instagram_account_id": instagram_account_id,
+                    "subscription_status": "subscribed",
+                    "subscribed_fields": ["comments"],
+                    "reason": None
+                }
+
+            err_data = data.get("error", {})
+            err_msg = err_data.get("message", f"HTTP {res.status_code} error")
+            err_code = err_data.get("code")
+
+            logger.warning(f"[META_WEBHOOK_SUB] Webhook subscription attempt for IG Account {instagram_account_id} status {res.status_code}: {err_msg}")
+            return {
+                "instagram_account_id": instagram_account_id,
+                "subscription_status": "failed",
+                "subscribed_fields": [],
+                "reason": f"Meta Graph API error (code {err_code}): {err_msg}" if err_code else err_msg
+            }
+        except Exception as e:
+            logger.error(f"[META_WEBHOOK_SUB] Exception during webhook subscription for IG Account {instagram_account_id}: {e}")
+            return {
+                "instagram_account_id": instagram_account_id,
+                "subscription_status": "failed",
+                "subscribed_fields": [],
+                "reason": "Network error during Instagram webhook subscription"
+            }
+
     def evaluate_account_comment_automation_readiness(
         self,
         social_account: Any,
@@ -1143,6 +1288,13 @@ class MetaGraphService:
         account_id = getattr(social_account, "account_id", "")
         account_name = getattr(social_account, "account_name", "")
         db_id = getattr(social_account, "id", 0)
+
+        ca_meta = metadata.get("comment_automation", {})
+        fb_sub = ca_meta.get("facebook_webhook_subscription", {}) or ca_meta.get("webhook_page_subscription", {})
+        ig_sub = ca_meta.get("instagram_webhook_subscription", {})
+
+        page_webhook_subscribed = (fb_sub.get("status") == "subscribed") if platform == "facebook" else False
+        instagram_webhook_subscribed = (ig_sub.get("status") == "subscribed") if platform == "instagram" else False
 
         if platform == "facebook":
             fb_caps = self.verify_facebook_page_capabilities(account_id, perm_map)
@@ -1170,7 +1322,7 @@ class MetaGraphService:
         else:
             reason = "Webhook infrastructure has not yet been configured"
 
-        return {
+        res_dict = {
             "social_account_id": db_id,
             "platform": platform,
             "account_name": account_name,
@@ -1178,13 +1330,17 @@ class MetaGraphService:
             "oauth_permissions_ready": oauth_ready,
             "comment_read_ready": comment_read_ready,
             "comment_reply_ready": comment_reply_ready,
-            "webhook_configured": webhook_configured,
+            "webhook_endpoint_configured": True,
             "webhook_prerequisites_ready": webhook_prereqs,
+            "page_webhook_subscribed": page_webhook_subscribed,
+            "instagram_webhook_subscribed": instagram_webhook_subscribed,
+            "webhook_configured": webhook_configured,
             "comment_automation_ready": comment_automation_ready,
             "missing_permissions": missing,
             "reason": reason,
             "inspection_status": inspection.get("status", "unknown")
         }
+        return res_dict
 
     def exchange_code_for_user_token(self, code: str) -> str:
         """Exchange Meta authorization code for short-lived user access token."""

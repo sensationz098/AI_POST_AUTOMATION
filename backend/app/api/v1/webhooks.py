@@ -85,8 +85,13 @@ async def receive_meta_webhook(request: Request):
     try:
         payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
         obj_type = payload.get("object", "unknown")
-        entry_count = len(payload.get("entry", []))
-        logger.info(f"[META_WEBHOOK] Validated Meta webhook payload. Object type: {obj_type}, Entry count: {entry_count}")
+        entry_list = payload.get("entry", [])
+        entry_count = len(entry_list) if isinstance(entry_list, list) else 0
+
+        if obj_type in ("page", "instagram"):
+            logger.info(f"[META_WEBHOOK] Validated Meta {obj_type.upper()} webhook event. Entry count: {entry_count}")
+        else:
+            logger.info(f"[META_WEBHOOK] Validated Meta webhook event with object type: {obj_type}. Entry count: {entry_count}")
     except Exception as e:
         logger.error(f"[META_WEBHOOK] Error parsing valid webhook JSON payload: {e}")
 
