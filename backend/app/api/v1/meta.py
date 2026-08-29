@@ -93,9 +93,22 @@ def meta_oauth_callback(
         saved_ig = 0
 
         for p in fb_pages:
+            # Automatic Facebook Page Webhook Subscription for 'feed' field
+            sub_res = meta_service.subscribe_page_to_webhook(p["account_id"], p["access_token"])
+            sub_status = sub_res.get("subscription_status", "failed")
+            sub_err = sub_res.get("reason")
+
             fb_meta = {
                 "granted_scopes": meta_service.REQUIRED_META_OAUTH_SCOPES,
-                "comment_automation_ready": True
+                "comment_automation_ready": False,
+                "comment_automation": {
+                    "facebook_webhook_subscription": {
+                        "status": sub_status,
+                        "last_attempt_at": datetime.now(timezone.utc).isoformat(),
+                        "subscribed_fields": ["feed"] if sub_status == "subscribed" else [],
+                        "last_error": sub_err
+                    }
+                }
             }
             social_account_repo.create_or_update(
                 db=db,
@@ -112,10 +125,25 @@ def meta_oauth_callback(
             saved_fb += 1
 
         for ig in ig_accounts:
+            # Automatic Instagram Account Webhook Subscription for 'comments' field
+            ig_sub_res = meta_service.subscribe_instagram_account_to_webhook(ig["account_id"], ig["access_token"])
+            ig_sub_status = ig_sub_res.get("subscription_status", "failed")
+            ig_sub_err = ig_sub_res.get("reason")
+
             ig_meta = dict(ig.get("metadata") or {})
+            existing_ca = dict(ig_meta.get("comment_automation") or {})
+            existing_ca.update({
+                "instagram_webhook_subscription": {
+                    "status": ig_sub_status,
+                    "last_attempt_at": datetime.now(timezone.utc).isoformat(),
+                    "subscribed_fields": ["comments"] if ig_sub_status == "subscribed" else [],
+                    "last_error": ig_sub_err
+                }
+            })
             ig_meta.update({
                 "granted_scopes": meta_service.REQUIRED_META_OAUTH_SCOPES,
-                "comment_automation_ready": True
+                "comment_automation_ready": False,
+                "comment_automation": existing_ca
             })
             social_account_repo.create_or_update(
                 db=db,
