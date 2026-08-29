@@ -336,4 +336,68 @@ def test_fallback_verify_missing_timestamp_rejected():
         assert res["is_published"] is False
         assert res["verification_source"] == "verification_failed"
 
+def test_datetime_timezone_utc_import_and_usage_no_nameerror():
+    """Verify that process_single_job_in_thread executes datetime.now(timezone.utc) without NameError."""
+    from app.services.publisher_service import PublishingEngine, InstagramPublisher
+    publisher = InstagramPublisher()
+    acc = MagicMock(id=1, account_id="17841400000000000", platform="instagram", access_token="tok_123", status="ACTIVE")
+    mock_job = MagicMock(ig_container_id=None)
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.first.return_value = mock_job
+    
+    with patch("app.services.publisher_service.SessionLocal", return_value=mock_db), \
+         patch("app.repositories.social_account_repository.social_account_repo.get_by_id", return_value=acc), \
+         patch("app.repositories.publishing_repository.publishing_repo.update_job_status"), \
+         patch.object(publisher, "publish", return_value="pub_media_999"):
+        
+        engine = PublishingEngine()
+        engine.ig_publisher = publisher
+        res = engine.process_single_job_in_thread(
+            job_id=99,
+            social_account_id=1,
+            caption="Test Timezone Import",
+            public_media_url="https://example.com/img.jpg",
+            is_video=False
+        )
+
+        assert res["status"] == "SUCCESS"
+        assert res["external_id"] == "pub_media_999"
+
+def test_unexpected_worker_exception_marks_job_failed():
+    """Verify that an unexpected exception during worker execution marks job FAILED with UNEXPECTED_PUBLISH_ERROR."""
+    from app.services.publisher_service import PublishingEngine
+    acc = MagicMock(id=1, account_id="17841400000000000", platform="instagram", access_token="tok_123", status="ACTIVE")
+    mock_job = MagicMock(ig_container_id=None)
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.first.return_value = mock_job
+
+    with patch("app.services.publisher_service.SessionLocal", return_value=mock_db), \
+         patch("app.repositories.social_account_repository.social_account_repo.get_by_id", return_value=acc), \
+         patch("app.repositories.publishing_repository.publishing_repo.update_job_status") as mock_update, \
+         patch("app.services.publisher_service.InstagramPublisher.publish", side_effect=RuntimeError("Simulated unexpected crashes")):
+
+        engine = PublishingEngine()
+        res = engine.process_single_job_in_thread(
+            job_id=100,
+            social_account_id=1,
+            caption="Test Crash Handling",
+            public_media_url="https://example.com/img.jpg",
+            is_video=False
+        )
+
+        assert res["status"] == "FAILED"
+        assert res["error"] == "Unexpected worker error: Simulated unexpected crashes"
+
+        # Confirm update_job_status was called with FAILED and UNEXPECTED_PUBLISH_ERROR
+        failed_calls = [
+            call for call in mock_update.call_args_list
+            if len(call.args) >= 3 and call.args[1] == 100 and call.args[2] == "FAILED"
+        ]
+        assert len(failed_calls) > 0
+        last_failed_kwargs = failed_calls[-1].kwargs
+        assert last_failed_kwargs.get("error_code") == "UNEXPECTED_PUBLISH_ERROR"
+        assert "Simulated unexpected crashes" in last_failed_kwargs.get("error_message", "")
+
+
+
 
