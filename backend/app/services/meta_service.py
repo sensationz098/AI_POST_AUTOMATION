@@ -1,7 +1,7 @@
 import time
 import requests
 import logging
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable, Tuple
 from datetime import datetime, timezone, timedelta
 from app.core.config import settings
 from app.core.logging_config import sanitize_url
@@ -377,6 +377,84 @@ class MetaGraphService:
             "verification_source": "verification_failed"
         }
 
+    def _validate_and_diagnose_instagram_cover_url(self, thumbnail_url: str) -> Tuple[bool, Optional[str]]:
+        """
+        Validate and log production diagnostics for an Instagram Reel cover image URL before sending it to Meta API.
+        
+        Requirements according to Meta Graph API Specs for Instagram Reel Cover Images:
+        1. Publicly fetchable HTTPS URL (HTTP status 200).
+        2. Non-zero content length (max 10MB).
+        3. Valid image format: JPEG or PNG (WEBP, GIF, SVG, BMP are rejected by Meta with code 2207052).
+        4. Valid dimensions: Width >= 320, Height >= 320.
+        5. Valid positive aspect ratio.
+        """
+        import io
+        from PIL import Image
+
+        try:
+            res = requests.get(thumbnail_url, timeout=10)
+            status = res.status_code
+            content_type = res.headers.get("Content-Type", "unknown")
+            content_length = len(res.content)
+            final_url = res.url
+
+            if status != 200:
+                logger.error(
+                    f"[PUBLISH_TRACE] INSTAGRAM_COVER_DIAGNOSTICS | url={sanitize_url(thumbnail_url)} | "
+                    f"http_status={status} | content_type={content_type} | content_length={content_length} | "
+                    f"final_url={sanitize_url(final_url)} | validation=FAILED_HTTP_STATUS"
+                )
+                return False, f"HTTP status {status} when fetching cover image"
+
+            if content_length == 0:
+                logger.error(
+                    f"[PUBLISH_TRACE] INSTAGRAM_COVER_DIAGNOSTICS | url={sanitize_url(thumbnail_url)} | "
+                    f"http_status={status} | content_type={content_type} | content_length=0 | "
+                    f"final_url={sanitize_url(final_url)} | validation=FAILED_EMPTY_FILE"
+                )
+                return False, "Cover image file is empty (0 bytes)"
+
+            try:
+                img = Image.open(io.BytesIO(res.content))
+                img_format = img.format.upper() if img.format else "UNKNOWN"
+                width, height = img.size
+                aspect_ratio = round(width / height, 4) if height > 0 else 0.0
+                mime_type = Image.MIME.get(img.format, content_type)
+            except Exception as img_err:
+                logger.error(
+                    f"[PUBLISH_TRACE] INSTAGRAM_COVER_DIAGNOSTICS | url={sanitize_url(thumbnail_url)} | "
+                    f"http_status={status} | content_type={content_type} | content_length={content_length} | "
+                    f"final_url={sanitize_url(final_url)} | error={img_err} | validation=FAILED_IMAGE_DECODE"
+                )
+                return False, f"Failed to decode image bytes: {img_err}"
+
+            logger.info(
+                f"[PUBLISH_TRACE] INSTAGRAM_COVER_DIAGNOSTICS | url={sanitize_url(thumbnail_url)} | "
+                f"http_status={status} | content_type={content_type} | content_length={content_length} | "
+                f"final_url={sanitize_url(final_url)} | detected_format={img_format} | mime_type={mime_type} | "
+                f"width={width} | height={height} | aspect_ratio={aspect_ratio} | size_bytes={content_length}"
+            )
+
+            # Rule 1: Meta requires JPEG or PNG for Instagram cover images
+            if img_format not in ["JPEG", "PNG"]:
+                return False, f"Unsupported format '{img_format}' (MIME: {mime_type}). Meta requires JPEG or PNG."
+
+            # Rule 2: Minimum dimension check (320x320)
+            if width < 320 or height < 320:
+                return False, f"Image dimensions ({width}x{height}) below minimum 320x320 requirement."
+
+            # Rule 3: Valid aspect ratio check
+            if aspect_ratio <= 0:
+                return False, f"Invalid aspect ratio ({aspect_ratio})."
+
+            return True, None
+        except Exception as err:
+            logger.error(
+                f"[PUBLISH_TRACE] INSTAGRAM_COVER_DIAGNOSTICS | url={sanitize_url(thumbnail_url)} | "
+                f"error={err} | validation=FAILED_EXCEPTION"
+            )
+            return False, f"Network/validation exception: {err}"
+
     def publish_to_instagram_business(
         self,
         ig_user_id: str,
@@ -442,8 +520,17 @@ class MetaGraphService:
                     "access_token": access_token
                 }
                 if thumbnail_url:
-                    container_payload["cover_url"] = thumbnail_url
-                    logger.info(f"[IG_PUBLISH] REEL_COVER_URL_ATTACHED | cover_url={sanitize_url(thumbnail_url)}")
+                    is_valid_cover, fail_reason = self._validate_and_diagnose_instagram_cover_url(thumbnail_url)
+                    if is_valid_cover:
+                        container_payload["cover_url"] = thumbnail_url
+                        logger.info(f"[IG_PUBLISH] REEL_COVER_URL_ATTACHED | cover_url={sanitize_url(thumbnail_url)}")
+                    else:
+                        logger.warning(
+                            f"[PUBLISH_TRACE] INSTAGRAM_COVER_VALIDATION_FAILED | url={sanitize_url(thumbnail_url)} | reason={fail_reason}"
+                        )
+                        logger.warning(
+                            f"[PUBLISH_TRACE] INSTAGRAM_COVER_SKIPPED_FALLBACK | url={sanitize_url(thumbnail_url)}"
+                        )
                 logger.info(f"[IG_PUBLISH] VIDEO_UPLOAD_STARTED | ig_user_id={ig_user_id} | video_url={sanitize_url(image_url)}")
             else:
                 container_payload = {
@@ -452,6 +539,9 @@ class MetaGraphService:
                     "access_token": access_token
                 }
                 logger.info(f"[IG_PUBLISH] PHOTO_UPLOAD_STARTED | ig_user_id={ig_user_id} | image_url={sanitize_url(image_url)}")
+
+            sanitized_payload = {k: (sanitize_url(v) if "url" in k else v) for k, v in container_payload.items() if k != "access_token"}
+            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_REQUEST | ig_user_id={ig_user_id} | payload={sanitized_payload}")
 
             container_res = requests.post(container_url, data=container_payload, timeout=30)
             c_data = container_res.json()
