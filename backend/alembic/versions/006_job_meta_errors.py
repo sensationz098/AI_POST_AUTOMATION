@@ -1,6 +1,6 @@
 """Add ig_container_id and raw Meta error columns to publishing_jobs table
 
-Revision ID: 006_job_container_and_meta_errors
+Revision ID: 006_job_meta_errors
 Revises: 005_thumbnail_fields
 Create Date: 2026-08-29 10:30:00.000000
 
@@ -9,7 +9,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = '006_job_container_and_meta_errors'
+revision: str = '006_job_meta_errors'
 down_revision: Union[str, None] = '005_thumbnail_fields'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
