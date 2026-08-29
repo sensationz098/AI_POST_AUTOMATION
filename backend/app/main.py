@@ -25,6 +25,7 @@ from app.api.v1.social_accounts import router as social_accounts_router
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.health import router as health_router
+from app.api.v1.webhooks import router as webhooks_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -60,6 +61,7 @@ app.include_router(meta_router, prefix=settings.API_V1_STR)
 app.include_router(social_accounts_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
 app.include_router(audit_router, prefix=settings.API_V1_STR)
+app.include_router(webhooks_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def root():

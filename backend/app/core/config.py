@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     META_MOCK_MODE: bool = Field(default=False, env="META_MOCK_MODE")
     FRONTEND_URL: str = Field(default="http://localhost:3000", env="FRONTEND_URL")
     META_CONFIG_ID: Optional[str] = Field(default=None, env="META_CONFIG_ID")
+    META_WEBHOOK_VERIFY_TOKEN: Optional[str] = Field(default=None, env="META_WEBHOOK_VERIFY_TOKEN")
     
     # Meta Long Video Processing & Polling Configurations
     META_VIDEO_PROCESSING_MAX_SECONDS: int = Field(default=300, env="META_VIDEO_PROCESSING_MAX_SECONDS")
