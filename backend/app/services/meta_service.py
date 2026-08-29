@@ -1,3 +1,4 @@
+import time
 import requests
 import logging
 from typing import Dict, Any, Optional, Callable
@@ -174,130 +175,180 @@ class MetaGraphService:
            - CONSERVATIVE FAILURE: Returns is_published=False if 0 or >1 candidates match to prevent
              concurrent jobs or duplicate captions from triggering false success.
         """
-        logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_VERIFICATION_STARTED | ig_user_id={ig_user_id} | container_id={creation_id}")
+    def verify_instagram_container_published(
+        self,
+        ig_user_id: str,
+        creation_id: str,
+        access_token: str,
+        caption: Optional[str] = None,
+        publish_started_at: Optional[datetime] = None,
+        max_wait_seconds: float = 60.0,
+        poll_interval: float = 5.0
+    ) -> Dict[str, Any]:
+        """
+        Safely verify whether an Instagram media container actually resulted in a live published media object.
+        Uses a bounded polling loop (max 60 seconds, 5s interval) to account for Meta API eventual consistency.
         
-        # 1. Direct Container Node Query
-        try:
-            c_res = requests.get(
-                f"{self.BASE_URL}/{creation_id}",
-                params={"fields": "status_code,status,id", "access_token": access_token},
-                timeout=15
+        Verification Strategy per attempt:
+        1. Direct Container Node Query (GET /{creation_id}?fields=status_code,status,id):
+           - If status_code == "PUBLISHED": Immediate Verified Success.
+           - ANY OTHER STATUS ("ERROR", "FINISHED", "IN_PROGRESS", "EXPIRED"):
+             DO NOT early return False. Continue immediately to Step 2.
+        
+        2. Account Media List Query (GET /{ig_user_id}/media?fields=id,caption,timestamp,permalink):
+           - REQUIRES exact normalized caption equality (no substring matching).
+           - REQUIRES valid parseable timestamp.
+           - REQUIRES timestamp inside publish attempt window [started_at - 15m, now + 5m].
+           - Exactly 1 candidate = Verified Success.
+           - >1 candidates = Ambiguous, continue polling.
+        """
+        start_verify_time = time.time()
+        attempt = 0
+        max_attempts = max(1, int(max_wait_seconds / poll_interval))
+        
+        logger.info(
+            f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_VERIFICATION_STARTED | ig_user_id={ig_user_id} | "
+            f"container_id={creation_id} | max_wait={max_wait_seconds}s | poll_interval={poll_interval}s"
+        )
+        
+        def _normalize_cap(raw: Optional[str]) -> str:
+            if not raw:
+                return ""
+            lines = [l.strip() for l in raw.replace("\r\n", "\n").split("\n")]
+            return "\n".join(lines).strip()
+
+        target_norm = _normalize_cap(caption)
+
+        ref_time = publish_started_at or datetime.now(timezone.utc)
+        if ref_time.tzinfo is None:
+            ref_time = ref_time.replace(tzinfo=timezone.utc)
+
+        while attempt < max_attempts:
+            attempt += 1
+            elapsed = round(time.time() - start_verify_time, 2)
+            logger.info(
+                f"[PUBLISH_TRACE] INSTAGRAM_AMBIGUOUS_VERIFY_ATTEMPT | attempt={attempt}/{max_attempts} | "
+                f"container_id={creation_id} | elapsed={elapsed}s"
             )
-            if c_res.status_code == 200:
-                c_data = c_res.json()
-                st_code = c_data.get("status_code")
-                c_id = c_data.get("id")
-                logger.info(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_VERIFY_CHECK | container_id={creation_id} | status_code={st_code}")
-                
-                if st_code == "PUBLISHED":
-                    pub_id = c_id if (c_id and str(c_id) != str(creation_id)) else f"ig_pub_{creation_id}"
-                    logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_CONFIRMED_SUCCESS | container_id={creation_id} | published_media_id={pub_id}")
-                    return {
-                        "is_published": True,
-                        "published_media_id": str(pub_id),
-                        "status_code": "PUBLISHED",
-                        "verification_source": "container_status"
-                    }
-                elif st_code in ["ERROR", "EXPIRED"]:
-                    logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_CONFIRMED_NOT_FOUND | container_id={creation_id} | status_code={st_code}")
-                    return {
-                        "is_published": False,
-                        "status_code": st_code,
-                        "verification_source": "container_status"
-                    }
-        except Exception as v_err:
-            logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_VERIFY_WARNING | container_id={creation_id} | error={v_err}")
 
-        # 2. Query Recent Account Media List (Strict Fallback)
-        try:
-            m_res = requests.get(
-                f"{self.BASE_URL}/{ig_user_id}/media",
-                params={"fields": "id,caption,timestamp,permalink", "limit": 10, "access_token": access_token},
-                timeout=15
-            )
-            if m_res.status_code == 200 and caption:
-                m_data = m_res.json()
-                media_items = m_data.get("data", [])
-                
-                # Normalize target caption: strip whitespace and normalize line endings
-                def _normalize_cap(raw: Optional[str]) -> str:
-                    if not raw:
-                        return ""
-                    lines = [l.strip() for l in raw.replace("\r\n", "\n").split("\n")]
-                    return "\n".join(lines).strip()
-
-                target_norm = _normalize_cap(caption)
-
-                # Establish publish attempt timestamp window
-                # The timestamp window exists to prevent older Instagram posts with identical captions
-                # (published hours or days ago) from being accepted as false-positive proof for the current attempt.
-                ref_time = publish_started_at or datetime.now(timezone.utc)
-                if ref_time.tzinfo is None:
-                    ref_time = ref_time.replace(tzinfo=timezone.utc)
-                
-                # Allowed publish attempt window: 15 minutes before publish start up to 5 minutes after current time
-                window_start = ref_time - timedelta(minutes=15)
-                window_end = datetime.now(timezone.utc) + timedelta(minutes=5)
-
-                matching_candidates = []
-
-                for item in media_items:
-                    item_cap_norm = _normalize_cap(item.get("caption"))
-                    
-                    # REQUIRE STRICT EXACT EQUALITY (NO SUBSTRING / PARTIAL MATCHING)
-                    if not target_norm or target_norm != item_cap_norm:
-                        continue
-
-                    # REQUIRE VALID TIMESTAMP FROM META (MISSING TIMESTAMP CANNOT BE VERIFIED)
-                    raw_ts = item.get("timestamp")
-                    if not raw_ts:
-                        logger.info(f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_TIMESTAMP_MISSING | item_id={item.get('id')}")
-                        continue
-
-                    try:
-                        clean_ts = raw_ts.replace("+0000", "+00:00").replace("Z", "+00:00")
-                        item_dt = datetime.fromisoformat(clean_ts)
-                        if item_dt.tzinfo is None:
-                            item_dt = item_dt.replace(tzinfo=timezone.utc)
-
-                        # REQUIRE TIMESTAMP CORRELATION WITHIN PUBLISH WINDOW
-                        if not (window_start <= item_dt <= window_end):
-                            logger.info(
-                                f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_TIMESTAMP_OUTSIDE_WINDOW | "
-                                f"item_id={item.get('id')} | item_dt={item_dt.isoformat()} | window_start={window_start.isoformat()}"
-                            )
-                            continue
-                    except Exception as ts_err:
-                        logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_TIMESTAMP_PARSE_ERROR | item_id={item.get('id')} | error={ts_err}")
-                        continue
-
-                    matching_candidates.append(item)
-
-                # CONSERVATIVE FAILURE RULES FOR CONCURRENT / AMBIGUOUS MATCHES:
-                # Exactly 1 candidate matching exact caption + timestamp window = Confirmed Success.
-                # >1 candidates matching = Cannot uniquely identify candidate -> Conservative Failure (is_published=False).
-                if len(matching_candidates) == 1:
-                    matched_item = matching_candidates[0]
-                    pub_id = matched_item.get("id")
+            # 1. Direct Container Node Query
+            try:
+                c_res = requests.get(
+                    f"{self.BASE_URL}/{creation_id}",
+                    params={"fields": "status_code,status,id", "access_token": access_token},
+                    timeout=15
+                )
+                if c_res.status_code == 200:
+                    c_data = c_res.json()
+                    st_code = c_data.get("status_code")
+                    c_id = c_data.get("id")
                     logger.info(
-                        f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_CONFIRMED_SUCCESS | container_id={creation_id} | "
-                        f"published_media_id={pub_id} | verification_source=account_media_list"
+                        f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_VERIFY_CHECK | attempt={attempt} | "
+                        f"container_id={creation_id} | status_code={st_code}"
                     )
-                    return {
-                        "is_published": True,
-                        "published_media_id": str(pub_id),
-                        "status_code": "PUBLISHED",
-                        "verification_source": "account_media_list"
-                    }
-                elif len(matching_candidates) > 1:
-                    logger.warning(
-                        f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_CONCURRENT_AMBIGUOUS_MATCHES | container_id={creation_id} | "
-                        f"candidates_found={len(matching_candidates)} | caption={caption[:30]}"
-                    )
-        except Exception as m_err:
-            logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_MEDIA_VERIFY_WARNING | ig_user_id={ig_user_id} | error={m_err}")
+                    
+                    if st_code == "PUBLISHED":
+                        pub_id = c_id if (c_id and str(c_id) != str(creation_id)) else f"ig_pub_{creation_id}"
+                        logger.info(
+                            f"[PUBLISH_TRACE] INSTAGRAM_AMBIGUOUS_PUBLISH_VERIFIED_SUCCESS | "
+                            f"container_id={creation_id} | published_media_id={pub_id} | "
+                            f"verification_source=container_status | attempt={attempt}"
+                        )
+                        return {
+                            "is_published": True,
+                            "published_media_id": str(pub_id),
+                            "status_code": "PUBLISHED",
+                            "verification_source": "container_status"
+                        }
+                    # NOTE: Do NOT early return on ERROR, FINISHED, EXPIRED, etc.
+                    # Production proof shows container status ERROR can be returned even when the post is live.
+            except Exception as v_err:
+                logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_VERIFY_WARNING | attempt={attempt} | container_id={creation_id} | error={v_err}")
 
-        logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_CONFIRMED_NOT_FOUND | container_id={creation_id}")
+            # 2. Query Recent Account Media List (Strict Fallback)
+            try:
+                m_res = requests.get(
+                    f"{self.BASE_URL}/{ig_user_id}/media",
+                    params={"fields": "id,caption,timestamp,permalink", "limit": 10, "access_token": access_token},
+                    timeout=15
+                )
+                
+                m_items = m_res.json().get("data", []) if m_res.status_code == 200 else []
+                logger.info(
+                    f"[PUBLISH_TRACE] INSTAGRAM_ACCOUNT_MEDIA_VERIFY_RESPONSE | attempt={attempt} | "
+                    f"http_status={m_res.status_code} | media_count={len(m_items)}"
+                )
+
+                if m_res.status_code == 200 and caption:
+                    window_start = ref_time - timedelta(minutes=15)
+                    window_end = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+                    matching_candidates = []
+
+                    for item in m_items:
+                        item_id = item.get("id")
+                        item_cap_norm = _normalize_cap(item.get("caption"))
+                        
+                        # Exact caption match requirement
+                        if not target_norm or target_norm != item_cap_norm:
+                            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_REJECT | attempt={attempt} | item_id={item_id} | reason=CAPTION_MISMATCH")
+                            continue
+
+                        # Timestamp requirement
+                        raw_ts = item.get("timestamp")
+                        if not raw_ts:
+                            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_REJECT | attempt={attempt} | item_id={item_id} | reason=TIMESTAMP_MISSING")
+                            continue
+
+                        try:
+                            clean_ts = raw_ts.replace("+0000", "+00:00").replace("Z", "+00:00")
+                            item_dt = datetime.fromisoformat(clean_ts)
+                            if item_dt.tzinfo is None:
+                                item_dt = item_dt.replace(tzinfo=timezone.utc)
+
+                            if not (window_start <= item_dt <= window_end):
+                                logger.info(
+                                    f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_REJECT | attempt={attempt} | "
+                                    f"item_id={item_id} | reason=TIMESTAMP_OUTSIDE_WINDOW | item_dt={item_dt.isoformat()}"
+                                )
+                                continue
+                        except Exception as ts_err:
+                            logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_REJECT | attempt={attempt} | item_id={item_id} | reason=TIMESTAMP_PARSE_FAILED | error={ts_err}")
+                            continue
+
+                        logger.info(f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_CANDIDATE | attempt={attempt} | item_id={item_id} | reason=MATCHING_CANDIDATE_FOUND")
+                        matching_candidates.append(item)
+
+                    if len(matching_candidates) == 1:
+                        matched_item = matching_candidates[0]
+                        pub_id = matched_item.get("id")
+                        logger.info(
+                            f"[PUBLISH_TRACE] INSTAGRAM_AMBIGUOUS_PUBLISH_VERIFIED_SUCCESS | "
+                            f"container_id={creation_id} | published_media_id={pub_id} | "
+                            f"verification_source=account_media_list | attempt={attempt}"
+                        )
+                        return {
+                            "is_published": True,
+                            "published_media_id": str(pub_id),
+                            "status_code": "PUBLISHED",
+                            "verification_source": "account_media_list"
+                        }
+                    elif len(matching_candidates) > 1:
+                        logger.warning(
+                            f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_CONCURRENT_AMBIGUOUS_MATCHES | attempt={attempt} | "
+                            f"container_id={creation_id} | candidates_found={len(matching_candidates)} | caption={caption[:30]}"
+                        )
+            except Exception as m_err:
+                logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_MEDIA_VERIFY_WARNING | attempt={attempt} | ig_user_id={ig_user_id} | error={m_err}")
+
+            # Sleep before retrying if attempts remain
+            if attempt < max_attempts:
+                time.sleep(poll_interval)
+
+        logger.info(
+            f"[PUBLISH_TRACE] INSTAGRAM_AMBIGUOUS_PUBLISH_VERIFICATION_TIMEOUT | "
+            f"container_id={creation_id} | attempts={max_attempts} | elapsed={round(time.time() - start_verify_time, 2)}s"
+        )
         return {
             "is_published": False,
             "status_code": "NOT_PUBLISHED",
@@ -488,7 +539,8 @@ class MetaGraphService:
                     ig_user_id=ig_user_id,
                     creation_id=creation_id,
                     access_token=access_token,
-                    caption=caption
+                    caption=caption,
+                    publish_started_at=publish_started_at
                 )
                 if v_res.get("is_published"):
                     pub_id = v_res.get("published_media_id")
@@ -522,7 +574,8 @@ class MetaGraphService:
                         ig_user_id=ig_user_id,
                         creation_id=creation_id,
                         access_token=access_token,
-                        caption=caption
+                        caption=caption,
+                        publish_started_at=publish_started_at
                     )
                     if v_res.get("is_published"):
                         pub_id = v_res.get("published_media_id")
