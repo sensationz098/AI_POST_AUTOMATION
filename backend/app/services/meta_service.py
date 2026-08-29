@@ -78,22 +78,10 @@ class MetaGraphService:
                     "description": message,
                     "access_token": access_token
                 }
-                files = None
-                if thumbnail_url:
-                    try:
-                        logger.info(f"[FB_PUBLISH] FETCHING_THUMBNAIL_BYTES | url={sanitize_url(thumbnail_url)}")
-                        t_res = requests.get(thumbnail_url, timeout=10)
-                        if t_res.status_code == 200:
-                            c_type = t_res.headers.get("Content-Type", "image/jpeg")
-                            files = {"thumb": ("thumbnail.jpg", t_res.content, c_type)}
-                            logger.info(f"[FB_PUBLISH] THUMBNAIL_BYTES_ATTACHED | size_bytes={len(t_res.content)}")
-                    except Exception as t_err:
-                        logger.warning(f"[FB_PUBLISH] Failed to fetch thumbnail_url for FB video upload: {t_err}")
-
                 video_timeout = settings.META_VIDEO_UPLOAD_TIMEOUT_SECONDS
                 logger.info(f"[FB_PUBLISH] VIDEO_UPLOAD_STARTED | page_id={page_id} | video_url={sanitize_url(image_url)} | timeout={video_timeout}s")
                 try:
-                    response = requests.post(url, data=payload, files=files, timeout=video_timeout)
+                    response = requests.post(url, data=payload, timeout=video_timeout)
                 except requests.exceptions.Timeout:
                     logger.error(f"[FB_PUBLISH] VIDEO_UPLOAD_TIMEOUT | page_id={page_id} | timeout={video_timeout}s")
                     raise Exception(f"Facebook video upload network HTTP timeout after {video_timeout} seconds.")
@@ -143,6 +131,40 @@ class MetaGraphService:
             fb_post_id = res_data.get("id")
             if not fb_post_id:
                 raise Exception(f"Facebook Graph API returned success response but missing post/video ID: {res_data}")
+
+            # Step 2: Apply Custom Thumbnail for Video Posts (Post-Creation)
+            if is_video_media and thumbnail_url:
+                try:
+                    logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_DOWNLOAD_STARTED | video_id={fb_post_id} | url={sanitize_url(thumbnail_url)}")
+                    t_res = requests.get(thumbnail_url, timeout=10)
+                    if t_res.status_code != 200:
+                        logger.error(
+                            f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_FAILED | facebook_video_id={fb_post_id} | "
+                            f"status_code={t_res.status_code} | error=Failed to download thumbnail image | url={sanitize_url(thumbnail_url)}"
+                        )
+                    else:
+                        logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_DOWNLOAD_SUCCESS | video_id={fb_post_id} | size_bytes={len(t_res.content)}")
+                        c_type = t_res.headers.get("Content-Type", "image/jpeg")
+                        thumb_files = {"source": ("thumbnail.jpg", t_res.content, c_type)}
+                        thumb_data = {
+                            "is_preferred": "true",
+                            "access_token": access_token
+                        }
+                        thumb_url = f"{self.BASE_URL}/{fb_post_id}/thumbnails"
+                        logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_STARTED | video_id={fb_post_id}")
+                        thumb_res = requests.post(thumb_url, data=thumb_data, files=thumb_files, timeout=15)
+                        if thumb_res.status_code == 200:
+                            logger.info(f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_SUCCESS | video_id={fb_post_id}")
+                        else:
+                            logger.error(
+                                f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_FAILED | facebook_video_id={fb_post_id} | "
+                                f"status_code={thumb_res.status_code} | error={thumb_res.text[:200]} | url={sanitize_url(thumbnail_url)}"
+                            )
+                except Exception as t_err:
+                    logger.error(
+                        f"[PUBLISH_TRACE] FACEBOOK_THUMBNAIL_UPLOAD_FAILED | facebook_video_id={fb_post_id} | "
+                        f"error={t_err} | url={sanitize_url(thumbnail_url)}"
+                    )
 
             logger.info(
                 f"[PUBLISH_TRACE] FACEBOOK_PUBLISH_SUCCESS | page_id={page_id} | returned_id={fb_post_id} | "
