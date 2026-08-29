@@ -147,3 +147,19 @@ export interface PublishingBatch {
   completed_at?: string;
   jobs: PublishingJob[];
 }
+
+export interface SocialComment {
+  id: number;
+  social_account_id: number;
+  platform: 'facebook' | 'instagram';
+  external_comment_id: string;
+  external_post_id?: string;
+  parent_comment_id?: string;
+  comment_text?: string;
+  commenter_id?: string;
+  commenter_name?: string;
+  event_timestamp?: string;
+  webhook_object: string;
+  processing_status: 'RECEIVED' | string;
+  created_at: string;
+}
