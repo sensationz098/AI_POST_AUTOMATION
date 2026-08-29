@@ -26,6 +26,49 @@ def get_connected_social_accounts(
     ]
     return real_accounts
 
+@router.get("/comment-automation/readiness")
+def get_comment_automation_readiness(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Inspect granted Meta permissions & comment automation capability readiness for current authenticated user's connected social accounts.
+    Strictly isolated per user. NEVER exposes tokens, secrets, or decrypted credentials.
+    """
+    from app.core.security_encryption import decrypt_token
+    from app.services.meta_service import meta_service
+    from datetime import datetime, timezone
+
+    accounts = social_account_repo.get_by_user(db, current_user.id)
+    fake_ids = {"109823471029", "17841400928371", "17841400928372", "17841400928373", "109823471030", "sandbox"}
+    real_accounts = [
+        a for a in accounts
+        if a.account_id not in fake_ids and not (a.access_token and ("sandbox" in a.access_token or "mock" in a.access_token))
+    ]
+
+    readiness_list = []
+    for acc in real_accounts:
+        decrypted_tok = decrypt_token(acc.access_token) or ""
+        readiness = meta_service.evaluate_account_comment_automation_readiness(acc, decrypted_tok)
+
+        # Update namespaced metadata_json["comment_automation"] while preserving all existing metadata fields
+        current_meta = dict(acc.metadata_json or {})
+        current_meta["comment_automation"] = {
+            "last_checked_at": datetime.now(timezone.utc).isoformat(),
+            "inspection_status": readiness.get("inspection_status"),
+            "oauth_permissions_ready": readiness.get("oauth_permissions_ready"),
+            "comment_read_ready": readiness.get("comment_read_ready"),
+            "comment_reply_ready": readiness.get("comment_reply_ready"),
+            "webhook_prerequisites_ready": readiness.get("webhook_prerequisites_ready"),
+            "missing_permissions": readiness.get("missing_permissions")
+        }
+        acc.metadata_json = current_meta
+        db.commit()
+
+        readiness_list.append(readiness)
+
+    return {"accounts": readiness_list}
+
 @router.post("/connect", response_model=SocialAccountResponse, status_code=status.HTTP_201_CREATED)
 def connect_social_account(
     request: SocialAccountConnectRequest,
