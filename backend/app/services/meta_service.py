@@ -935,9 +935,30 @@ class MetaGraphService:
                 "is_sandbox": False
             }
 
+    REQUIRED_META_OAUTH_SCOPES = [
+        "pages_show_list",
+        "pages_read_engagement",
+        "pages_manage_posts",
+        "pages_read_user_content",
+        "pages_manage_engagement",
+        "pages_manage_metadata",
+        "instagram_basic",
+        "instagram_content_publish",
+        "instagram_manage_comments",
+        "business_management"
+    ]
+
+    REQUIRED_COMMENT_AUTOMATION_SCOPES = [
+        "pages_read_user_content",
+        "pages_manage_engagement",
+        "pages_manage_metadata",
+        "instagram_manage_comments"
+    ]
+
     def get_authorization_url(self, state: str) -> str:
         """Generate official Meta OAuth Authorization Dialog URL with required permissions."""
         from urllib.parse import urlencode
+        scope_str = ",".join(self.REQUIRED_META_OAUTH_SCOPES)
         params = {
             "client_id": settings.META_APP_ID or "YOUR_META_APP_ID",
             "redirect_uri": settings.META_OAUTH_REDIRECT_URI,
@@ -948,9 +969,34 @@ class MetaGraphService:
             params["config_id"] = settings.META_CONFIG_ID
             params["override_default_response_type"] = "true"
         else:
-            params["scope"] = "pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,business_management"
+            params["scope"] = scope_str
+
+        logger.info(f"[META_OAUTH] Initiating Meta OAuth authorization flow with requested scopes: {scope_str}")
 
         return f"https://www.facebook.com/{settings.META_GRAPH_API_VERSION}/dialog/oauth?{urlencode(params)}"
+
+    def check_comment_automation_reconnection_needed(self, metadata_json: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Check whether a connected account requires OAuth reconnection to access comment automation permissions.
+        Accounts connected prior to the scope upgrade will not have comment automation permissions granted.
+        """
+        meta = metadata_json or {}
+        granted_scopes = meta.get("granted_scopes") or []
+        comment_ready = meta.get("comment_automation_ready", False)
+
+        missing_scopes = [s for s in self.REQUIRED_COMMENT_AUTOMATION_SCOPES if s not in granted_scopes]
+        reconnection_required = not comment_ready or bool(missing_scopes)
+
+        return {
+            "reconnection_required": reconnection_required,
+            "comment_automation_ready": comment_ready and not missing_scopes,
+            "missing_scopes": missing_scopes,
+            "message": (
+                "Reconnection required to enable Instagram and Facebook comment automation."
+                if reconnection_required
+                else "Account has all required comment automation permissions."
+            )
+        }
 
     def exchange_code_for_user_token(self, code: str) -> str:
         """Exchange Meta authorization code for short-lived user access token."""

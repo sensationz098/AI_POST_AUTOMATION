@@ -35,3 +35,15 @@ class SocialAccount(Base):
 
     owner = relationship("User")
     brand = relationship("BrandProfile")
+
+    @property
+    def requires_reconnection_for_comment_automation(self) -> bool:
+        """
+        Evaluate if an existing connected account requires OAuth reconnection to obtain comment automation scopes.
+        Existing accounts connected prior to scope expansion do not have comment_automation_ready=True in metadata_json.
+        """
+        meta = self.metadata_json or {}
+        if meta.get("comment_automation_ready") is True:
+            return False
+        return True
+
