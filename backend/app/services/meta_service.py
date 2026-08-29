@@ -998,6 +998,194 @@ class MetaGraphService:
             )
         }
 
+    def inspect_token_permissions(self, access_token: str) -> Dict[str, Any]:
+        """
+        Query Meta Graph API GET /me/permissions to safely determine actually granted, declined, or expired scopes.
+        NEVER logs or exposes sensitive access tokens.
+        """
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if not access_token or access_token.startswith("sandbox") or access_token.startswith("mock") or (is_mock_allowed and access_token == "mock_token"):
+            logger.info("[META_PERMISSIONS] Mock/sandbox token context; returning simulated granted permissions.")
+            return {
+                "status": "success",
+                "http_status": 200,
+                "permissions": {scope: "granted" for scope in self.REQUIRED_META_OAUTH_SCOPES}
+            }
+
+        url = f"{self.BASE_URL}/me/permissions"
+        params = {"access_token": access_token}
+
+        try:
+            res = requests.get(url, params=params, timeout=15)
+            data = res.json()
+
+            if res.status_code != 200:
+                logger.warning(f"[META_PERMISSIONS] Graph API permission inspection status: {res.status_code}")
+                status_str = "expired" if res.status_code in (401, 403) else "inspection_failed"
+                return {
+                    "status": status_str,
+                    "http_status": res.status_code,
+                    "permissions": {scope: status_str for scope in self.REQUIRED_META_OAUTH_SCOPES}
+                }
+
+            perm_data = data.get("data", [])
+            permissions_map = {}
+            for item in perm_data:
+                p_name = item.get("permission")
+                p_status = item.get("status")
+                if p_name:
+                    permissions_map[p_name] = p_status
+
+            result_map = {}
+            for scope in self.REQUIRED_META_OAUTH_SCOPES:
+                result_map[scope] = permissions_map.get(scope, "declined")
+
+            granted_count = sum(1 for v in result_map.values() if v == "granted")
+            logger.info(f"[META_PERMISSIONS] Permission inspection completed. Granted: {granted_count}/{len(self.REQUIRED_META_OAUTH_SCOPES)}")
+
+            return {
+                "status": "success",
+                "http_status": 200,
+                "permissions": result_map
+            }
+        except Exception as e:
+            logger.error(f"[META_PERMISSIONS] Permission inspection failed: {e}")
+            return {
+                "status": "inspection_failed",
+                "http_status": 500,
+                "permissions": {scope: "inspection_failed" for scope in self.REQUIRED_META_OAUTH_SCOPES}
+            }
+
+    def verify_facebook_page_capabilities(
+        self,
+        page_id: str,
+        permissions_map: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """
+        Determine whether connected Facebook Page appears capable of future comment reading, replies, and webhooks.
+        Based strictly on actually granted Meta permissions. Read-only.
+        """
+        required_fb_scopes = ["pages_read_user_content", "pages_manage_engagement", "pages_manage_metadata"]
+        missing_scopes = [s for s in required_fb_scopes if permissions_map.get(s) != "granted"]
+
+        comment_read_ready = permissions_map.get("pages_read_user_content") == "granted"
+        comment_reply_ready = permissions_map.get("pages_manage_engagement") == "granted"
+        webhook_management_ready = permissions_map.get("pages_manage_metadata") == "granted"
+
+        inspection_status = "success" if not missing_scopes else "missing_permissions"
+
+        return {
+            "platform": "facebook",
+            "page_id": page_id,
+            "oauth_permissions": {
+                s: permissions_map.get(s, "declined") for s in required_fb_scopes
+            },
+            "comment_read_ready": comment_read_ready,
+            "comment_reply_ready": comment_reply_ready,
+            "webhook_management_ready": webhook_management_ready,
+            "missing_permissions": missing_scopes,
+            "inspection_status": inspection_status
+        }
+
+    def verify_instagram_capabilities(
+        self,
+        ig_account_id: str,
+        permissions_map: Dict[str, str],
+        metadata_json: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Determine whether linked Instagram Professional account appears capable of future comment reading, replies, and webhooks.
+        Based strictly on actually granted Meta permissions and account linkage. Read-only.
+        """
+        meta = metadata_json or {}
+        ig_linked = bool(ig_account_id) and ig_account_id not in ("0", "none", "null")
+
+        required_ig_scopes = ["instagram_basic", "instagram_manage_comments"]
+        missing_scopes = [s for s in required_ig_scopes if permissions_map.get(s) != "granted"]
+        if not ig_linked and "instagram_account_not_linked" not in missing_scopes:
+            missing_scopes.append("instagram_account_not_linked")
+
+        comment_read_ready = ig_linked and permissions_map.get("instagram_basic") == "granted" and permissions_map.get("instagram_manage_comments") == "granted"
+        comment_reply_ready = ig_linked and permissions_map.get("instagram_manage_comments") == "granted"
+        webhook_ready_prerequisites = ig_linked and permissions_map.get("instagram_manage_comments") == "granted"
+
+        inspection_status = "success" if (ig_linked and not [s for s in required_ig_scopes if permissions_map.get(s) != "granted"]) else "missing_permissions"
+
+        return {
+            "platform": "instagram",
+            "instagram_account_id": ig_account_id,
+            "oauth_permissions": {
+                s: permissions_map.get(s, "declined") for s in required_ig_scopes
+            },
+            "instagram_account_linked": ig_linked,
+            "comment_read_ready": comment_read_ready,
+            "comment_reply_ready": comment_reply_ready,
+            "webhook_ready_prerequisites": webhook_ready_prerequisites,
+            "missing_permissions": missing_scopes,
+            "inspection_status": inspection_status
+        }
+
+    def evaluate_account_comment_automation_readiness(
+        self,
+        social_account: Any,
+        decrypted_token: str
+    ) -> Dict[str, Any]:
+        """
+        Build a single structured readiness result for a connected social account.
+        Checks actual granted permissions via Graph API, evaluates capabilities, and identifies missing permissions.
+        CRITICAL LOGIC: comment_automation_ready MUST remain False at this stage because webhook infrastructure and comment engines are not yet implemented.
+        """
+        inspection = self.inspect_token_permissions(decrypted_token)
+        perm_map = inspection.get("permissions", {})
+
+        platform = (getattr(social_account, "platform", "") or "").lower()
+        metadata = getattr(social_account, "metadata_json", {}) or {}
+        account_id = getattr(social_account, "account_id", "")
+        account_name = getattr(social_account, "account_name", "")
+        db_id = getattr(social_account, "id", 0)
+
+        if platform == "facebook":
+            fb_caps = self.verify_facebook_page_capabilities(account_id, perm_map)
+            missing = fb_caps["missing_permissions"]
+            comment_read_ready = fb_caps["comment_read_ready"]
+            comment_reply_ready = fb_caps["comment_reply_ready"]
+            webhook_prereqs = fb_caps["webhook_management_ready"]
+            oauth_ready = (inspection.get("status") == "success") and len(missing) == 0
+        else:  # instagram
+            ig_caps = self.verify_instagram_capabilities(account_id, perm_map, metadata)
+            missing = ig_caps["missing_permissions"]
+            comment_read_ready = ig_caps["comment_read_ready"]
+            comment_reply_ready = ig_caps["comment_reply_ready"]
+            webhook_prereqs = ig_caps["webhook_ready_prerequisites"]
+            oauth_ready = (inspection.get("status") == "success") and len(missing) == 0 and ig_caps["instagram_account_linked"]
+
+        requires_reconnection = len(missing) > 0 or inspection.get("status") in ("expired", "inspection_failed")
+
+        # SAFETY GUARANTEE: comment_automation_ready MUST be False
+        comment_automation_ready = False
+        webhook_configured = False
+
+        if requires_reconnection:
+            reason = f"Reconnection required to grant missing permissions: {', '.join(missing)}" if missing else "Meta access token expired or invalid. Reconnection required."
+        else:
+            reason = "Webhook infrastructure has not yet been configured"
+
+        return {
+            "social_account_id": db_id,
+            "platform": platform,
+            "account_name": account_name,
+            "requires_reconnection": requires_reconnection,
+            "oauth_permissions_ready": oauth_ready,
+            "comment_read_ready": comment_read_ready,
+            "comment_reply_ready": comment_reply_ready,
+            "webhook_configured": webhook_configured,
+            "webhook_prerequisites_ready": webhook_prereqs,
+            "comment_automation_ready": comment_automation_ready,
+            "missing_permissions": missing,
+            "reason": reason,
+            "inspection_status": inspection.get("status", "unknown")
+        }
+
     def exchange_code_for_user_token(self, code: str) -> str:
         """Exchange Meta authorization code for short-lived user access token."""
         if not settings.META_APP_SECRET or settings.META_APP_SECRET == "your-meta-app-secret" or settings.META_APP_SECRET.startswith("your-"):
