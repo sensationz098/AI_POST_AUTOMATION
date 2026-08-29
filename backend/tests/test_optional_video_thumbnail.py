@@ -116,7 +116,7 @@ def test_video_post_custom_thumbnail_publishing(client, db_session: Session):
         ]
 
         # Publish FB
-        meta_service.publish_to_facebook_page(
+        res_fb = meta_service.publish_to_facebook_page(
             page_id="12345",
             access_token="valid_token",
             message="Caption",
@@ -125,9 +125,19 @@ def test_video_post_custom_thumbnail_publishing(client, db_session: Session):
             thumbnail_url=thumb_url
         )
         assert mock_get.called
-        fb_kwargs = mock_post.call_args_list[0][1]
-        assert fb_kwargs["files"] is not None
-        assert "thumb" in fb_kwargs["files"]
+        assert res_fb["id"] == "fb_vid_999"
+
+        # 1st POST: Video Creation (no inline thumb files)
+        fb_vid_kwargs = mock_post.call_args_list[0][1]
+        assert "files" not in fb_vid_kwargs or fb_vid_kwargs["files"] is None
+
+        # 2nd POST: Thumbnail Upload to /{video_id}/thumbnails
+        fb_thumb_url = mock_post.call_args_list[1][0][0]
+        fb_thumb_kwargs = mock_post.call_args_list[1][1]
+        assert "/fb_vid_999/thumbnails" in fb_thumb_url
+        assert fb_thumb_kwargs["files"] is not None
+        assert "source" in fb_thumb_kwargs["files"]
+        assert fb_thumb_kwargs["data"]["is_preferred"] == "true"
 
         # Publish IG
         meta_service.publish_to_instagram_business(
@@ -138,7 +148,7 @@ def test_video_post_custom_thumbnail_publishing(client, db_session: Session):
             is_video=True,
             thumbnail_url=thumb_url
         )
-        ig_payload = mock_post.call_args_list[1][1]["data"]
+        ig_payload = mock_post.call_args_list[2][1]["data"]
         assert ig_payload.get("cover_url") == thumb_url
 
 
