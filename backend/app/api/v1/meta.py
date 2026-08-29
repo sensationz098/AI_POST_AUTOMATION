@@ -93,6 +93,10 @@ def meta_oauth_callback(
         saved_ig = 0
 
         for p in fb_pages:
+            fb_meta = {
+                "granted_scopes": meta_service.REQUIRED_META_OAUTH_SCOPES,
+                "comment_automation_ready": True
+            }
             social_account_repo.create_or_update(
                 db=db,
                 user_id=user_id,
@@ -101,12 +105,18 @@ def meta_oauth_callback(
                 account_name=p["account_name"],
                 access_token=p["access_token"],
                 token_type="page_access_token",
-                logo_url=p["logo_url"]
+                logo_url=p["logo_url"],
+                metadata_json=fb_meta
             )
             brand_repo.ensure_brand_profile_exists(db, user_id, p["account_name"], p["logo_url"])
             saved_fb += 1
 
         for ig in ig_accounts:
+            ig_meta = dict(ig.get("metadata") or {})
+            ig_meta.update({
+                "granted_scopes": meta_service.REQUIRED_META_OAUTH_SCOPES,
+                "comment_automation_ready": True
+            })
             social_account_repo.create_or_update(
                 db=db,
                 user_id=user_id,
@@ -116,7 +126,7 @@ def meta_oauth_callback(
                 access_token=ig["access_token"],
                 token_type="page_access_token",
                 logo_url=ig["logo_url"],
-                metadata_json=ig.get("metadata")
+                metadata_json=ig_meta
             )
             brand_repo.ensure_brand_profile_exists(db, user_id, ig["account_name"], ig["logo_url"])
             saved_ig += 1
