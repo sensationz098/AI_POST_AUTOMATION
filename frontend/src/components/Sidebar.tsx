@@ -9,6 +9,7 @@ import {
   Layers, 
   Calendar, 
   Share2, 
+  MessageSquare,
   ShieldCheck, 
   Bot,
   Zap,
@@ -44,6 +45,7 @@ const navGroups: NavGroup[] = [
   {
     title: 'Social & Brands',
     items: [
+      { name: 'Comments', href: '/comments', icon: MessageSquare },
       { name: 'Brand Profiles', href: '/brands', icon: Layers },
       { name: 'Meta Accounts', href: '/meta-connect', icon: Share2, isMeta: true },
     ],
