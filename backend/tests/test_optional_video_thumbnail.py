@@ -103,8 +103,15 @@ def test_video_post_custom_thumbnail_publishing(client, db_session: Session):
     with patch("app.services.meta_service.requests.get") as mock_get, \
          patch("app.services.meta_service.requests.post") as mock_post:
 
+        import io
+        from PIL import Image
+        img = Image.new("RGB", (1080, 1920), color="blue")
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG")
+        valid_jpg_bytes = buf.getvalue()
+
         mock_get.return_value.status_code = 200
-        mock_get.return_value.content = b"fake_image_bytes"
+        mock_get.return_value.content = valid_jpg_bytes
         mock_get.return_value.headers = {"Content-Type": "image/jpeg"}
         mock_get.return_value.json.return_value = {"status_code": "FINISHED"}
 
