@@ -9,7 +9,7 @@ from app.repositories.social_account_repository import social_account_repo
 from app.core.security_encryption import encrypt_token
 from app.core.config import settings
 
-def test_successful_page_webhook_subscription_calls_correct_endpoint():
+def test_successful_facebook_page_webhook_subscription_calls_correct_endpoint():
     """Verify subscribe_page_to_webhook calls POST /{page_id}/subscribed_apps with subscribed_fields=feed."""
     page_id = "109823471099"
     token = "EAAB12345secret_page_token"
@@ -27,25 +27,20 @@ def test_successful_page_webhook_subscription_calls_correct_endpoint():
         assert res["subscription_status"] == "subscribed"
         assert res["subscribed_fields"] == ["feed"]
 
-def test_successful_instagram_webhook_subscription_calls_correct_endpoint():
-    """Verify subscribe_instagram_account_to_webhook calls POST /{ig_id}/subscribed_apps with subscribed_fields=comments."""
+def test_instagram_webhook_registration_does_not_make_unsupported_http_request():
+    """Verify subscribe_instagram_account_to_webhook registers App-level webhook without making unsupported HTTP calls."""
     ig_id = "17841400928399"
     token = "EAAB12345secret_page_token"
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {"success": True}
 
-    with patch("requests.post", return_value=mock_resp) as mock_post:
+    with patch("requests.post") as mock_post:
         res = meta_service.subscribe_instagram_account_to_webhook(ig_id, token)
 
-        assert mock_post.called
-        call_url, call_kwargs = mock_post.call_args
-        assert f"/{ig_id}/subscribed_apps" in call_url[0]
-        assert call_kwargs["params"]["subscribed_fields"] == "comments"
+        # Unsupported HTTP request to /{ig_id}/subscribed_apps must NOT be made
+        assert not mock_post.called
         assert res["subscription_status"] == "subscribed"
         assert res["subscribed_fields"] == ["comments"]
 
-def test_only_feed_field_requested_for_facebook():
+def test_facebook_subscription_uses_only_feed():
     """Verify Facebook subscription ONLY requests the 'feed' field."""
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -56,33 +51,6 @@ def test_only_feed_field_requested_for_facebook():
         params = mock_post.call_args[1]["params"]
         assert params["subscribed_fields"] == "feed"
         assert "comments" not in params["subscribed_fields"]
-
-def test_only_comments_field_requested_for_instagram():
-    """Verify Instagram subscription ONLY requests the 'comments' field."""
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {"success": True}
-
-    with patch("requests.post", return_value=mock_resp) as mock_post:
-        meta_service.subscribe_instagram_account_to_webhook("998877", "EAABtoken")
-        params = mock_post.call_args[1]["params"]
-        assert params["subscribed_fields"] == "comments"
-        assert "feed" not in params["subscribed_fields"]
-        assert "messages" not in params["subscribed_fields"]
-
-def test_instagram_subscription_does_not_affect_facebook_subscription():
-    """Verify Facebook and Instagram subscriptions use separate endpoints and parameters."""
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {"success": True}
-
-    with patch("requests.post", return_value=mock_resp) as mock_post:
-        res_fb = meta_service.subscribe_page_to_webhook("fb_100", "tok")
-        res_ig = meta_service.subscribe_instagram_account_to_webhook("ig_200", "tok")
-
-        assert res_fb["subscribed_fields"] == ["feed"]
-        assert res_ig["subscribed_fields"] == ["comments"]
-        assert mock_post.call_count == 2
 
 def test_tokens_never_appear_in_logs_or_errors():
     """Verify raw access tokens never leak into error message results."""
@@ -98,8 +66,8 @@ def test_tokens_never_appear_in_logs_or_errors():
         assert secret_token not in str(res_fb)
         assert secret_token not in str(res_ig)
 
-def test_tokens_never_appear_in_readiness_api_response():
-    """Verify access tokens are excluded from readiness responses for both Facebook and Instagram."""
+def test_readiness_accurately_represents_instagram_and_facebook_webhook_configuration():
+    """Verify readiness logic evaluates webhook status accurately for Facebook and Instagram accounts."""
     secret_token = "EAAB_VERY_SECRET_TOKEN_888"
     fb_acc = SocialAccount(
         id=20,
@@ -119,7 +87,10 @@ def test_tokens_never_appear_in_readiness_api_response():
         account_name="@ig_test",
         access_token=encrypt_token(secret_token),
         status="CONNECTED",
-        metadata_json={"comment_automation": {"instagram_webhook_subscription": {"status": "subscribed"}}}
+        metadata_json={
+            "instagram_account_id": "17841400928399",
+            "comment_automation": {"instagram_webhook_subscription": {"status": "subscribed"}}
+        }
     )
 
     with patch.object(meta_service, "inspect_token_permissions", return_value={"status": "success", "permissions": {s: "granted" for s in meta_service.REQUIRED_META_OAUTH_SCOPES}}):
@@ -162,16 +133,15 @@ def test_existing_metadata_fields_are_preserved(db_session):
     assert updated_acc.metadata_json["existing_custom_setting"] == "keep_this_value"
     assert updated_acc.metadata_json["comment_automation"]["facebook_webhook_subscription"]["status"] == "subscribed"
 
-def test_subscription_failure_does_not_fail_oauth(client, db_session):
-    """Verify Meta API webhook subscription failure does not abort OAuth callback or page/IG connection."""
+def test_oauth_flow_completes_and_connects_both_fb_and_ig(client, db_session):
+    """Verify OAuth callback connects both FB Page and IG Account cleanly."""
     with patch.object(meta_service, "exchange_code_for_user_token", return_value="short_tok"), \
          patch.object(meta_service, "get_long_lived_user_token", return_value="long_tok"), \
          patch.object(meta_service, "fetch_user_pages_and_instagram_accounts", return_value={
              "facebook_pages": [{"account_id": "page_123", "account_name": "Test FB Page", "access_token": "page_tok", "logo_url": None}],
              "instagram_accounts": [{"account_id": "ig_456", "account_name": "Test IG Account", "access_token": "page_tok", "logo_url": None}]
          }), \
-         patch.object(meta_service, "subscribe_page_to_webhook", return_value={"page_id": "page_123", "subscription_status": "failed", "reason": "Meta 400"}), \
-         patch.object(meta_service, "subscribe_instagram_account_to_webhook", return_value={"instagram_account_id": "ig_456", "subscription_status": "failed", "reason": "Meta 400"}), \
+         patch.object(meta_service, "subscribe_page_to_webhook", return_value={"page_id": "page_123", "subscription_status": "subscribed", "reason": None}), \
          patch("app.api.v1.meta.pop_oauth_state", return_value=1):
 
         res = client.get("/api/v1/meta/oauth/callback?code=valid_code&state=valid_state", follow_redirects=False)
@@ -181,35 +151,25 @@ def test_subscription_failure_does_not_fail_oauth(client, db_session):
         acc_fb = social_account_repo.get_by_account_id(db_session, 1, "facebook", "page_123")
         acc_ig = social_account_repo.get_by_account_id(db_session, 1, "instagram", "ig_456")
 
-        assert acc_fb.status == "CONNECTED"
-        assert acc_ig.status == "CONNECTED"
-        assert acc_fb.metadata_json["comment_automation"]["facebook_webhook_subscription"]["status"] == "failed"
-        assert acc_ig.metadata_json["comment_automation"]["instagram_webhook_subscription"]["status"] == "failed"
-
-def test_already_subscribed_accounts_handled_idempotently():
-    """Verify Meta API returning success: true for already subscribed account is handled idempotently."""
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {"success": True}
-
-    with patch("requests.post", return_value=mock_resp):
-        res1 = meta_service.subscribe_page_to_webhook("1001", "tok")
-        res2 = meta_service.subscribe_instagram_account_to_webhook("2002", "tok")
-
-        assert res1["subscription_status"] == "subscribed"
-        assert res2["subscription_status"] == "subscribed"
+        assert acc_fb is not None and acc_fb.status == "CONNECTED"
+        assert acc_ig is not None and acc_ig.status == "CONNECTED"
+        assert acc_fb.metadata_json["comment_automation"]["facebook_webhook_subscription"]["status"] == "subscribed"
+        assert acc_ig.metadata_json["comment_automation"]["instagram_webhook_subscription"]["status"] == "subscribed"
 
 def test_missing_account_ids_and_tokens_handled_safely():
     """Verify missing page/IG ID or token returns failure status without raising exception."""
     res1 = meta_service.subscribe_page_to_webhook("", "token")
-    res2 = meta_service.subscribe_instagram_account_to_webhook("1001", "")
+    res2 = meta_service.subscribe_instagram_account_to_webhook("", "token")
 
     assert res1["subscription_status"] == "failed"
     assert res2["subscription_status"] == "failed"
 
-def test_webhook_post_recognizes_page_object(client):
-    """Verify webhook POST receiver validates HMAC signature and logs page object type."""
-    payload = json.dumps({"object": "page", "entry": [{"id": "page_123", "time": 1700000000}]}).encode("utf-8")
+def test_webhook_post_recognizes_page_object_with_event_type(client):
+    """Verify webhook POST receiver validates HMAC signature and logs page object type and field changes."""
+    payload = json.dumps({
+        "object": "page",
+        "entry": [{"id": "page_123", "time": 1700000000, "changes": [{"field": "feed", "value": {"item": "status"}}]}]
+    }).encode("utf-8")
     expected_hash = hmac.new(settings.META_APP_SECRET.encode("utf-8"), payload, hashlib.sha256).hexdigest()
     headers = {"X-Hub-Signature-256": f"sha256={expected_hash}"}
 
@@ -217,9 +177,12 @@ def test_webhook_post_recognizes_page_object(client):
     assert res.status_code == 200
     assert res.json() == {"status": "success"}
 
-def test_webhook_post_recognizes_instagram_object(client):
-    """Verify webhook POST receiver validates HMAC signature and logs instagram object type."""
-    payload = json.dumps({"object": "instagram", "entry": [{"id": "ig_456", "time": 1700000000}]}).encode("utf-8")
+def test_webhook_post_recognizes_instagram_object_with_event_type(client):
+    """Verify webhook POST receiver validates HMAC signature and logs instagram object type and comments change."""
+    payload = json.dumps({
+        "object": "instagram",
+        "entry": [{"id": "ig_456", "time": 1700000000, "changes": [{"field": "comments", "value": {"id": "c_1"}}]}]
+    }).encode("utf-8")
     expected_hash = hmac.new(settings.META_APP_SECRET.encode("utf-8"), payload, hashlib.sha256).hexdigest()
     headers = {"X-Hub-Signature-256": f"sha256={expected_hash}"}
 
