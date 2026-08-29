@@ -55,14 +55,33 @@ class PublishingRepository:
     def get_batch(self, db: Session, batch_id: int) -> Optional[PublishingBatch]:
         return db.query(PublishingBatch).filter(PublishingBatch.id == batch_id).first()
 
+    def update_job_container_id(
+        self,
+        db: Session,
+        job_id: int,
+        ig_container_id: str
+    ) -> Optional[PublishingJob]:
+        job = db.query(PublishingJob).filter(PublishingJob.id == job_id).first()
+        if job:
+            job.ig_container_id = ig_container_id
+            job.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(job)
+        return job
+
     def update_job_status(
         self,
         db: Session,
         job_id: int,
         status: str,
         external_post_id: Optional[str] = None,
+        ig_container_id: Optional[str] = None,
         error_code: Optional[str] = None,
-        error_message: Optional[str] = None
+        error_message: Optional[str] = None,
+        meta_status_code: Optional[int] = None,
+        meta_error_code: Optional[int] = None,
+        meta_error_subcode: Optional[int] = None,
+        meta_error_message: Optional[str] = None
     ) -> Optional[PublishingJob]:
         job = db.query(PublishingJob).filter(PublishingJob.id == job_id).first()
         if job:
@@ -70,10 +89,20 @@ class PublishingRepository:
             job.attempts += 1
             if external_post_id:
                 job.external_post_id = external_post_id
+            if ig_container_id:
+                job.ig_container_id = ig_container_id
             if error_code:
                 job.error_code = error_code
             if error_message:
                 job.error_message = error_message
+            if meta_status_code is not None:
+                job.meta_status_code = meta_status_code
+            if meta_error_code is not None:
+                job.meta_error_code = meta_error_code
+            if meta_error_subcode is not None:
+                job.meta_error_subcode = meta_error_subcode
+            if meta_error_message:
+                job.meta_error_message = meta_error_message
             if status == JobStatus.SUCCESS.value:
                 job.published_at = datetime.now(timezone.utc)
             job.updated_at = datetime.now(timezone.utc)

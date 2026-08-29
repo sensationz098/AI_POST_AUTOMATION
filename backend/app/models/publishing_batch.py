@@ -62,8 +62,15 @@ class PublishingJob(Base):
     status = Column(String(50), default=JobStatus.QUEUED.value, index=True)
     
     external_post_id = Column(String(255), nullable=True)  # FB post ID or IG media ID
+    ig_container_id = Column(String(255), nullable=True)  # Persisted IG container ID
+    
     error_code = Column(String(100), nullable=True)  # "TOKEN_EXPIRED", "PERMISSION_ERROR", "RATE_LIMIT", etc.
     error_message = Column(Text, nullable=True)  # Clean human-readable message
+    
+    meta_status_code = Column(Integer, nullable=True)  # Raw HTTP status code (e.g. 403)
+    meta_error_code = Column(Integer, nullable=True)  # Raw Meta error code (e.g. 4)
+    meta_error_subcode = Column(Integer, nullable=True)  # Raw Meta error subcode (e.g. 2207051)
+    meta_error_message = Column(Text, nullable=True)  # Raw Meta API error string
     
     attempts = Column(Integer, default=0)
     published_at = Column(DateTime, nullable=True)

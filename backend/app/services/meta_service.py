@@ -1,10 +1,51 @@
 import requests
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable
+from datetime import datetime, timezone, timedelta
 from app.core.config import settings
 from app.core.logging_config import sanitize_url
 
 logger = logging.getLogger(__name__)
+
+class MetaPublishException(Exception):
+    """Custom exception containing structured Meta API error metadata."""
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        error_code: Optional[int] = None,
+        error_subcode: Optional[int] = None,
+        error_message: Optional[str] = None,
+        raw_response: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message)
+        self.status_code = status_code
+        self.error_code = error_code
+        self.error_subcode = error_subcode
+        self.error_message = error_message or message
+        self.raw_response = raw_response or {}
+
+def is_ambiguous_meta_error(
+    status_code: Optional[int],
+    error_code: Optional[int],
+    error_subcode: Optional[int],
+    error_message: Optional[str]
+) -> bool:
+    """
+    Distinguishes a definitive API failure from an ambiguous publication outcome.
+    Ambiguous scenarios include HTTP 403 rate limits (codes 4, 17, 32, subcode 2207051), HTTP 429, 5xx server errors.
+    """
+    if not status_code:
+        return False
+    err_msg = (error_message or "").lower()
+    if status_code == 403:
+        if error_code in [4, 17, 32] or error_subcode in [2207051] or "limit" in err_msg or "rate" in err_msg:
+            return True
+    if status_code == 429:
+        return True
+    if status_code >= 500:
+        return True
+    return False
 
 class MetaGraphService:
     BASE_URL = f"https://graph.facebook.com/{settings.META_GRAPH_API_VERSION}"
@@ -12,7 +53,6 @@ class MetaGraphService:
     def publish_to_facebook_page(
         self, page_id: str, access_token: str, message: str, image_url: Optional[str] = None, is_video: bool = False, thumbnail_url: Optional[str] = None
     ) -> Dict[str, Any]:
-
         """Publish a photo or video post to a Facebook Page via Meta Graph API."""
         is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
         if is_mock_allowed and (not page_id or not access_token or page_id == "sandbox" or access_token.startswith("sandbox") or access_token.startswith("mock")):
@@ -112,8 +152,169 @@ class MetaGraphService:
             logger.error(f"[FB_PUBLISH] Meta Service Facebook publish error: {e}")
             raise e
 
+    def verify_instagram_container_published(
+        self,
+        ig_user_id: str,
+        creation_id: str,
+        access_token: str,
+        caption: Optional[str] = None,
+        publish_started_at: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Safely query Meta Graph API to check whether an Instagram container was actually published.
+        
+        CRITICAL RULE: status_code == FINISHED only confirms container readiness before media_publish, NOT publication.
+        Verification checks:
+        1. Container node direct status: GET /{creation_id}?fields=status_code,status,id
+           If status_code == "PUBLISHED", publication is confirmed.
+        2. Account media list: GET /{ig-user-id}/media?fields=id,caption,timestamp,permalink
+           Strict matching rules for fallback account media verification:
+           - REQUIRES exact normalized caption equality (no substring / inclusion matching).
+           - REQUIRES timestamp correlation (item timestamp within publish attempt window).
+           - CONSERVATIVE FAILURE: Returns is_published=False if 0 or >1 candidates match to prevent
+             concurrent jobs or duplicate captions from triggering false success.
+        """
+        logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_VERIFICATION_STARTED | ig_user_id={ig_user_id} | container_id={creation_id}")
+        
+        # 1. Direct Container Node Query
+        try:
+            c_res = requests.get(
+                f"{self.BASE_URL}/{creation_id}",
+                params={"fields": "status_code,status,id", "access_token": access_token},
+                timeout=15
+            )
+            if c_res.status_code == 200:
+                c_data = c_res.json()
+                st_code = c_data.get("status_code")
+                c_id = c_data.get("id")
+                logger.info(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_VERIFY_CHECK | container_id={creation_id} | status_code={st_code}")
+                
+                if st_code == "PUBLISHED":
+                    pub_id = c_id if (c_id and str(c_id) != str(creation_id)) else f"ig_pub_{creation_id}"
+                    logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_CONFIRMED_SUCCESS | container_id={creation_id} | published_media_id={pub_id}")
+                    return {
+                        "is_published": True,
+                        "published_media_id": str(pub_id),
+                        "status_code": "PUBLISHED",
+                        "verification_source": "container_status"
+                    }
+                elif st_code in ["ERROR", "EXPIRED"]:
+                    logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_CONFIRMED_NOT_FOUND | container_id={creation_id} | status_code={st_code}")
+                    return {
+                        "is_published": False,
+                        "status_code": st_code,
+                        "verification_source": "container_status"
+                    }
+        except Exception as v_err:
+            logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_VERIFY_WARNING | container_id={creation_id} | error={v_err}")
+
+        # 2. Query Recent Account Media List (Strict Fallback)
+        try:
+            m_res = requests.get(
+                f"{self.BASE_URL}/{ig_user_id}/media",
+                params={"fields": "id,caption,timestamp,permalink", "limit": 10, "access_token": access_token},
+                timeout=15
+            )
+            if m_res.status_code == 200 and caption:
+                m_data = m_res.json()
+                media_items = m_data.get("data", [])
+                
+                # Normalize target caption: strip whitespace and normalize line endings
+                def _normalize_cap(raw: Optional[str]) -> str:
+                    if not raw:
+                        return ""
+                    lines = [l.strip() for l in raw.replace("\r\n", "\n").split("\n")]
+                    return "\n".join(lines).strip()
+
+                target_norm = _normalize_cap(caption)
+
+                # Establish publish attempt timestamp window
+                # The timestamp window exists to prevent older Instagram posts with identical captions
+                # (published hours or days ago) from being accepted as false-positive proof for the current attempt.
+                ref_time = publish_started_at or datetime.now(timezone.utc)
+                if ref_time.tzinfo is None:
+                    ref_time = ref_time.replace(tzinfo=timezone.utc)
+                
+                # Allowed publish attempt window: 15 minutes before publish start up to 5 minutes after current time
+                window_start = ref_time - timedelta(minutes=15)
+                window_end = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+                matching_candidates = []
+
+                for item in media_items:
+                    item_cap_norm = _normalize_cap(item.get("caption"))
+                    
+                    # REQUIRE STRICT EXACT EQUALITY (NO SUBSTRING / PARTIAL MATCHING)
+                    if not target_norm or target_norm != item_cap_norm:
+                        continue
+
+                    # REQUIRE VALID TIMESTAMP FROM META (MISSING TIMESTAMP CANNOT BE VERIFIED)
+                    raw_ts = item.get("timestamp")
+                    if not raw_ts:
+                        logger.info(f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_TIMESTAMP_MISSING | item_id={item.get('id')}")
+                        continue
+
+                    try:
+                        clean_ts = raw_ts.replace("+0000", "+00:00").replace("Z", "+00:00")
+                        item_dt = datetime.fromisoformat(clean_ts)
+                        if item_dt.tzinfo is None:
+                            item_dt = item_dt.replace(tzinfo=timezone.utc)
+
+                        # REQUIRE TIMESTAMP CORRELATION WITHIN PUBLISH WINDOW
+                        if not (window_start <= item_dt <= window_end):
+                            logger.info(
+                                f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_TIMESTAMP_OUTSIDE_WINDOW | "
+                                f"item_id={item.get('id')} | item_dt={item_dt.isoformat()} | window_start={window_start.isoformat()}"
+                            )
+                            continue
+                    except Exception as ts_err:
+                        logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_TIMESTAMP_PARSE_ERROR | item_id={item.get('id')} | error={ts_err}")
+                        continue
+
+                    matching_candidates.append(item)
+
+                # CONSERVATIVE FAILURE RULES FOR CONCURRENT / AMBIGUOUS MATCHES:
+                # Exactly 1 candidate matching exact caption + timestamp window = Confirmed Success.
+                # >1 candidates matching = Cannot uniquely identify candidate -> Conservative Failure (is_published=False).
+                if len(matching_candidates) == 1:
+                    matched_item = matching_candidates[0]
+                    pub_id = matched_item.get("id")
+                    logger.info(
+                        f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_CONFIRMED_SUCCESS | container_id={creation_id} | "
+                        f"published_media_id={pub_id} | verification_source=account_media_list"
+                    )
+                    return {
+                        "is_published": True,
+                        "published_media_id": str(pub_id),
+                        "status_code": "PUBLISHED",
+                        "verification_source": "account_media_list"
+                    }
+                elif len(matching_candidates) > 1:
+                    logger.warning(
+                        f"[PUBLISH_TRACE] INSTAGRAM_VERIFY_CONCURRENT_AMBIGUOUS_MATCHES | container_id={creation_id} | "
+                        f"candidates_found={len(matching_candidates)} | caption={caption[:30]}"
+                    )
+        except Exception as m_err:
+            logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_MEDIA_VERIFY_WARNING | ig_user_id={ig_user_id} | error={m_err}")
+
+        logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_CONFIRMED_NOT_FOUND | container_id={creation_id}")
+        return {
+            "is_published": False,
+            "status_code": "NOT_PUBLISHED",
+            "verification_source": "verification_failed"
+        }
+
     def publish_to_instagram_business(
-        self, ig_user_id: str, access_token: str, caption: str, image_url: str, is_video: bool = False, thumbnail_url: Optional[str] = None
+        self,
+        ig_user_id: str,
+        access_token: str,
+        caption: str,
+        image_url: str,
+        is_video: bool = False,
+        thumbnail_url: Optional[str] = None,
+        on_container_created: Optional[Callable[[str], None]] = None,
+        existing_container_id: Optional[str] = None,
+        publish_started_at: Optional[datetime] = None
     ) -> Dict[str, Any]:
         """
         Publish Photo or Video Reel to Instagram Business Account via 2-Step Container Graph API flow:
@@ -121,6 +322,7 @@ class MetaGraphService:
         Step 2: Bounded polling of container status until FINISHED (with exponential backoff & configurable timeout)
         Step 3: Publish IG Media Container (POST /{ig-user-id}/media_publish)
         """
+        publish_started_at = publish_started_at or datetime.now(timezone.utc)
         is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
         if is_mock_allowed and (not ig_user_id or not access_token or ig_user_id == "sandbox" or access_token.startswith("sandbox") or access_token.startswith("mock")):
             logger.info("[IG_PUBLISH] Executing Sandbox Instagram Publish Simulation.")
@@ -131,7 +333,28 @@ class MetaGraphService:
             }
 
         if not ig_user_id or not access_token:
-            raise Exception("Instagram Business Account ID and valid Access Token are required for publishing.")
+            raise MetaPublishException("Instagram Business Account ID and valid Access Token are required for publishing.")
+
+        # Check existing container before creating a new one on retries
+        if existing_container_id and not (is_mock_allowed and (ig_user_id == "sandbox" or access_token.startswith("sandbox") or access_token.startswith("mock"))):
+            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_RETRY_BLOCKED_PENDING_VERIFICATION | existing_container_id={existing_container_id}")
+            v_res = self.verify_instagram_container_published(
+                ig_user_id=ig_user_id,
+                creation_id=existing_container_id,
+                access_token=access_token,
+                caption=caption,
+                publish_started_at=publish_started_at
+            )
+            if v_res.get("is_published"):
+                pub_id = v_res.get("published_media_id")
+                logger.info(f"[PUBLISH_TRACE] INSTAGRAM_RETRY_VERIFICATION_SUCCESS | container_id={existing_container_id} | published_media_id={pub_id}")
+                return {
+                    "container_id": existing_container_id,
+                    "id": str(pub_id),
+                    "status": "published",
+                    "was_retry_verified": True
+                }
+            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_SAFE_REPUBLISH_ALLOWED | container_id={existing_container_id}")
 
         try:
             container_url = f"{self.BASE_URL}/{ig_user_id}/media"
@@ -165,15 +388,30 @@ class MetaGraphService:
                 err_code = err_dict.get("code")
                 err_subcode = err_dict.get("error_subcode")
                 logger.error(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_FAILED | ig_user_id={ig_user_id} | status_code={container_res.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={err}")
-                raise Exception(f"IG Container Creation Failed ({container_res.status_code}) [code={err_code}, subcode={err_subcode}]: {err}")
+                raise MetaPublishException(
+                    message=f"IG Container Creation Failed ({container_res.status_code}) [code={err_code}, subcode={err_subcode}]: {err}",
+                    status_code=container_res.status_code,
+                    error_code=err_code,
+                    error_subcode=err_subcode,
+                    error_message=err,
+                    raw_response=c_data
+                )
 
             creation_id = c_data.get("id")
             if not creation_id:
-                raise Exception(f"IG Container Creation Failed: Meta returned success response without container ID: {c_data}")
+                raise MetaPublishException(f"IG Container Creation Failed: Meta returned success response without container ID: {c_data}")
 
             logger.info(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_CREATED | ig_user_id={ig_user_id} | container_id={creation_id}")
 
-            # Step 2: Bounded polling of container status until FINISHED (with exponential backoff & configurable timeout)
+            # Persist container ID immediately upon creation
+            if on_container_created:
+                try:
+                    on_container_created(str(creation_id))
+                    logger.info(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_PERSISTED | container_id={creation_id}")
+                except Exception as cb_err:
+                    logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_PERSIST_WARNING | container_id={creation_id} | error={cb_err}")
+
+            # Step 2: Bounded polling of container status until FINISHED
             import time
             status_url = f"{self.BASE_URL}/{creation_id}"
             max_wait_seconds = settings.META_VIDEO_PROCESSING_MAX_SECONDS
@@ -215,21 +453,19 @@ class MetaGraphService:
                 elif last_status_code == "ERROR":
                     err_msg = last_status_details or st_data.get("error", {}).get("message") or "Unknown container processing error on Meta servers"
                     logger.error(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_FAILED | container_id={creation_id} | status_code=ERROR | error={err_msg} | elapsed={elapsed}s")
-                    raise Exception(f"IG Container processing failed on Meta servers (ERROR): {err_msg}")
+                    raise MetaPublishException(f"IG Container processing failed on Meta servers (ERROR): {err_msg}")
                 elif last_status_code == "EXPIRED":
                     logger.error(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_EXPIRED | container_id={creation_id} | status_code=EXPIRED | elapsed={elapsed}s")
-                    raise Exception(f"IG Container processing expired on Meta servers (EXPIRED). Container ID: {creation_id}")
+                    raise MetaPublishException(f"IG Container processing expired on Meta servers (EXPIRED). Container ID: {creation_id}")
 
-                # Still processing (e.g. IN_PROGRESS or pending)
                 time.sleep(current_delay)
                 current_delay = min(current_delay * backoff_factor, max_delay)
 
             if not is_finished:
                 total_elapsed = round(time.time() - start_time, 2)
                 logger.error(f"[PUBLISH_TRACE] INSTAGRAM_CONTAINER_TIMEOUT | container_id={creation_id} | status_code={last_status_code} | total_time={total_elapsed}s | max_allowed={max_wait_seconds}s")
-                raise Exception(
-                    f"IG Video container processing timed out on Meta servers after {total_elapsed}s (status: {last_status_code or 'IN_PROGRESS'}). "
-                    f"Publication could not be confirmed within the configured processing window ({max_wait_seconds}s). Container ID: {creation_id}"
+                raise MetaPublishException(
+                    f"IG Video container processing timed out on Meta servers after {total_elapsed}s (status: {last_status_code or 'IN_PROGRESS'}). Container ID: {creation_id}"
                 )
 
             # Step 3: Publish Media Container ONLY after FINISHED status is confirmed
@@ -239,9 +475,35 @@ class MetaGraphService:
                 "creation_id": creation_id,
                 "access_token": access_token
             }
-            pub_res = requests.post(publish_url, data=publish_payload, timeout=30)
-            p_data = pub_res.json()
-            logger.info(f"[PUBLISH_TRACE] INSTAGRAM_RESPONSE_RECEIVED | container_id={creation_id} | status_code={pub_res.status_code} | response_keys={list(p_data.keys())}")
+            
+            pub_res = None
+            p_data = {}
+            try:
+                pub_res = requests.post(publish_url, data=publish_payload, timeout=30)
+                p_data = pub_res.json()
+                logger.info(f"[PUBLISH_TRACE] INSTAGRAM_RESPONSE_RECEIVED | container_id={creation_id} | status_code={pub_res.status_code} | response_keys={list(p_data.keys())}")
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as req_err:
+                logger.warning(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_RESPONSE_AMBIGUOUS | container_id={creation_id} | network_error={req_err}")
+                v_res = self.verify_instagram_container_published(
+                    ig_user_id=ig_user_id,
+                    creation_id=creation_id,
+                    access_token=access_token,
+                    caption=caption
+                )
+                if v_res.get("is_published"):
+                    pub_id = v_res.get("published_media_id")
+                    logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_CONFIRMED_SUCCESS | container_id={creation_id} | published_media_id={pub_id}")
+                    return {
+                        "container_id": creation_id,
+                        "id": str(pub_id),
+                        "status": "published",
+                        "was_ambiguous_verified": True
+                    }
+                raise MetaPublishException(
+                    message=f"IG Media Publish network timeout/connection error for container {creation_id}: {req_err}",
+                    status_code=504,
+                    error_message=str(req_err)
+                )
 
             if pub_res.status_code != 200:
                 err_dict = p_data.get("error", {})
@@ -249,16 +511,50 @@ class MetaGraphService:
                 err_code = err_dict.get("code")
                 err_subcode = err_dict.get("error_subcode")
                 logger.error(f"[PUBLISH_TRACE] INSTAGRAM_MEDIA_PUBLISH_FAILED | container_id={creation_id} | status_code={pub_res.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={err}")
-                raise Exception(f"IG Media Publish Failed ({pub_res.status_code}) [code={err_code}, subcode={err_subcode}]: {err}")
+                
+                # Check ambiguous outcome
+                if is_ambiguous_meta_error(pub_res.status_code, err_code, err_subcode, err):
+                    logger.warning(
+                        f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_RESPONSE_AMBIGUOUS | container_id={creation_id} | "
+                        f"status_code={pub_res.status_code} | error_code={err_code} | error_subcode={err_subcode}"
+                    )
+                    v_res = self.verify_instagram_container_published(
+                        ig_user_id=ig_user_id,
+                        creation_id=creation_id,
+                        access_token=access_token,
+                        caption=caption
+                    )
+                    if v_res.get("is_published"):
+                        pub_id = v_res.get("published_media_id")
+                        logger.info(f"[PUBLISH_TRACE] INSTAGRAM_PUBLISH_CONFIRMED_SUCCESS | container_id={creation_id} | published_media_id={pub_id}")
+                        return {
+                            "container_id": creation_id,
+                            "id": str(pub_id),
+                            "status": "published",
+                            "was_ambiguous_verified": True
+                        }
+
+                raise MetaPublishException(
+                    message=f"IG Media Publish Failed ({pub_res.status_code}) [code={err_code}, subcode={err_subcode}]: {err}",
+                    status_code=pub_res.status_code,
+                    error_code=err_code,
+                    error_subcode=err_subcode,
+                    error_message=err,
+                    raw_response=p_data
+                )
 
             published_media_id = p_data.get("id")
             if not published_media_id:
                 logger.error(f"[PUBLISH_TRACE] INSTAGRAM_MEDIA_PUBLISH_NO_ID | container_id={creation_id} | response={p_data}")
-                raise Exception(f"IG Media Publish succeeded but returned no published media ID: {p_data}")
+                raise MetaPublishException(
+                    message=f"IG Media Publish succeeded but returned no published media ID: {p_data}",
+                    status_code=200,
+                    raw_response=p_data
+                )
 
             logger.info(
                 f"[PUBLISH_TRACE] INSTAGRAM_MEDIA_PUBLISH_SUCCESS | ig_user_id={ig_user_id} | container_id={creation_id} | "
-                f"published_media_id={published_media_id} | sanitized_response={{\"platform\": \"instagram\", \"container_id\": \"{creation_id}\", \"status_code\": \"FINISHED\", \"published_media_id\": \"{published_media_id}\"}}"
+                f"published_media_id={published_media_id}"
             )
             return {
                 "container_id": creation_id,
@@ -266,9 +562,9 @@ class MetaGraphService:
                 "status": "published"
             }
         except Exception as e:
-            logger.error(f"[IG_PUBLISH] Meta Service Instagram publish error: {e}")
-            raise e
-
+            if not isinstance(e, MetaPublishException):
+                logger.error(f"[IG_PUBLISH] Meta Service Instagram publish error: {e}")
+            raise
 
 
     def fetch_facebook_page_metrics(self, page_id: str, access_token: str) -> Dict[str, Any]:
