@@ -186,25 +186,26 @@ def test_fallback_verify_substring_caption_rejected():
     now = datetime.now(timezone.utc)
     valid_ts = now.isoformat()
 
-    with patch("requests.get") as mock_get:
+    with patch("time.sleep"), patch("requests.get") as mock_get:
         c_res = MagicMock(status_code=200)
         c_res.json.return_value = {"status_code": "FINISHED"}
 
-        # Account has "Sale", target is "Big Summer Sale"
         m_res = MagicMock(status_code=200)
         m_res.json.return_value = {
             "data": [
                 {"id": "media_old_sale", "caption": "Sale", "timestamp": valid_ts}
             ]
         }
-        mock_get.side_effect = [c_res, m_res]
+        mock_get.side_effect = lambda *args, **kwargs: c_res if "102" in args[0] else m_res
 
         res = meta_service.verify_instagram_container_published(
             ig_user_id="17841400000000000",
             creation_id="container_102",
             access_token="valid_token",
             caption="Big Summer Sale",
-            publish_started_at=now
+            publish_started_at=now,
+            max_wait_seconds=1.0,
+            poll_interval=1.0
         )
 
         assert res["is_published"] is False
@@ -215,7 +216,7 @@ def test_fallback_verify_older_post_outside_time_window_rejected():
     now = datetime.now(timezone.utc)
     old_ts = (now - timedelta(hours=2)).isoformat() # 2 hours old (outside 15 min window)
 
-    with patch("requests.get") as mock_get:
+    with patch("time.sleep"), patch("requests.get") as mock_get:
         c_res = MagicMock(status_code=200)
         c_res.json.return_value = {"status_code": "FINISHED"}
 
@@ -225,14 +226,16 @@ def test_fallback_verify_older_post_outside_time_window_rejected():
                 {"id": "media_old_post", "caption": "Daily Update", "timestamp": old_ts}
             ]
         }
-        mock_get.side_effect = [c_res, m_res]
+        mock_get.side_effect = lambda *args, **kwargs: c_res if "103" in args[0] else m_res
 
         res = meta_service.verify_instagram_container_published(
             ig_user_id="17841400000000000",
             creation_id="container_103",
             access_token="valid_token",
             caption="Daily Update",
-            publish_started_at=now
+            publish_started_at=now,
+            max_wait_seconds=1.0,
+            poll_interval=1.0
         )
 
         assert res["is_published"] is False
@@ -243,7 +246,7 @@ def test_fallback_verify_concurrent_identical_captions_fails_conservatively():
     now = datetime.now(timezone.utc)
     valid_ts = now.isoformat()
 
-    with patch("requests.get") as mock_get:
+    with patch("time.sleep"), patch("requests.get") as mock_get:
         c_res = MagicMock(status_code=200)
         c_res.json.return_value = {"status_code": "FINISHED"}
 
@@ -255,14 +258,16 @@ def test_fallback_verify_concurrent_identical_captions_fails_conservatively():
                 {"id": "media_job_b", "caption": "Concurrent Flash Sale", "timestamp": valid_ts}
             ]
         }
-        mock_get.side_effect = [c_res, m_res]
+        mock_get.side_effect = lambda *args, **kwargs: c_res if "104" in args[0] else m_res
 
         res = meta_service.verify_instagram_container_published(
             ig_user_id="17841400000000000",
             creation_id="container_104",
             access_token="valid_token",
             caption="Concurrent Flash Sale",
-            publish_started_at=now
+            publish_started_at=now,
+            max_wait_seconds=1.0,
+            poll_interval=1.0
         )
 
         # Must fail conservatively (is_published=False) to avoid arbitrarily assigning media ID
@@ -271,7 +276,7 @@ def test_fallback_verify_concurrent_identical_captions_fails_conservatively():
 
 def test_direct_container_status_published_success():
     """TEST 5: Direct container status == PUBLISHED succeeds immediately without media list fallback."""
-    with patch("requests.get") as mock_get:
+    with patch("time.sleep"), patch("requests.get") as mock_get:
         c_res = MagicMock(status_code=200)
         c_res.json.return_value = {"status_code": "PUBLISHED", "id": "pub_media_direct_555"}
         mock_get.return_value = c_res
@@ -290,19 +295,21 @@ def test_direct_container_status_published_success():
 
 def test_container_status_finished_does_not_mean_published():
     """TEST 6: Container status == FINISHED does NOT automatically mean published."""
-    with patch("requests.get") as mock_get:
+    with patch("time.sleep"), patch("requests.get") as mock_get:
         c_res = MagicMock(status_code=200)
         c_res.json.return_value = {"status_code": "FINISHED"}
 
         m_res = MagicMock(status_code=200)
         m_res.json.return_value = {"data": []} # Empty media list
-        mock_get.side_effect = [c_res, m_res]
+        mock_get.side_effect = lambda *args, **kwargs: c_res if "106" in args[0] else m_res
 
         res = meta_service.verify_instagram_container_published(
             ig_user_id="17841400000000000",
             creation_id="container_106",
             access_token="valid_token",
-            caption="Unpublished Post"
+            caption="Unpublished Post",
+            max_wait_seconds=1.0,
+            poll_interval=1.0
         )
 
         assert res["is_published"] is False
@@ -312,7 +319,7 @@ def test_fallback_verify_missing_timestamp_rejected():
     """Verify media item with exact caption match but missing or None timestamp is REJECTED."""
     now = datetime.now(timezone.utc)
 
-    with patch("requests.get") as mock_get:
+    with patch("time.sleep"), patch("requests.get") as mock_get:
         c_res = MagicMock(status_code=200)
         c_res.json.return_value = {"status_code": "FINISHED"}
 
@@ -323,14 +330,16 @@ def test_fallback_verify_missing_timestamp_rejected():
                 {"id": "media_no_ts", "caption": "Exact Caption", "timestamp": None}
             ]
         }
-        mock_get.side_effect = [c_res, m_res]
+        mock_get.side_effect = lambda *args, **kwargs: c_res if "107" in args[0] else m_res
 
         res = meta_service.verify_instagram_container_published(
             ig_user_id="17841400000000000",
             creation_id="container_107",
             access_token="valid_token",
             caption="Exact Caption",
-            publish_started_at=now
+            publish_started_at=now,
+            max_wait_seconds=1.0,
+            poll_interval=1.0
         )
 
         assert res["is_published"] is False
@@ -397,6 +406,158 @@ def test_unexpected_worker_exception_marks_job_failed():
         last_failed_kwargs = failed_calls[-1].kwargs
         assert last_failed_kwargs.get("error_code") == "UNEXPECTED_PUBLISH_ERROR"
         assert "Simulated unexpected crashes" in last_failed_kwargs.get("error_message", "")
+
+def test_ambiguous_403_eventual_consistency_polling_finds_media_on_second_attempt_success():
+    """Verify eventual consistency polling succeeds when post appears on second verification attempt."""
+    now = datetime.now(timezone.utc)
+    valid_ts = now.isoformat()
+
+    with patch("time.sleep") as mock_sleep, patch("requests.get") as mock_get:
+        # Attempt 1: Container status FINISHED, media list empty
+        c_res_1 = MagicMock(status_code=200, json=lambda: {"status_code": "FINISHED"})
+        m_res_1 = MagicMock(status_code=200, json=lambda: {"data": []})
+
+        # Attempt 2: Container status FINISHED, media list contains matching post
+        c_res_2 = MagicMock(status_code=200, json=lambda: {"status_code": "FINISHED"})
+        m_res_2 = MagicMock(status_code=200, json=lambda: {
+            "data": [{"id": "eventual_media_202", "caption": "Polling Test", "timestamp": valid_ts}]
+        })
+
+        mock_get.side_effect = [c_res_1, m_res_1, c_res_2, m_res_2]
+
+        res = meta_service.verify_instagram_container_published(
+            ig_user_id="17841400000000000",
+            creation_id="container_202",
+            access_token="valid_token",
+            caption="Polling Test",
+            publish_started_at=now,
+            max_wait_seconds=10.0,
+            poll_interval=2.0
+        )
+
+        assert res["is_published"] is True
+        assert res["published_media_id"] == "eventual_media_202"
+        assert res["verification_source"] == "account_media_list"
+        assert mock_sleep.call_count == 1 # Slept once between attempt 1 and 2
+
+def test_container_error_status_does_not_abort_and_finds_published_media_success():
+    """Verify container status == ERROR does NOT early return, and account media list verification succeeds."""
+    now = datetime.now(timezone.utc)
+    valid_ts = now.isoformat()
+
+    with patch("requests.get") as mock_get:
+        c_res = MagicMock(status_code=200, json=lambda: {"status_code": "ERROR"})
+        m_res = MagicMock(status_code=200, json=lambda: {
+            "data": [{"id": "live_media_303", "caption": "Live Post Despite ERROR", "timestamp": valid_ts}]
+        })
+        mock_get.side_effect = [c_res, m_res]
+
+        res = meta_service.verify_instagram_container_published(
+            ig_user_id="17841400000000000",
+            creation_id="container_303",
+            access_token="valid_token",
+            caption="Live Post Despite ERROR",
+            publish_started_at=now,
+            max_wait_seconds=5.0,
+            poll_interval=5.0
+        )
+
+        assert res["is_published"] is True
+        assert res["published_media_id"] == "live_media_303"
+        assert res["verification_source"] == "account_media_list"
+
+def test_container_error_status_and_media_never_found_times_out():
+    """Verify container status == ERROR and media never appearing returns FAILED after bounded polling timeout."""
+    now = datetime.now(timezone.utc)
+
+    with patch("time.sleep"), patch("requests.get") as mock_get:
+        c_res = MagicMock(status_code=200, json=lambda: {"status_code": "ERROR"})
+        m_res = MagicMock(status_code=200, json=lambda: {"data": []})
+        mock_get.side_effect = [c_res, m_res, c_res, m_res] # 2 attempts
+
+        res = meta_service.verify_instagram_container_published(
+            ig_user_id="17841400000000000",
+            creation_id="container_404",
+            access_token="valid_token",
+            caption="Failed Post",
+            publish_started_at=now,
+            max_wait_seconds=4.0,
+            poll_interval=2.0
+        )
+
+        assert res["is_published"] is False
+        assert res["verification_source"] == "verification_failed"
+
+def test_ambiguous_recovery_calls_media_publish_exactly_once():
+    """Verify media_publish POST is called exactly ONCE throughout ambiguous recovery verification."""
+    now = datetime.now(timezone.utc)
+    valid_ts = now.isoformat()
+
+    with patch("time.sleep"), patch("requests.post") as mock_post, patch("requests.get") as mock_get:
+        # Container creation success
+        container_res = MagicMock(status_code=200, json=lambda: {"id": "container_once_505"})
+        # Media publish returns 403 Rate Limit (Ambiguous)
+        publish_res = MagicMock(status_code=403, json=lambda: {
+            "error": {"message": "Application request limit reached", "code": 4, "error_subcode": 2207051}
+        })
+        mock_post.side_effect = [container_res, publish_res]
+
+        # Status check FINISHED, account media list contains live item
+        status_res = MagicMock(status_code=200, json=lambda: {"status_code": "FINISHED"})
+        c_verify = MagicMock(status_code=200, json=lambda: {"status_code": "FINISHED"})
+        m_verify = MagicMock(status_code=200, json=lambda: {
+            "data": [{"id": "pub_once_505", "caption": "Single Publish Test", "timestamp": valid_ts}]
+        })
+        mock_get.side_effect = [status_res, c_verify, m_verify]
+
+        res = meta_service.publish_to_instagram_business(
+            ig_user_id="17841400000000000",
+            access_token="valid_token",
+            caption="Single Publish Test",
+            image_url="https://example.com/image.jpg",
+            is_video=False
+        )
+
+        assert res["id"] == "pub_once_505"
+        assert res["status"] == "published"
+        # Confirm media_publish POST endpoint was called exactly once (1 container create + 1 publish = 2 total POSTs)
+        post_urls = [call.args[0] for call in mock_post.call_args_list]
+        publish_calls = [url for url in post_urls if "media_publish" in url]
+        assert len(publish_calls) == 1
+
+def test_ambiguous_recovery_creates_no_new_containers_during_verification():
+    """Verify NO new container is created during verification polling loop."""
+    now = datetime.now(timezone.utc)
+    valid_ts = now.isoformat()
+
+    with patch("time.sleep"), patch("requests.post") as mock_post, patch("requests.get") as mock_get:
+        container_res = MagicMock(status_code=200, json=lambda: {"id": "container_nocreate_606"})
+        publish_res = MagicMock(status_code=403, json=lambda: {
+            "error": {"message": "Application request limit reached", "code": 4, "error_subcode": 2207051}
+        })
+        mock_post.side_effect = [container_res, publish_res]
+
+        status_res = MagicMock(status_code=200, json=lambda: {"status_code": "FINISHED"})
+        c_verify = MagicMock(status_code=200, json=lambda: {"status_code": "FINISHED"})
+        m_verify = MagicMock(status_code=200, json=lambda: {
+            "data": [{"id": "pub_nocreate_606", "caption": "No New Container Test", "timestamp": valid_ts}]
+        })
+        mock_get.side_effect = [status_res, c_verify, m_verify]
+
+        res = meta_service.publish_to_instagram_business(
+            ig_user_id="17841400000000000",
+            access_token="valid_token",
+            caption="No New Container Test",
+            image_url="https://example.com/image.jpg",
+            is_video=False
+        )
+
+        assert res["id"] == "pub_nocreate_606"
+        # Exactly 1 container creation POST occurred before media_publish, none during verification
+        post_urls = [call.args[0] for call in mock_post.call_args_list]
+        container_create_calls = [url for url in post_urls if "media_publish" not in url]
+        assert len(container_create_calls) == 1
+
 
 
 
