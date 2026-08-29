@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -9,16 +9,14 @@ from app.models.publishing_batch import BatchStatus, JobStatus, PublishingJob
 from app.models.social_account import SocialAccount
 from app.repositories.publishing_repository import publishing_repo
 from app.repositories.social_account_repository import social_account_repo
-from app.services.meta_service import meta_service
+from app.services.meta_service import meta_service, MetaPublishException
 from app.services.media_service import resolve_media_type, upload_base64_to_public_https
-
-logger = logging.getLogger(__name__)
-
 from app.core.database import SessionLocal
 from app.core.security_encryption import decrypt_token
-
 from app.core.logging_config import sanitize_url
 from app.models.post import Post
+
+logger = logging.getLogger(__name__)
 
 
 def classify_error(err_str: str) -> tuple[str, str]:
@@ -35,6 +33,7 @@ def classify_error(err_str: str) -> tuple[str, str]:
     if "media" in err_lower or "image" in err_lower or "video" in err_lower or "format" in err_lower or "cdn" in err_lower:
         return "INVALID_MEDIA", f"Media requirements error: {err_str[:200]}"
     return "PLATFORM_ERROR", f"Meta Graph API error: {err_str[:200]}"
+
 
 class FacebookPublisher:
     def publish(self, account: SocialAccount, caption: str, public_media_url: Optional[str], is_video: bool, thumbnail_url: Optional[str] = None) -> str:
@@ -66,8 +65,19 @@ class FacebookPublisher:
             raise Exception(f"Facebook Graph API returned no post ID: {res}")
         return str(post_id)
 
+
 class InstagramPublisher:
-    def publish(self, account: SocialAccount, caption: str, public_media_url: Optional[str], is_video: bool, thumbnail_url: Optional[str] = None) -> str:
+    def publish(
+        self,
+        account: SocialAccount,
+        caption: str,
+        public_media_url: Optional[str],
+        is_video: bool,
+        thumbnail_url: Optional[str] = None,
+        on_container_created: Optional[Callable[[str], None]] = None,
+        existing_container_id: Optional[str] = None,
+        publish_started_at: Optional[datetime] = None
+    ) -> str:
         logger.info(f"[PUBLISH_TRACE] META_SERVICE_ENTERED | platform=instagram | account_id={account.account_id} | is_video={is_video} | thumbnail_url={sanitize_url(thumbnail_url)}")
         final_url = public_media_url
         if is_video:
@@ -90,7 +100,10 @@ class InstagramPublisher:
             caption=caption,
             image_url=final_url,
             is_video=is_video,
-            thumbnail_url=thumbnail_url
+            thumbnail_url=thumbnail_url,
+            on_container_created=on_container_created,
+            existing_container_id=existing_container_id,
+            publish_started_at=publish_started_at
         )
         media_id = res.get("id")
         if not media_id:
@@ -116,6 +129,7 @@ class PublishingEngine:
     ) -> Dict[str, Any]:
         """Execute job in a dedicated thread-local database session."""
         start_time = time.time()
+        publish_started_at = datetime.now(timezone.utc)
         logger.info(f"[PUBLISH_TRACE] THREAD_JOB_STARTED | batch_id={batch_id} | job_id={job_id} | social_account_id={social_account_id}")
         thread_db = SessionLocal()
         try:
@@ -140,11 +154,26 @@ class PublishingEngine:
                 logger.error(f"[PUBLISH_TRACE] PUBLISH_JOB_FAILED | batch_id={batch_id} | job_id={job_id} | platform={acc.platform} | error_code={code} | error_class=Exception | error={msg} | elapsed={round(time.time() - start_time, 2)}s")
                 return {"job_id": job_id, "status": "FAILED", "error": msg}
 
+            job = thread_db.query(PublishingJob).filter(PublishingJob.id == job_id).first()
+            existing_c_id = job.ig_container_id if job else None
+
+            def container_created_callback(c_id: str):
+                publishing_repo.update_job_container_id(thread_db, job_id, c_id)
+
             try:
                 if acc.platform == "facebook":
                     ext_id = self.fb_publisher.publish(acc, caption, public_media_url, is_video, thumbnail_url=thumbnail_url)
                 elif acc.platform == "instagram":
-                    ext_id = self.ig_publisher.publish(acc, caption, public_media_url, is_video, thumbnail_url=thumbnail_url)
+                    ext_id = self.ig_publisher.publish(
+                        acc,
+                        caption,
+                        public_media_url,
+                        is_video,
+                        thumbnail_url=thumbnail_url,
+                        on_container_created=container_created_callback,
+                        existing_container_id=existing_c_id,
+                        publish_started_at=publish_started_at
+                    )
                 else:
                     raise Exception(f"Unsupported platform: {acc.platform}")
 
@@ -157,12 +186,29 @@ class PublishingEngine:
                 code, msg = classify_error(err_str)
                 if code == "TOKEN_EXPIRED":
                     social_account_repo.mark_status(thread_db, acc.id, "TOKEN_EXPIRED")
-                publishing_repo.update_job_status(thread_db, job_id, JobStatus.FAILED.value, error_code=code, error_message=msg)
+
+                meta_status = getattr(e, "status_code", None)
+                meta_code = getattr(e, "error_code", None)
+                meta_subcode = getattr(e, "error_subcode", None)
+                meta_msg = getattr(e, "error_message", None)
+
+                publishing_repo.update_job_status(
+                    thread_db,
+                    job_id,
+                    JobStatus.FAILED.value,
+                    error_code=code,
+                    error_message=msg,
+                    meta_status_code=meta_status,
+                    meta_error_code=meta_code,
+                    meta_error_subcode=meta_subcode,
+                    meta_error_message=meta_msg
+                )
                 elapsed = round(time.time() - start_time, 2)
-                logger.error(f"[PUBLISH_TRACE] PUBLISH_JOB_FAILED | batch_id={batch_id} | job_id={job_id} | platform={acc.platform} | error_code={code} | error_class={e.__class__.__name__} | error={msg} | elapsed={elapsed}s")
+                logger.error(f"[PUBLISH_TRACE] PUBLISH_JOB_FAILED | batch_id={batch_id} | job_id={job_id} | platform={acc.platform} | error_code={code} | meta_status={meta_status} | error_class={e.__class__.__name__} | error={msg} | elapsed={elapsed}s")
                 return {"job_id": job_id, "status": "FAILED", "error": msg}
         finally:
             thread_db.close()
+
 
     def process_single_job(
         self,

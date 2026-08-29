@@ -334,15 +334,21 @@ class PostService:
                     elif not is_video and (not ig_url or ig_url.startswith("data:") or ig_url.startswith("blob:")):
                         errors.append("IG Publish Error: A valid photo file or public URL is required for Instagram publishing.")
                     else:
+                        def ig_container_created_cb(c_id: str):
+                            post.ig_container_id = c_id
+                            db.commit()
+
                         res = meta_service.publish_to_instagram_business(
                             ig_user_id=ig_user_id,
                             access_token=ig_token or "sandbox_token",
                             caption=formatted_caption,
                             image_url=ig_url,
                             is_video=is_video,
-                            thumbnail_url=post_thumb_url
+                            thumbnail_url=post_thumb_url,
+                            on_container_created=ig_container_created_cb,
+                            existing_container_id=post.ig_container_id
                         )
-                        post.ig_container_id = res.get("container_id")
+                        post.ig_container_id = res.get("container_id") or post.ig_container_id
                         published_ig_id = res.get("id")
                         if not published_ig_id:
                             raise Exception("Instagram API returned response without published media ID.")
