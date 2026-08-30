@@ -148,6 +148,14 @@ export interface PublishingBatch {
   jobs: PublishingJob[];
 }
 
+export interface SocialCommentReply {
+  id: number;
+  message: string;
+  status: 'SUCCESS' | 'FAILED' | string;
+  external_reply_id?: string;
+  created_at: string;
+}
+
 export interface SocialComment {
   id: number;
   social_account_id: number;
@@ -162,4 +170,6 @@ export interface SocialComment {
   webhook_object: string;
   processing_status: 'RECEIVED' | string;
   created_at: string;
+  replies?: SocialCommentReply[];
 }
+

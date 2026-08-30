@@ -9,6 +9,7 @@ from app.models.publishing_batch import PublishingBatch, PublishingJob, BatchSta
 from app.models.refresh_token import RefreshToken
 
 from app.models.social_comment import SocialComment, CommentProcessingStatus
+from app.models.social_comment_reply import SocialCommentReply
 
 __all__ = [
     "User", 
@@ -25,6 +26,8 @@ __all__ = [
     "JobStatus",
     "RefreshToken",
     "SocialComment",
-    "CommentProcessingStatus"
+    "CommentProcessingStatus",
+    "SocialCommentReply"
 ]
+
 
