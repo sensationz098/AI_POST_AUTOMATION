@@ -79,4 +79,45 @@ class SocialCommentRepository:
             query = query.filter(SocialComment.platform == platform)
         return query.order_by(SocialComment.created_at.desc()).offset(skip).limit(limit).all()
 
+    def get_by_id_and_user_id(
+        self,
+        db: Session,
+        comment_id: int,
+        user_id: int
+    ) -> Optional[SocialComment]:
+        """Strict user ownership retrieval of a comment."""
+        return db.query(SocialComment).filter(
+            SocialComment.id == comment_id,
+            SocialComment.user_id == user_id
+        ).first()
+
+    def create_reply_audit(
+        self,
+        db: Session,
+        comment_id: int,
+        user_id: int,
+        platform: str,
+        message: str,
+        external_reply_id: Optional[str] = None,
+        status: str = "SUCCESS",
+        error_message: Optional[str] = None
+    ):
+        """Record manual reply attempt for auditing and reply history tracking."""
+        from app.models.social_comment_reply import SocialCommentReply
+        reply_record = SocialCommentReply(
+            comment_id=comment_id,
+            user_id=user_id,
+            platform=platform,
+            message=message,
+            external_reply_id=external_reply_id,
+            status=status,
+            error_message=error_message,
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(reply_record)
+        db.commit()
+        db.refresh(reply_record)
+        return reply_record
+
 social_comment_repo = SocialCommentRepository()
+

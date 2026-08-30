@@ -1503,5 +1503,106 @@ class MetaGraphService:
             logger.error(f"[IG_DELETE] Meta Service Instagram delete error: {e}")
             raise e
 
+    def reply_to_facebook_comment(self, comment_id: str, access_token: str, message: str) -> Dict[str, Any]:
+        """
+        Reply to a Facebook comment via Meta Graph API: POST /{comment_id}/comments
+        Uses Page access token.
+        """
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if is_mock_allowed and (not comment_id or not access_token or comment_id.startswith("mock") or access_token.startswith("sandbox") or access_token.startswith("mock")):
+            logger.info(f"[FB_REPLY] Executing Sandbox Facebook Comment Reply Simulation for comment ID: {comment_id}")
+            return {"id": f"fb_reply_mock_{abs(hash(message)) % 1000000}", "status": "published_sandbox"}
+
+        if not comment_id or not access_token:
+            raise MetaPublishException("Facebook Comment ID and valid Access Token are required for replying.")
+
+        try:
+            logger.info(f"[REPLY_TRACE] FACEBOOK_COMMENT_REPLY_STARTED | comment_id={comment_id}")
+            url = f"{self.BASE_URL}/{comment_id}/comments"
+            payload = {
+                "message": message,
+                "access_token": access_token
+            }
+            response = requests.post(url, data=payload, timeout=15)
+            res_data = response.json()
+            logger.info(f"[REPLY_TRACE] FACEBOOK_COMMENT_REPLY_RESPONSE | comment_id={comment_id} | status_code={response.status_code}")
+
+            if response.status_code != 200:
+                err_dict = res_data.get("error", {})
+                error_msg = err_dict.get("message", "Facebook Comment Reply Error")
+                err_code = err_dict.get("code")
+                err_subcode = err_dict.get("error_subcode")
+                logger.error(f"[REPLY_TRACE] FACEBOOK_COMMENT_REPLY_FAILED | comment_id={comment_id} | status_code={response.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={error_msg}")
+                raise MetaPublishException(
+                    message=f"Facebook Graph API Reply Error ({response.status_code}) [code={err_code}, subcode={err_subcode}]: {error_msg}",
+                    status_code=response.status_code,
+                    error_code=err_code,
+                    error_subcode=err_subcode,
+                    error_message=error_msg,
+                    raw_response=res_data
+                )
+
+            reply_id = res_data.get("id")
+            if not reply_id:
+                raise MetaPublishException(f"Facebook Graph API returned success response but missing reply ID: {res_data}")
+
+            logger.info(f"[REPLY_TRACE] FACEBOOK_COMMENT_REPLY_SUCCESS | comment_id={comment_id} | reply_id={reply_id}")
+            return res_data
+        except Exception as e:
+            if not isinstance(e, MetaPublishException):
+                logger.error(f"[FB_REPLY] Meta Service Facebook reply error: {e}")
+            raise
+
+    def reply_to_instagram_comment(self, comment_id: str, access_token: str, message: str) -> Dict[str, Any]:
+        """
+        Reply to an Instagram comment via Meta Graph API: POST /{comment_id}/replies
+        Uses access token associated with the connected Instagram Professional Account.
+        """
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if is_mock_allowed and (not comment_id or not access_token or comment_id.startswith("mock") or access_token.startswith("sandbox") or access_token.startswith("mock")):
+            logger.info(f"[IG_REPLY] Executing Sandbox Instagram Comment Reply Simulation for comment ID: {comment_id}")
+            return {"id": f"ig_reply_mock_{abs(hash(message)) % 1000000}", "status": "published_sandbox"}
+
+        if not comment_id or not access_token:
+            raise MetaPublishException("Instagram Comment ID and valid Access Token are required for replying.")
+
+        try:
+            logger.info(f"[REPLY_TRACE] INSTAGRAM_COMMENT_REPLY_STARTED | comment_id={comment_id}")
+            url = f"{self.BASE_URL}/{comment_id}/replies"
+            payload = {
+                "message": message,
+                "access_token": access_token
+            }
+            response = requests.post(url, data=payload, timeout=15)
+            res_data = response.json()
+            logger.info(f"[REPLY_TRACE] INSTAGRAM_COMMENT_REPLY_RESPONSE | comment_id={comment_id} | status_code={response.status_code}")
+
+            if response.status_code != 200:
+                err_dict = res_data.get("error", {})
+                error_msg = err_dict.get("message", "Instagram Comment Reply Error")
+                err_code = err_dict.get("code")
+                err_subcode = err_dict.get("error_subcode")
+                logger.error(f"[REPLY_TRACE] INSTAGRAM_COMMENT_REPLY_FAILED | comment_id={comment_id} | status_code={response.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={error_msg}")
+                raise MetaPublishException(
+                    message=f"Instagram Graph API Reply Error ({response.status_code}) [code={err_code}, subcode={err_subcode}]: {error_msg}",
+                    status_code=response.status_code,
+                    error_code=err_code,
+                    error_subcode=err_subcode,
+                    error_message=error_msg,
+                    raw_response=res_data
+                )
+
+            reply_id = res_data.get("id")
+            if not reply_id:
+                raise MetaPublishException(f"Instagram Graph API returned success response but missing reply ID: {res_data}")
+
+            logger.info(f"[REPLY_TRACE] INSTAGRAM_COMMENT_REPLY_SUCCESS | comment_id={comment_id} | reply_id={reply_id}")
+            return res_data
+        except Exception as e:
+            if not isinstance(e, MetaPublishException):
+                logger.error(f"[IG_REPLY] Meta Service Instagram reply error: {e}")
+            raise
+
 meta_service = MetaGraphService()
+
 
