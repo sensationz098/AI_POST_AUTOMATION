@@ -907,3 +907,73 @@ def test_pagination_with_deleted_comments(client: TestClient, auth_headers: dict
     assert "del_pag_c_4" not in returned_ids
 
 
+def test_social_account_filtering_all_accounts(client: TestClient, auth_headers: dict, test_user: User, fb_comment: SocialComment, ig_comment: SocialComment):
+    """Verify omitting social_account_id returns all comments belonging to current user across accounts."""
+    res = client.get("/api/v1/social-comments/", headers=auth_headers)
+    assert res.status_code == 200
+    ids = [c["id"] for c in res.json()]
+    assert fb_comment.id in ids
+    assert ig_comment.id in ids
+
+
+def test_social_account_filtering_specific_account(client: TestClient, auth_headers: dict, test_user: User, fb_comment: SocialComment, ig_comment: SocialComment):
+    """Verify passing valid social_account_id filters comments to that specific account only."""
+    res = client.get(f"/api/v1/social-comments/?social_account_id={fb_comment.social_account_id}", headers=auth_headers)
+    assert res.status_code == 200
+    comments = res.json()
+    assert all(c["social_account_id"] == fb_comment.social_account_id for c in comments)
+    ids = [c["id"] for c in comments]
+    assert fb_comment.id in ids
+    assert ig_comment.id not in ids
+
+
+def test_social_account_filtering_other_user_account_rejected(client: TestClient, auth_headers: dict, db_session: Session):
+    """Verify passing a social_account_id belonging to another user is rejected with safe 404."""
+    other_user = User(email="other_acc_owner@example.com", hashed_password="pw", full_name="Other User")
+    db_session.add(other_user)
+    db_session.commit()
+    db_session.refresh(other_user)
+
+    other_acc = SocialAccount(
+        user_id=other_user.id,
+        platform="facebook",
+        account_id="other_fb_page_123",
+        account_name="Other Page",
+        access_token="enc_tok",
+        status="CONNECTED"
+    )
+    db_session.add(other_acc)
+    db_session.commit()
+    db_session.refresh(other_acc)
+
+    res = client.get(f"/api/v1/social-comments/?social_account_id={other_acc.id}", headers=auth_headers)
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Social account not found"
+
+
+def test_social_account_filtering_combined_with_platform_filter(client: TestClient, auth_headers: dict, test_user: User, fb_comment: SocialComment, ig_comment: SocialComment):
+    """Verify combining social_account_id with platform query param works correctly."""
+    # FB account + platform=facebook -> returns FB comment
+    res1 = client.get(f"/api/v1/social-comments/?social_account_id={fb_comment.social_account_id}&platform=facebook", headers=auth_headers)
+    assert res1.status_code == 200
+    ids1 = [c["id"] for c in res1.json()]
+    assert fb_comment.id in ids1
+
+    # FB account + platform=instagram -> returns 0 comments safely
+    res2 = client.get(f"/api/v1/social-comments/?social_account_id={fb_comment.social_account_id}&platform=instagram", headers=auth_headers)
+    assert res2.status_code == 200
+    assert len(res2.json()) == 0
+
+
+def test_social_account_filtering_excludes_deleted_and_reply_echoes(client: TestClient, auth_headers: dict, test_user: User, fb_comment: SocialComment, db_session: Session):
+    """Verify social_account_id filtering preserves soft-delete exclusion and owner reply echo suppression."""
+    fb_comment.is_deleted = True
+    db_session.commit()
+
+    res = client.get(f"/api/v1/social-comments/?social_account_id={fb_comment.social_account_id}", headers=auth_headers)
+    assert res.status_code == 200
+    ids = [c["id"] for c in res.json()]
+    assert fb_comment.id not in ids
+
+
+

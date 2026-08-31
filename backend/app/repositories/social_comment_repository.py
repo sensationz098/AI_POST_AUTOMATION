@@ -71,7 +71,8 @@ class SocialCommentRepository:
         user_id: int,
         skip: int = 0,
         limit: int = 50,
-        platform: Optional[str] = None
+        platform: Optional[str] = None,
+        social_account_id: Optional[int] = None
     ) -> List[SocialComment]:
         """Fetch comments belonging to a specific user with pagination, excluding owner reply echoes."""
         from app.models.social_comment_reply import SocialCommentReply
@@ -90,6 +91,8 @@ class SocialCommentRepository:
         )
         if platform:
             query = query.filter(SocialComment.platform == platform)
+        if social_account_id:
+            query = query.filter(SocialComment.social_account_id == social_account_id)
 
         return query.order_by(SocialComment.created_at.desc()).offset(skip).limit(limit).all()
 

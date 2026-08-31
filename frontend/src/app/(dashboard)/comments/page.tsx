@@ -19,11 +19,13 @@ import {
   Image as ImageIcon,
   Video,
   FileText,
-  Trash2
+  Trash2,
+  Filter,
+  Share2
 } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
-import { SocialComment, SocialCommentPostContext, SocialCommentReply } from '@/lib/types';
+import { SocialComment, SocialCommentPostContext, SocialCommentReply, SocialAccount } from '@/lib/types';
 
 // 1. Post Context Preview Component
 function PostContextCard({
@@ -517,6 +519,8 @@ function CommentConversation({
 
 export default function CommentsPage() {
   const [comments, setComments] = useState<SocialComment[]>([]);
+  const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('all');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -528,7 +532,23 @@ export default function CommentsPage() {
   const [isSubmittingMap, setIsSubmittingMap] = useState<Record<number, boolean>>({});
   const [feedbackMap, setFeedbackMap] = useState<Record<number, { type: 'success' | 'error'; message: string } | null>>({});
 
-  const fetchComments = async (isManualRefresh = false) => {
+  // 1. Fetch multi-account destinations
+  const fetchSocialAccounts = async () => {
+    try {
+      const res = await apiClient.get('/social-accounts/');
+      if (Array.isArray(res.data)) {
+        const fakeIds = new Set(['109823471029', '17841400928371', '17841400928372', '17841400928373', '109823471030', 'sandbox']);
+        const realAccs = res.data.filter((a: SocialAccount) => !fakeIds.has(a.account_id));
+        setSocialAccounts(realAccs);
+      }
+    } catch (e) {
+      console.warn('Failed to load connected social accounts:', e);
+    }
+  };
+
+  // 2. Fetch comments with optional account filtering
+  const fetchComments = async (isManualRefresh = false, overrideAccountId?: string) => {
+    const targetAccountId = overrideAccountId !== undefined ? overrideAccountId : selectedAccountId;
     if (isManualRefresh) {
       setIsRefreshing(true);
     } else {
@@ -537,7 +557,11 @@ export default function CommentsPage() {
     setError(null);
 
     try {
-      const res = await apiClient.get('/social-comments/');
+      const params: Record<string, any> = {};
+      if (targetAccountId !== 'all') {
+        params.social_account_id = Number(targetAccountId);
+      }
+      const res = await apiClient.get('/social-comments/', { params });
       if (Array.isArray(res.data)) {
         setComments(res.data);
       } else {
@@ -553,8 +577,23 @@ export default function CommentsPage() {
   };
 
   useEffect(() => {
+    fetchSocialAccounts();
     fetchComments();
   }, []);
+
+  const handleAccountChange = (newAccountId: string) => {
+    setSelectedAccountId(newAccountId);
+
+    // Intelligently reset or adjust platform filter if selected account platform conflicts
+    if (newAccountId !== 'all') {
+      const acc = socialAccounts.find((a) => String(a.id) === newAccountId);
+      if (acc && platformFilter !== 'all' && acc.platform !== platformFilter) {
+        setPlatformFilter('all');
+      }
+    }
+
+    fetchComments(false, newAccountId);
+  };
 
   const handleRefresh = () => {
     fetchComments(true);
@@ -658,6 +697,10 @@ export default function CommentsPage() {
     }
   };
 
+  const selectedAccount = selectedAccountId === 'all'
+    ? null
+    : socialAccounts.find((a) => String(a.id) === selectedAccountId);
+
   const filteredComments = comments.filter((comment) => {
     if (platformFilter === 'all') return true;
     return comment.platform === platformFilter;
@@ -707,12 +750,32 @@ export default function CommentsPage() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-2.5 flex-shrink-0">
+          <div className="flex items-center space-x-2.5 flex-shrink-0 flex-wrap gap-y-2">
+            {/* Account Switcher Dropdown (Reusing Dashboard Styling & Icon Conventions) */}
+            <div className="flex items-center space-x-2 bg-slate-900/80 border border-slate-800 px-3 py-2 rounded-xl shadow-sm">
+              <Filter className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+              <select
+                value={selectedAccountId}
+                onChange={(e) => handleAccountChange(e.target.value)}
+                className="bg-transparent text-xs text-indigo-300 font-semibold focus:outline-none cursor-pointer pr-1"
+                title="Select Connected Social Account"
+              >
+                <option value="all" className="bg-slate-900 text-slate-100 font-medium">
+                  🌐 All Connected Accounts ({socialAccounts.length})
+                </option>
+                {socialAccounts.map((acc) => (
+                  <option key={acc.id} value={String(acc.id)} className="bg-slate-900 text-slate-100 font-medium">
+                    {acc.platform === 'facebook' ? '📘' : '📸'} {acc.account_name} ({acc.platform})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Refresh Button */}
             <button
               onClick={handleRefresh}
               disabled={isLoading || isRefreshing}
-              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-white font-semibold text-xs transition flex items-center space-x-2 shadow-md disabled:opacity-50"
+              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-white font-semibold text-xs transition flex items-center space-x-2 shadow-md disabled:opacity-50"
               title="Refetch Comments"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-indigo-400 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -743,32 +806,41 @@ export default function CommentsPage() {
           >
             All Platforms ({comments.length})
           </button>
-          <button
-            onClick={() => setPlatformFilter('facebook')}
-            className={`px-3 py-1.5 rounded-lg font-medium text-xs transition flex items-center space-x-1.5 ${
-              platformFilter === 'facebook'
-                ? 'bg-blue-600 text-white shadow'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Facebook className="w-3 h-3 fill-current" />
-            <span>Facebook ({comments.filter((c) => c.platform === 'facebook').length})</span>
-          </button>
-          <button
-            onClick={() => setPlatformFilter('instagram')}
-            className={`px-3 py-1.5 rounded-lg font-medium text-xs transition flex items-center space-x-1.5 ${
-              platformFilter === 'instagram'
-                ? 'bg-pink-600 text-white shadow'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Instagram className="w-3 h-3" />
-            <span>Instagram ({comments.filter((c) => c.platform === 'instagram').length})</span>
-          </button>
+
+          {/* Show Facebook tab if all accounts or Facebook account is selected */}
+          {(!selectedAccount || selectedAccount.platform === 'facebook') && (
+            <button
+              onClick={() => setPlatformFilter('facebook')}
+              className={`px-3 py-1.5 rounded-lg font-medium text-xs transition flex items-center space-x-1.5 ${
+                platformFilter === 'facebook'
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Facebook className="w-3 h-3 fill-current" />
+              <span>Facebook ({comments.filter((c) => c.platform === 'facebook').length})</span>
+            </button>
+          )}
+
+          {/* Show Instagram tab if all accounts or Instagram account is selected */}
+          {(!selectedAccount || selectedAccount.platform === 'instagram') && (
+            <button
+              onClick={() => setPlatformFilter('instagram')}
+              className={`px-3 py-1.5 rounded-lg font-medium text-xs transition flex items-center space-x-1.5 ${
+                platformFilter === 'instagram'
+                  ? 'bg-pink-600 text-white shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Instagram className="w-3 h-3" />
+              <span>Instagram ({comments.filter((c) => c.platform === 'instagram').length})</span>
+            </button>
+          )}
         </div>
 
         <div className="text-[11px] text-slate-400 font-mono">
           Showing {filteredComments.length} comment{filteredComments.length !== 1 ? 's' : ''}
+          {selectedAccount ? ` for ${selectedAccount.account_name}` : ''}
         </div>
       </div>
 
@@ -797,16 +869,43 @@ export default function CommentsPage() {
             <span>Retry Loading</span>
           </button>
         </div>
+      ) : socialAccounts.length === 0 ? (
+        /* Empty State: No connected social accounts */
+        <div className="linear-panel p-12 rounded-2xl text-center space-y-4 border border-slate-800 shadow-xl">
+          <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 mx-auto shadow-inner">
+            <Share2 className="w-7 h-7 text-indigo-400/80" />
+          </div>
+          <div className="space-y-1 max-w-sm mx-auto">
+            <h3 className="text-sm font-bold text-slate-200">No social accounts connected yet</h3>
+            <p className="text-xs text-slate-400">
+              Connect your Facebook Pages and Instagram Professional accounts to start viewing and replying to incoming comments.
+            </p>
+          </div>
+          <Link
+            href="/meta-connect"
+            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition inline-flex items-center space-x-2 shadow"
+          >
+            <span>Connect Social Accounts</span>
+          </Link>
+        </div>
       ) : filteredComments.length === 0 ? (
-        /* Friendly Empty State */
+        /* Empty State: No comments for selected account / platform filter */
         <div className="linear-panel p-12 rounded-2xl text-center space-y-4 border border-slate-800 shadow-xl">
           <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 mx-auto shadow-inner">
             <MessageSquare className="w-7 h-7 text-indigo-400/80" />
           </div>
           <div className="space-y-1 max-w-sm mx-auto">
-            <h3 className="text-sm font-bold text-slate-200">No comments received yet</h3>
+            <h3 className="text-sm font-bold text-slate-200">
+              {platformFilter !== 'all'
+                ? `No ${platformFilter === 'facebook' ? 'Facebook' : 'Instagram'} comments for ${selectedAccount ? selectedAccount.account_name : 'this account'} yet`
+                : selectedAccount
+                ? `No comments for ${selectedAccount.account_name} yet`
+                : 'No comments received yet'}
+            </h3>
             <p className="text-xs text-slate-400">
-              Comments from your connected Facebook Pages and Instagram Professional accounts will appear here.
+              {selectedAccount
+                ? `Comments received for ${selectedAccount.account_name} will appear here.`
+                : 'Comments from your connected Facebook Pages and Instagram Professional accounts will appear here.'}
             </p>
           </div>
           <button
