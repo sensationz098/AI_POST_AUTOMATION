@@ -152,8 +152,19 @@ export interface SocialCommentReply {
   id: number;
   message: string;
   status: 'SUCCESS' | 'FAILED' | string;
+  error_message?: string;
   external_reply_id?: string;
   created_at: string;
+}
+
+export interface SocialCommentPostContext {
+  id: number;
+  title?: string;
+  caption?: string;
+  image_url?: string;
+  media_type?: string;
+  thumbnail_url?: string;
+  platform: 'facebook' | 'instagram';
 }
 
 export interface SocialComment {
@@ -170,6 +181,7 @@ export interface SocialComment {
   webhook_object: string;
   processing_status: 'RECEIVED' | string;
   created_at: string;
+  post?: SocialCommentPostContext | null;
   replies?: SocialCommentReply[];
 }
 
