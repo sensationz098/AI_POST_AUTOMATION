@@ -10,15 +10,413 @@ import {
   Loader2, 
   Clock, 
   User, 
-  Hash,
   ShieldCheck,
   CheckCircle2,
   CornerDownRight,
   Send,
-  X
+  X,
+  ExternalLink,
+  Image as ImageIcon,
+  Video,
+  FileText
 } from 'lucide-react';
+import Link from 'next/link';
 import { apiClient } from '@/lib/api';
-import { SocialComment } from '@/lib/types';
+import { SocialComment, SocialCommentPostContext, SocialCommentReply } from '@/lib/types';
+
+// 1. Post Context Preview Component
+function PostContextCard({
+  post,
+  externalPostId,
+  platform,
+}: {
+  post?: SocialCommentPostContext | null;
+  externalPostId?: string;
+  platform: 'facebook' | 'instagram';
+}) {
+  const isFb = platform === 'facebook';
+
+  if (!post) {
+    return (
+      <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs mb-3">
+        <div className="flex items-center space-x-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 flex-shrink-0">
+            <FileText className="w-4 h-4 text-slate-400" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center space-x-2">
+              <span className="font-semibold text-slate-300 text-xs">Post information unavailable</span>
+              {isFb ? (
+                <span className="px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-800/60 font-bold text-[9px] flex items-center space-x-1">
+                  <Facebook className="w-2.5 h-2.5 fill-current" />
+                  <span>Facebook</span>
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded bg-pink-950/80 text-pink-300 border border-pink-800/60 font-bold text-[9px] flex items-center space-x-1">
+                  <Instagram className="w-2.5 h-2.5" />
+                  <span>Instagram</span>
+                </span>
+              )}
+            </div>
+            {externalPostId && (
+              <p className="text-[10px] font-mono text-slate-500 truncate mt-0.5">
+                External Post ID: {externalPostId}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const hasMedia = Boolean(post.thumbnail_url || post.image_url);
+
+  return (
+    <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5 shadow-sm">
+      <div className="flex items-start space-x-3 min-w-0">
+        {hasMedia ? (
+          <img
+            src={post.thumbnail_url || post.image_url}
+            alt={post.title || 'Social post'}
+            className="w-11 h-11 rounded-lg object-cover border border-slate-800 flex-shrink-0 bg-slate-900"
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
+        ) : post.media_type === 'video' ? (
+          <div className="w-11 h-11 rounded-lg bg-indigo-950/40 border border-indigo-800/50 flex items-center justify-center text-indigo-400 flex-shrink-0">
+            <Video className="w-5 h-5" />
+          </div>
+        ) : (
+          <div className="w-11 h-11 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 flex-shrink-0">
+            <ImageIcon className="w-5 h-5" />
+          </div>
+        )}
+
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center space-x-2">
+            <span className="font-bold text-slate-100 text-xs truncate">
+              {post.title || 'Untitled Social Post'}
+            </span>
+            {isFb ? (
+              <span className="px-2 py-0.5 rounded bg-blue-950/90 text-blue-300 border border-blue-800/70 font-bold text-[9px] flex items-center space-x-1 flex-shrink-0">
+                <Facebook className="w-2.5 h-2.5 fill-current" />
+                <span>Facebook</span>
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded bg-pink-950/90 text-pink-300 border border-pink-800/70 font-bold text-[9px] flex items-center space-x-1 flex-shrink-0">
+                <Instagram className="w-2.5 h-2.5" />
+                <span>Instagram</span>
+              </span>
+            )}
+          </div>
+          {post.caption && (
+            <p className="text-[11px] text-slate-300 line-clamp-2 leading-snug font-sans">
+              {post.caption}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <Link
+        href="/posts"
+        className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-indigo-300 hover:text-white text-[10px] font-semibold transition flex items-center space-x-1 flex-shrink-0 self-start sm:self-center"
+      >
+        <span>View Post</span>
+        <ExternalLink className="w-3 h-3" />
+      </Link>
+    </div>
+  );
+}
+
+// 2. Original Customer Comment Component
+function OriginalComment({
+  comment,
+  formatDate,
+}: {
+  comment: SocialComment;
+  formatDate: (iso?: string) => string;
+}) {
+  return (
+    <div className="space-y-2">
+      {/* Comment Header */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center space-x-2">
+          <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs flex-shrink-0">
+            {comment.commenter_name ? comment.commenter_name.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
+          </div>
+          <div>
+            <span className="text-slate-100 font-bold text-xs">
+              {comment.commenter_name || comment.commenter_id || 'Anonymous User'}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2.5 text-[10px]">
+          <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80 font-mono font-bold flex items-center space-x-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>{comment.processing_status || 'RECEIVED'}</span>
+          </span>
+
+          <span className="text-slate-400 flex items-center space-x-1 font-mono">
+            <Clock className="w-3 h-3 text-slate-500" />
+            <span>{formatDate(comment.event_timestamp || comment.created_at)}</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Comment Text */}
+      <div className="text-slate-200 text-xs leading-relaxed bg-slate-900/90 p-3 rounded-xl border border-slate-800/80 font-sans shadow-inner">
+        {comment.comment_text ? (
+          <p className="whitespace-pre-wrap">"{comment.comment_text}"</p>
+        ) : (
+          <p className="text-slate-500 italic text-[11px]">
+            (Comment payload received without text content)
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 3. Nested Owner Reply Thread Component
+function ReplyThread({
+  replies,
+  formatDate,
+}: {
+  replies?: SocialCommentReply[];
+  formatDate: (iso?: string) => string;
+}) {
+  if (!replies || replies.length === 0) return null;
+
+  return (
+    <div className="pl-3 sm:pl-5 border-l-2 border-indigo-500/30 space-y-2 my-2.5">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 flex items-center space-x-1 mb-1.5">
+        <CornerDownRight className="w-3 h-3 text-indigo-400" />
+        <span>Owner Reply Thread ({replies.length})</span>
+      </div>
+
+      {replies.map((reply) => {
+        const isFailed = reply.status === 'FAILED';
+
+        return (
+          <div
+            key={reply.id}
+            className={`p-2.5 rounded-xl border text-xs space-y-1 shadow-sm transition ${
+              isFailed
+                ? 'bg-rose-950/30 border-rose-800/60 text-rose-200'
+                : 'bg-slate-950/90 border-slate-800/90 text-slate-200'
+            }`}
+          >
+            <div className="flex items-center justify-between text-[10px] text-slate-400">
+              <div className="flex items-center space-x-1.5">
+                <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold text-[9px] flex items-center space-x-1">
+                  {isFailed ? (
+                    <AlertCircle className="w-2.5 h-2.5 text-rose-400" />
+                  ) : (
+                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
+                  )}
+                  <span>You (Owner)</span>
+                </span>
+
+                {isFailed ? (
+                  <span className="px-1.5 py-0.5 rounded bg-rose-950 text-rose-400 border border-rose-800 font-mono text-[9px] font-bold">
+                    FAILED
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono text-[9px] font-bold">
+                    SUCCESS
+                  </span>
+                )}
+              </div>
+
+              <span className="font-mono text-slate-400">{formatDate(reply.created_at)}</span>
+            </div>
+
+            <p className="text-slate-100 font-sans pl-1 whitespace-pre-wrap">{reply.message}</p>
+
+            {isFailed && reply.error_message && (
+              <p className="text-[10px] text-rose-400 font-mono italic pt-0.5 pl-1">
+                Error details: {reply.error_message}
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// 4. Reply Composer Form Component
+function ReplyComposer({
+  comment,
+  isReplying,
+  replyText,
+  isSubmitting,
+  feedback,
+  onOpen,
+  onClose,
+  onTextChange,
+  onSubmit,
+}: {
+  comment: SocialComment;
+  isReplying: boolean;
+  replyText: string;
+  isSubmitting: boolean;
+  feedback: { type: 'success' | 'error'; message: string } | null;
+  onOpen: () => void;
+  onClose: () => void;
+  onTextChange: (text: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="pt-1">
+      {!isReplying ? (
+        <button
+          onClick={onOpen}
+          className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white border border-indigo-500/30 font-semibold text-xs transition flex items-center space-x-1.5 shadow-sm"
+        >
+          <CornerDownRight className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Reply</span>
+        </button>
+      ) : (
+        <div className="bg-slate-950/90 p-3.5 rounded-xl border border-indigo-500/40 space-y-3 shadow-xl animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-200 border-b border-slate-800 pb-2">
+            <span className="flex items-center space-x-1.5 text-indigo-400">
+              <CornerDownRight className="w-4 h-4 text-indigo-400" />
+              <span>Reply to {comment.commenter_name || 'commenter'} as Page Owner</span>
+            </span>
+            <button
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <textarea
+            value={replyText}
+            onChange={(e) => onTextChange(e.target.value)}
+            disabled={isSubmitting}
+            maxLength={2000}
+            rows={3}
+            placeholder={`Type your response to ${comment.commenter_name || 'this commenter'}...`}
+            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition resize-none disabled:opacity-50"
+          />
+
+          {feedback && (
+            <div
+              className={`p-2.5 rounded-lg border text-xs flex items-center space-x-2 ${
+                feedback.type === 'success'
+                  ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
+                  : 'bg-rose-950/40 border-rose-800 text-rose-300'
+              }`}
+            >
+              {feedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              )}
+              <span>{feedback.message}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[10px] font-mono text-slate-500">
+              {replyText.length} / 2000 characters
+            </span>
+
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={isSubmitting || !replyText.trim()}
+                className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white font-bold text-xs transition flex items-center space-x-1.5 shadow-md disabled:text-slate-500 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                    <span>Sending Reply...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send Reply</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 5. Main Conversation Container Component
+function CommentConversation({
+  comment,
+  formatDate,
+  activeReplyCommentId,
+  replyTextMap,
+  isSubmittingMap,
+  feedbackMap,
+  handleOpenReplyForm,
+  handleCloseReplyForm,
+  handleReplyTextChange,
+  handleSendReply,
+}: {
+  comment: SocialComment;
+  formatDate: (iso?: string) => string;
+  activeReplyCommentId: number | null;
+  replyTextMap: Record<number, string>;
+  isSubmittingMap: Record<number, boolean>;
+  feedbackMap: Record<number, { type: 'success' | 'error'; message: string } | null>;
+  handleOpenReplyForm: (id: number) => void;
+  handleCloseReplyForm: (id: number) => void;
+  handleReplyTextChange: (id: number, text: string) => void;
+  handleSendReply: (comment: SocialComment) => void;
+}) {
+  const isReplying = activeReplyCommentId === comment.id;
+  const replyText = replyTextMap[comment.id] || '';
+  const isSubmitting = isSubmittingMap[comment.id] || false;
+  const feedback = feedbackMap[comment.id] || null;
+
+  return (
+    <div className="linear-panel p-4 sm:p-5 rounded-2xl border border-slate-800/80 hover:border-slate-700 transition space-y-3 bg-slate-900/40 shadow-lg">
+      {/* POST CONTEXT HEADER */}
+      <PostContextCard post={comment.post} externalPostId={comment.external_post_id} platform={comment.platform} />
+
+      {/* ORIGINAL CUSTOMER COMMENT */}
+      <OriginalComment comment={comment} formatDate={formatDate} />
+
+      {/* NESTED REPLIES THREAD */}
+      <ReplyThread replies={comment.replies} formatDate={formatDate} />
+
+      {/* REPLY COMPOSER & ACTIONS */}
+      <ReplyComposer
+        comment={comment}
+        isReplying={isReplying}
+        replyText={replyText}
+        isSubmitting={isSubmitting}
+        feedback={feedback}
+        onOpen={() => handleOpenReplyForm(comment.id)}
+        onClose={() => handleCloseReplyForm(comment.id)}
+        onTextChange={(text) => handleReplyTextChange(comment.id, text)}
+        onSubmit={() => handleSendReply(comment)}
+      />
+    </div>
+  );
+}
 
 export default function CommentsPage() {
   const [comments, setComments] = useState<SocialComment[]>([]);
@@ -101,11 +499,10 @@ export default function CommentsPage() {
           [comment.id]: { type: 'success', message: res.data.message || 'Reply published successfully!' }
         }));
 
-        // Clear typed message and close form after brief delay
         setTimeout(() => {
           setReplyTextMap((prev) => ({ ...prev, [comment.id]: '' }));
           setActiveReplyCommentId(null);
-          fetchComments(true); // Refetch to show persistent reply history
+          fetchComments(true);
         }, 1200);
       } else {
         setFeedbackMap((prev) => ({
@@ -160,7 +557,7 @@ export default function CommentsPage() {
                 </span>
               </h1>
               <p className="text-xs text-slate-400 mt-1">
-                View incoming Facebook & Instagram comments and manually reply directly from your dashboard.
+                View incoming Facebook & Instagram comments, see post context, and reply directly from your dashboard.
               </p>
             </div>
           </div>
@@ -276,210 +673,23 @@ export default function CommentsPage() {
           </button>
         </div>
       ) : (
-        /* Comments List */
+        /* Comments List rendered via CommentConversation */
         <div className="space-y-4">
-          {filteredComments.map((comment) => {
-            const isReplying = activeReplyCommentId === comment.id;
-            const replyText = replyTextMap[comment.id] || '';
-            const isSubmitting = isSubmittingMap[comment.id] || false;
-            const feedback = feedbackMap[comment.id];
-            const hasReplies = comment.replies && comment.replies.length > 0;
-
-            return (
-              <div
-                key={comment.id}
-                className="linear-panel p-4 rounded-xl border border-slate-800/80 hover:border-slate-700 transition space-y-3.5 bg-slate-900/40 shadow-lg"
-              >
-                {/* Comment Header Row */}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/60 pb-2.5">
-                  <div className="flex items-center space-x-2">
-                    {/* Platform Badge */}
-                    {comment.platform === 'facebook' ? (
-                      <span className="px-2.5 py-1 rounded-md bg-blue-950/80 text-blue-300 border border-blue-800/80 font-bold text-[10px] flex items-center space-x-1.5">
-                        <Facebook className="w-3 h-3 fill-current text-blue-400" />
-                        <span>Facebook</span>
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-1 rounded-md bg-pink-950/80 text-pink-300 border border-pink-800/80 font-bold text-[10px] flex items-center space-x-1.5">
-                        <Instagram className="w-3 h-3 text-pink-400" />
-                        <span>Instagram</span>
-                      </span>
-                    )}
-
-                    {/* Commenter Info */}
-                    <div className="flex items-center space-x-1.5 text-slate-200 font-semibold text-xs">
-                      <User className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{comment.commenter_name || comment.commenter_id || 'Anonymous User'}</span>
-                    </div>
-                  </div>
-
-                  {/* Right Metadata: Processing Status & Timestamp */}
-                  <div className="flex items-center space-x-3 text-[11px]">
-                    {/* Processing Status Badge */}
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80 font-mono text-[9px] font-bold flex items-center space-x-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>{comment.processing_status || 'RECEIVED'}</span>
-                    </span>
-
-                    {/* Timestamp */}
-                    <span className="text-slate-400 flex items-center space-x-1 font-mono text-[10px]">
-                      <Clock className="w-3 h-3 text-slate-500" />
-                      <span>{formatDate(comment.event_timestamp || comment.created_at)}</span>
-                    </span>
-                  </div>
-                </div>
-
-                {/* Comment Body */}
-                <div className="text-slate-100 text-xs font-normal leading-relaxed pl-1">
-                  {comment.comment_text ? (
-                    <p className="bg-slate-950/60 p-3 rounded-lg border border-slate-800/70 font-sans text-slate-200">
-                      "{comment.comment_text}"
-                    </p>
-                  ) : (
-                    <p className="text-slate-500 italic text-[11px]">
-                      (Comment payload received without text content)
-                    </p>
-                  )}
-                </div>
-
-                {/* Existing Reply History List */}
-                {hasReplies && (
-                  <div className="space-y-2 pt-1 pl-4 border-l-2 border-indigo-500/40">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 flex items-center space-x-1">
-                      <CornerDownRight className="w-3 h-3 text-indigo-400" />
-                      <span>Your Replies ({comment.replies!.length})</span>
-                    </div>
-                    {comment.replies!.map((reply) => (
-                      <div
-                        key={reply.id}
-                        className="bg-slate-950/90 p-2.5 rounded-lg border border-indigo-900/30 text-xs space-y-1 shadow-inner"
-                      >
-                        <div className="flex items-center justify-between text-[10px] text-slate-400">
-                          <span className="font-semibold text-indigo-300 flex items-center space-x-1">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                            <span>Page Owner</span>
-                          </span>
-                          <span className="font-mono text-slate-400">{formatDate(reply.created_at)}</span>
-                        </div>
-                        <p className="text-slate-200 font-sans">{reply.message}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* External IDs & Reply Action Button Footer */}
-                <div className="flex flex-wrap items-center justify-between gap-3 text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-800/40">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="flex items-center space-x-1 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                      <Hash className="w-3 h-3 text-slate-400" />
-                      <span>Comment ID: {comment.external_comment_id}</span>
-                    </span>
-
-                    {comment.external_post_id && (
-                      <span className="flex items-center space-x-1 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                        <Hash className="w-3 h-3 text-indigo-400" />
-                        <span>Post ID: {comment.external_post_id}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Manual Reply Toggle Button */}
-                  {!isReplying && (
-                    <button
-                      onClick={() => handleOpenReplyForm(comment.id)}
-                      className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white border border-indigo-500/30 font-semibold text-xs transition flex items-center space-x-1.5 shadow-sm"
-                    >
-                      <CornerDownRight className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Reply</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Inline Reply Composer Form */}
-                {isReplying && (
-                  <div className="mt-3 bg-slate-950/90 p-3.5 rounded-xl border border-indigo-500/40 space-y-3 shadow-xl animate-in fade-in slide-in-from-top-1 duration-200">
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-200 border-b border-slate-800 pb-2">
-                      <span className="flex items-center space-x-1.5 text-indigo-400">
-                        <CornerDownRight className="w-4 h-4 text-indigo-400" />
-                        <span>Write Manual Reply</span>
-                      </span>
-                      <button
-                        onClick={() => handleCloseReplyForm(comment.id)}
-                        disabled={isSubmitting}
-                        className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <textarea
-                      value={replyText}
-                      onChange={(e) => handleReplyTextChange(comment.id, e.target.value)}
-                      disabled={isSubmitting}
-                      maxLength={2000}
-                      rows={3}
-                      placeholder={`Type your manual reply to ${comment.commenter_name || 'this commenter'}...`}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition resize-none disabled:opacity-50"
-                    />
-
-                    {/* Feedback Alert Message */}
-                    {feedback && (
-                      <div
-                        className={`p-2.5 rounded-lg border text-xs flex items-center space-x-2 ${
-                          feedback.type === 'success'
-                            ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
-                            : 'bg-rose-950/40 border-rose-800 text-rose-300'
-                        }`}
-                      >
-                        {feedback.type === 'success' ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                        ) : (
-                          <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                        )}
-                        <span>{feedback.message}</span>
-                      </div>
-                    )}
-
-                    {/* Actions Row & Character Count */}
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-[10px] font-mono text-slate-500">
-                        {replyText.length} / 2000 characters
-                      </span>
-
-                      <div className="flex items-center space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => handleCloseReplyForm(comment.id)}
-                          disabled={isSubmitting}
-                          className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold transition disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSendReply(comment)}
-                          disabled={isSubmitting || !replyText.trim()}
-                          className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white font-bold text-xs transition flex items-center space-x-1.5 shadow-md disabled:text-slate-500 disabled:cursor-not-allowed"
-                        >
-                          {isSubmitting ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                              <span>Sending Reply...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Send className="w-3.5 h-3.5" />
-                              <span>Send Reply</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {filteredComments.map((comment) => (
+            <CommentConversation
+              key={comment.id}
+              comment={comment}
+              formatDate={formatDate}
+              activeReplyCommentId={activeReplyCommentId}
+              replyTextMap={replyTextMap}
+              isSubmittingMap={isSubmittingMap}
+              feedbackMap={feedbackMap}
+              handleOpenReplyForm={handleOpenReplyForm}
+              handleCloseReplyForm={handleCloseReplyForm}
+              handleReplyTextChange={handleReplyTextChange}
+              handleSendReply={handleSendReply}
+            />
+          ))}
         </div>
       )}
     </div>

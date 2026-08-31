@@ -31,6 +31,7 @@ def get_user_social_comments(
     Retrieve ingested social comments for the authenticated user only.
     Enforces user isolation and excludes any sensitive credentials.
     Includes persistent reply history for each comment.
+    Includes associated post context if available.
     """
     comments = social_comment_repo.get_by_user_id(
         db=db,
@@ -40,8 +41,47 @@ def get_user_social_comments(
         platform=platform
     )
     
-    return [
-        {
+    # Batch lookup matching posts for current_user to avoid N+1 queries
+    ext_post_ids = list({c.external_post_id for c in comments if c.external_post_id})
+    fb_posts = {}
+    ig_posts = {}
+    
+    if ext_post_ids:
+        from app.models.post import Post
+        matched_posts = db.query(Post).filter(
+            Post.user_id == current_user.id,
+            (Post.fb_post_id.in_(ext_post_ids)) | (Post.ig_media_id.in_(ext_post_ids))
+        ).all()
+        
+        for p in matched_posts:
+            if p.fb_post_id:
+                fb_posts[p.fb_post_id] = p
+            if p.ig_media_id:
+                ig_posts[p.ig_media_id] = p
+
+    res_list = []
+    for c in comments:
+        post_obj = None
+        if c.external_post_id:
+            c_platform = (c.platform or "").lower()
+            matched_post = None
+            if c_platform == "facebook":
+                matched_post = fb_posts.get(c.external_post_id)
+            elif c_platform == "instagram":
+                matched_post = ig_posts.get(c.external_post_id)
+
+            if matched_post:
+                post_obj = {
+                    "id": matched_post.id,
+                    "title": matched_post.title,
+                    "caption": matched_post.caption,
+                    "image_url": matched_post.image_url,
+                    "media_type": matched_post.media_type,
+                    "thumbnail_url": matched_post.thumbnail_url,
+                    "platform": c.platform
+                }
+
+        res_list.append({
             "id": c.id,
             "social_account_id": c.social_account_id,
             "platform": c.platform,
@@ -55,19 +95,20 @@ def get_user_social_comments(
             "webhook_object": c.webhook_object,
             "processing_status": c.processing_status,
             "created_at": c.created_at.isoformat() if c.created_at else None,
+            "post": post_obj,
             "replies": [
                 {
                     "id": r.id,
                     "message": r.message,
                     "status": r.status,
+                    "error_message": r.error_message,
                     "external_reply_id": r.external_reply_id,
                     "created_at": r.created_at.isoformat() if r.created_at else None
                 }
                 for r in (c.replies or [])
             ]
-        }
-        for c in comments
-    ]
+        })
+    return res_list
 
 @router.post("/{comment_id}/reply", response_model=dict)
 def reply_to_social_comment(

@@ -371,3 +371,107 @@ def test_duplicate_submission_protection(client: TestClient, auth_headers: dict,
         assert "Duplicate reply detected" in res2.json()["message"]
         # Meta API was NOT called a second time
         assert mock_reply.call_count == 1
+
+
+def test_comment_with_matching_facebook_post(client: TestClient, auth_headers: dict, test_user: User, fb_comment: SocialComment, db_session: Session):
+    from app.models.post import Post
+    from app.models.brand import BrandProfile
+
+    brand = BrandProfile(name="Test Brand", user_id=test_user.id, brand_colors=[], tone_of_voice="Friendly", cta_style="Direct")
+    db_session.add(brand)
+    db_session.commit()
+
+    post = Post(
+        brand_id=brand.id,
+        user_id=test_user.id,
+        title="Summer Sale FB Post",
+        caption="Check out our FB sale!",
+        image_url="https://example.com/fb.jpg",
+        media_type="image",
+        thumbnail_url="https://example.com/fb_thumb.jpg",
+        fb_post_id="fb_post_888",
+        platforms=["facebook"]
+    )
+    db_session.add(post)
+    db_session.commit()
+
+    res = client.get("/api/v1/social-comments/", headers=auth_headers)
+    assert res.status_code == 200
+    comments = res.json()
+    target = next((c for c in comments if c["id"] == fb_comment.id), None)
+    assert target is not None
+    assert target["post"] is not None
+    assert target["post"]["id"] == post.id
+    assert target["post"]["title"] == "Summer Sale FB Post"
+    assert target["post"]["caption"] == "Check out our FB sale!"
+    assert target["post"]["platform"] == "facebook"
+
+
+def test_comment_with_matching_instagram_post(client: TestClient, auth_headers: dict, test_user: User, ig_comment: SocialComment, db_session: Session):
+    from app.models.post import Post
+    from app.models.brand import BrandProfile
+
+    brand = BrandProfile(name="Test Brand IG", user_id=test_user.id, brand_colors=[], tone_of_voice="Friendly", cta_style="Direct")
+    db_session.add(brand)
+    db_session.commit()
+
+    post = Post(
+        brand_id=brand.id,
+        user_id=test_user.id,
+        title="Summer Reel IG",
+        caption="Watch our new Reel!",
+        image_url="https://example.com/ig.jpg",
+        media_type="video",
+        thumbnail_url="https://example.com/ig_thumb.jpg",
+        ig_media_id="ig_media_666",
+        platforms=["instagram"]
+    )
+    db_session.add(post)
+    db_session.commit()
+
+    res = client.get("/api/v1/social-comments/", headers=auth_headers)
+    assert res.status_code == 200
+    comments = res.json()
+    target = next((c for c in comments if c["id"] == ig_comment.id), None)
+    assert target is not None
+    assert target["post"] is not None
+    assert target["post"]["id"] == post.id
+    assert target["post"]["title"] == "Summer Reel IG"
+    assert target["post"]["platform"] == "instagram"
+
+
+def test_comment_with_no_matching_post(client: TestClient, auth_headers: dict, fb_comment: SocialComment):
+    res = client.get("/api/v1/social-comments/", headers=auth_headers)
+    assert res.status_code == 200
+    comments = res.json()
+    target = next((c for c in comments if c["id"] == fb_comment.id), None)
+    assert target is not None
+    assert target["post"] is None
+
+
+def test_user_cannot_receive_another_users_post_context(client: TestClient, auth_headers: dict, test_user: User, other_user: User, fb_comment: SocialComment, db_session: Session):
+    from app.models.post import Post
+    from app.models.brand import BrandProfile
+
+    other_brand = BrandProfile(name="Other Brand", user_id=other_user.id, brand_colors=[], tone_of_voice="Friendly", cta_style="Direct")
+    db_session.add(other_brand)
+    db_session.commit()
+
+    other_post = Post(
+        brand_id=other_brand.id,
+        user_id=other_user.id,
+        title="Secret Other User Post",
+        caption="Do not expose this",
+        fb_post_id="fb_post_888",
+        platforms=["facebook"]
+    )
+    db_session.add(other_post)
+    db_session.commit()
+
+    res = client.get("/api/v1/social-comments/", headers=auth_headers)
+    assert res.status_code == 200
+    comments = res.json()
+    target = next((c for c in comments if c["id"] == fb_comment.id), None)
+    assert target is not None
+    assert target["post"] is None
+
