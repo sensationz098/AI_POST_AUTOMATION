@@ -475,3 +475,263 @@ def test_user_cannot_receive_another_users_post_context(client: TestClient, auth
     assert target is not None
     assert target["post"] is None
 
+
+def test_owner_reply_webhook_duplication_prevented(client: TestClient, auth_headers: dict, test_user: User, fb_comment: SocialComment, db_session: Session):
+    """Verify owner reply webhook echo does not create duplicate SocialComment."""
+    # 1. Owner replies via API
+    with patch.object(meta_service, "reply_to_facebook_comment", return_value={"id": "fb_reply_echo_123"}):
+        res = client.post(
+            f"/api/v1/social-comments/{fb_comment.id}/reply",
+            headers=auth_headers,
+            json={"message": "Official owner reply"}
+        )
+        assert res.status_code == 200
+        assert res.json()["external_reply_id"] == "fb_reply_echo_123"
+
+    # 2. Meta webhook sends event for the exact same reply ID
+    from app.services.comment_ingestion_service import meta_comment_ingestion_service
+    webhook_payload = {
+        "object": "page",
+        "entry": [{
+            "id": "fb_page_123", # matches account
+            "changes": [{
+                "field": "feed",
+                "value": {
+                    "item": "comment",
+                    "comment_id": "fb_reply_echo_123",
+                    "message": "Official owner reply"
+                }
+            }]
+        }]
+    }
+
+    # Ensure account exists for account matching in webhook
+    from app.repositories.social_account_repository import social_account_repo
+    social_account_repo.create_or_update(
+        db=db_session, user_id=test_user.id, platform="facebook", account_id="fb_page_123", account_name="Test Page", access_token="tok_123"
+    )
+
+    ingested = meta_comment_ingestion_service.parse_and_ingest_payload(db=db_session, payload=webhook_payload)
+    # The ingestion service MUST skip creating a SocialComment for this owner reply echo
+    assert len(ingested) == 0
+
+    # Verify DB has no SocialComment with external_comment_id = "fb_reply_echo_123"
+    duplicate_comment = db_session.query(SocialComment).filter_by(external_comment_id="fb_reply_echo_123").first()
+    assert duplicate_comment is None
+
+
+def test_existing_duplicate_social_comment_excluded_from_api(client: TestClient, auth_headers: dict, test_user: User, fb_comment: SocialComment, db_session: Session):
+    """Verify pre-existing duplicate SocialComment with external_comment_id matching SocialCommentReply is suppressed from GET API."""
+    from app.models.social_comment_reply import SocialCommentReply
+
+    # Create audit reply
+    reply = SocialCommentReply(
+        comment_id=fb_comment.id,
+        user_id=test_user.id,
+        platform="facebook",
+        message="Owner reply text",
+        external_reply_id="dup_external_123",
+        status="SUCCESS"
+    )
+    db_session.add(reply)
+
+    # Create pre-existing duplicate SocialComment representing the same webhook echo
+    dup_comment = SocialComment(
+        user_id=test_user.id,
+        social_account_id=fb_comment.social_account_id,
+        platform="facebook",
+        external_comment_id="dup_external_123",
+        comment_text="Owner reply text",
+        webhook_object="page",
+        created_at=fb_comment.created_at
+    )
+    db_session.add(dup_comment)
+    db_session.commit()
+
+    res = client.get("/api/v1/social-comments/", headers=auth_headers)
+    assert res.status_code == 200
+    comments = res.json()
+
+    # The top-level comments response must contain fb_comment but NOT dup_comment
+    returned_ids = [c["external_comment_id"] for c in comments]
+    assert fb_comment.external_comment_id in returned_ids
+    assert "dup_external_123" not in returned_ids
+
+
+def test_user_reply_id_does_not_suppress_other_user_comment(client: TestClient, auth_headers: dict, test_user: User, other_user: User, fb_comment: SocialComment, db_session: Session):
+    """Verify User A's reply ID does not suppress User B's comment with the same external_comment_id."""
+    from app.models.social_comment_reply import SocialCommentReply
+    from app.models.social_account import SocialAccount
+
+    # User B has an owner reply with ID "shared_reply_id"
+    other_reply = SocialCommentReply(
+        comment_id=9999,
+        user_id=other_user.id,
+        platform="facebook",
+        message="Other user reply",
+        external_reply_id="shared_reply_id",
+        status="SUCCESS"
+    )
+    db_session.add(other_reply)
+
+    # User A (test_user) has a genuine customer comment with external_comment_id = "shared_reply_id"
+    user_a_acc = db_session.query(SocialAccount).filter_by(user_id=test_user.id).first()
+    user_a_comment = SocialComment(
+        user_id=test_user.id,
+        social_account_id=user_a_acc.id,
+        platform="facebook",
+        external_comment_id="shared_reply_id",
+        comment_text="Customer comment for User A",
+        webhook_object="page"
+    )
+    db_session.add(user_a_comment)
+    db_session.commit()
+
+    # Query GET API as test_user (User A)
+    res = client.get("/api/v1/social-comments/", headers=auth_headers)
+    assert res.status_code == 200
+    comments = res.json()
+
+    # User A MUST see their comment even though User B has a reply with the same external_reply_id
+    comment_ids = [c["external_comment_id"] for c in comments]
+    assert "shared_reply_id" in comment_ids
+
+
+def test_meta_post_fallback_success_and_failure(client: TestClient, auth_headers: dict, test_user: User, db_session: Session):
+    """Test Stage 2 Meta Graph API fallback for unresolved post IDs and graceful failure handling."""
+    from app.models.social_account import SocialAccount
+    from app.core.security_encryption import encrypt_token
+
+    # Setup connected Instagram account
+    ig_account = SocialAccount(
+        user_id=test_user.id,
+        platform="instagram",
+        account_id="ig_acc_meta_test",
+        account_name="Meta Test IG",
+        access_token=encrypt_token("mock_access_token_123"),
+        status="CONNECTED"
+    )
+    db_session.add(ig_account)
+    db_session.commit()
+
+    # Create comment referencing external_post_id "unresolved_ig_post_1" not in local Post table
+    c1 = SocialComment(
+        user_id=test_user.id,
+        social_account_id=ig_account.id,
+        platform="instagram",
+        external_comment_id="c_meta_1",
+        external_post_id="unresolved_ig_post_1",
+        comment_text="Comment on unresolved IG post",
+        webhook_object="instagram"
+    )
+    db_session.add(c1)
+    db_session.commit()
+
+    # Mock meta_service.fetch_instagram_media_info to simulate successful Meta API resolution
+    mock_meta_response = {
+        "id": "unresolved_ig_post_1",
+        "caption": "Meta Fallback Post Caption",
+        "media_type": "IMAGE",
+        "media_url": "https://example.com/meta_img.jpg",
+        "thumbnail_url": "https://example.com/meta_thumb.jpg"
+    }
+
+    with patch.object(meta_service, "fetch_instagram_media_info", return_value=mock_meta_response) as mock_fetch:
+        res = client.get("/api/v1/social-comments/", headers=auth_headers)
+        assert res.status_code == 200
+        comments = res.json()
+        target = next((c for c in comments if c["external_comment_id"] == "c_meta_1"), None)
+        assert target is not None
+        assert target["post"] is not None
+        assert target["post"]["caption"] == "Meta Fallback Post Caption"
+        assert target["post"]["source"] == "meta"
+        assert mock_fetch.called
+
+    # Test Meta Fallback Failure returns post: null without breaking comments API (returns HTTP 200)
+    with patch.object(meta_service, "fetch_instagram_media_info", side_effect=Exception("Meta API Down")):
+        res = client.get("/api/v1/social-comments/", headers=auth_headers)
+        assert res.status_code == 200
+        comments = res.json()
+        target = next((c for c in comments if c["external_comment_id"] == "c_meta_1"), None)
+        assert target is not None
+        assert target["post"] is None
+
+
+def test_meta_fallback_request_caching(client: TestClient, auth_headers: dict, test_user: User, db_session: Session):
+    """Verify multiple comments on the same unresolved post only trigger ONE Meta API call."""
+    from app.models.social_account import SocialAccount
+    from app.core.security_encryption import encrypt_token
+
+    ig_account = SocialAccount(
+        user_id=test_user.id,
+        platform="instagram",
+        account_id="ig_acc_cache_test",
+        account_name="Cache Test IG",
+        access_token=encrypt_token("mock_access_token_123"),
+        status="CONNECTED"
+    )
+    db_session.add(ig_account)
+    db_session.commit()
+
+    # 3 comments referencing the same external_post_id "shared_unresolved_post_999"
+    for i in range(1, 4):
+        db_session.add(SocialComment(
+            user_id=test_user.id,
+            social_account_id=ig_account.id,
+            platform="instagram",
+            external_comment_id=f"c_shared_{i}",
+            external_post_id="shared_unresolved_post_999",
+            comment_text=f"Shared post comment {i}",
+            webhook_object="instagram"
+        ))
+    db_session.commit()
+
+    mock_meta_response = {
+        "id": "shared_unresolved_post_999",
+        "caption": "Shared Post Caption",
+        "media_type": "IMAGE"
+    }
+
+    with patch.object(meta_service, "fetch_instagram_media_info", return_value=mock_meta_response) as mock_fetch:
+        res = client.get("/api/v1/social-comments/", headers=auth_headers)
+        assert res.status_code == 200
+        # Meta API fetch method MUST be called exactly once for all 3 comments!
+        assert mock_fetch.call_count == 1
+
+
+def test_pagination_with_owner_reply_exclusion(client: TestClient, auth_headers: dict, test_user: User, fb_comment: SocialComment, db_session: Session):
+    """Verify excluding owner reply echoes does not break skip, limit, and pagination ordering."""
+    from app.models.social_comment_reply import SocialCommentReply
+    from app.models.social_account import SocialAccount
+
+    acc = db_session.query(SocialAccount).filter_by(user_id=test_user.id).first()
+
+    # Create 5 SocialComments, where comments 2 and 4 are owner reply echoes
+    for i in range(1, 6):
+        c_id = f"pag_c_{i}"
+        db_session.add(SocialComment(
+            user_id=test_user.id,
+            social_account_id=acc.id,
+            platform="facebook",
+            external_comment_id=c_id,
+            comment_text=f"Comment {i}",
+            webhook_object="page"
+        ))
+    
+    # Mark pag_c_2 and pag_c_4 as owner replies in SocialCommentReply
+    db_session.add(SocialCommentReply(comment_id=1, user_id=test_user.id, platform="facebook", message="r2", external_reply_id="pag_c_2", status="SUCCESS"))
+    db_session.add(SocialCommentReply(comment_id=1, user_id=test_user.id, platform="facebook", message="r4", external_reply_id="pag_c_4", status="SUCCESS"))
+    db_session.commit()
+
+    # Request skip=0, limit=3
+    res = client.get("/api/v1/social-comments/?skip=0&limit=3", headers=auth_headers)
+    assert res.status_code == 200
+    comments = res.json()
+
+    # Should return exactly 3 top-level comments (excluding pag_c_2 and pag_c_4)
+    returned_ids = [c["external_comment_id"] for c in comments]
+    assert len(returned_ids) == 3
+    assert "pag_c_2" not in returned_ids
+    assert "pag_c_4" not in returned_ids
+
+

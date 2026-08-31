@@ -30,8 +30,9 @@ def get_user_social_comments(
     """
     Retrieve ingested social comments for the authenticated user only.
     Enforces user isolation and excludes any sensitive credentials.
-    Includes persistent reply history for each comment.
-    Includes associated post context if available.
+    Filters out owner reply echoes at DB and API response layers.
+    Includes persistent, chronologically sorted reply history for each comment.
+    Includes associated post context (local DB or Meta Graph API fallback).
     """
     comments = social_comment_repo.get_by_user_id(
         db=db,
@@ -41,8 +42,16 @@ def get_user_social_comments(
         platform=platform
     )
     
-    # Batch lookup matching posts for current_user to avoid N+1 queries
-    ext_post_ids = list({c.external_post_id for c in comments if c.external_post_id})
+    # Defensive Protection: Fetch external_reply_ids for current_user to exclude any webhook echoes
+    owner_reply_ids = {
+        r[0] for r in db.query(SocialCommentReply.external_reply_id).filter(
+            SocialCommentReply.user_id == current_user.id,
+            SocialCommentReply.external_reply_id.isnot(None)
+        ).all() if r[0]
+    }
+    
+    # Stage 1: Batch lookup matching posts in local DB for current_user
+    ext_post_ids = list({c.external_post_id.strip() for c in comments if c.external_post_id and c.external_post_id.strip()})
     fb_posts = {}
     ig_posts = {}
     
@@ -55,20 +64,38 @@ def get_user_social_comments(
         
         for p in matched_posts:
             if p.fb_post_id:
-                fb_posts[p.fb_post_id] = p
+                fb_posts[p.fb_post_id.strip()] = p
             if p.ig_media_id:
-                ig_posts[p.ig_media_id] = p
+                ig_posts[p.ig_media_id.strip()] = p
+
+    # Stage 2: In-Memory Request Cache for Meta Graph API Fallback Lookups
+    meta_resolved_posts: dict = {}
+    
+    # Pre-fetch user's connected social accounts for Meta API fallback
+    connected_accounts = db.query(SocialAccount).filter(
+        SocialAccount.user_id == current_user.id,
+        SocialAccount.status == "CONNECTED"
+    ).all()
+    
+    fb_account = next((a for a in connected_accounts if (a.platform or "").lower() == "facebook"), None)
+    ig_account = next((a for a in connected_accounts if (a.platform or "").lower() == "instagram"), None)
 
     res_list = []
     for c in comments:
+        # Defensive Check: Skip if this comment is an owner reply echo
+        if c.external_comment_id in owner_reply_ids:
+            continue
+
         post_obj = None
-        if c.external_post_id:
+        if c.external_post_id and c.external_post_id.strip():
+            ext_pid = c.external_post_id.strip()
             c_platform = (c.platform or "").lower()
             matched_post = None
+
             if c_platform == "facebook":
-                matched_post = fb_posts.get(c.external_post_id)
+                matched_post = fb_posts.get(ext_pid)
             elif c_platform == "instagram":
-                matched_post = ig_posts.get(c.external_post_id)
+                matched_post = ig_posts.get(ext_pid)
 
             if matched_post:
                 post_obj = {
@@ -78,8 +105,61 @@ def get_user_social_comments(
                     "image_url": matched_post.image_url,
                     "media_type": matched_post.media_type,
                     "thumbnail_url": matched_post.thumbnail_url,
-                    "platform": c.platform
+                    "platform": c.platform,
+                    "source": "local"
                 }
+            else:
+                # Stage 2: Meta Graph API Fallback with Request-Level Caching
+                cache_key = f"{c_platform}:{ext_pid}"
+                if cache_key in meta_resolved_posts:
+                    post_obj = meta_resolved_posts[cache_key]
+                else:
+                    try:
+                        if c_platform == "facebook" and fb_account:
+                            token = decrypt_token(fb_account.access_token)
+                            if token:
+                                fb_meta = meta_service.fetch_facebook_post_info(ext_pid, token)
+                                if fb_meta and isinstance(fb_meta, dict):
+                                    msg = fb_meta.get("message") or ""
+                                    title_text = msg.split("\n")[0][:60] if msg else "Facebook Post"
+                                    post_obj = {
+                                        "id": str(fb_meta.get("id") or ext_pid),
+                                        "title": title_text,
+                                        "caption": msg,
+                                        "image_url": fb_meta.get("full_picture") or fb_meta.get("picture"),
+                                        "media_type": "image",
+                                        "thumbnail_url": fb_meta.get("picture") or fb_meta.get("full_picture"),
+                                        "platform": "facebook",
+                                        "source": "meta"
+                                    }
+                        elif c_platform == "instagram" and ig_account:
+                            token = decrypt_token(ig_account.access_token)
+                            if token:
+                                ig_meta = meta_service.fetch_instagram_media_info(ext_pid, token)
+                                if ig_meta and isinstance(ig_meta, dict):
+                                    cap = ig_meta.get("caption") or ""
+                                    title_text = cap.split("\n")[0][:60] if cap else "Instagram Post"
+                                    post_obj = {
+                                        "id": str(ig_meta.get("id") or ext_pid),
+                                        "title": title_text,
+                                        "caption": cap,
+                                        "image_url": ig_meta.get("media_url") or ig_meta.get("thumbnail_url"),
+                                        "media_type": (ig_meta.get("media_type") or "IMAGE").lower(),
+                                        "thumbnail_url": ig_meta.get("thumbnail_url") or ig_meta.get("media_url"),
+                                        "platform": "instagram",
+                                        "source": "meta"
+                                    }
+                    except Exception as meta_err:
+                        # Graceful Fallback: Log warning and leave post_obj as None
+                        pass
+                    
+                    meta_resolved_posts[cache_key] = post_obj
+
+        # Sort replies chronologically (oldest first: Oldest reply -> Newest reply)
+        sorted_replies = sorted(
+            (c.replies or []),
+            key=lambda r: r.created_at or datetime.min.replace(tzinfo=timezone.utc)
+        )
 
         res_list.append({
             "id": c.id,
@@ -105,7 +185,7 @@ def get_user_social_comments(
                     "external_reply_id": r.external_reply_id,
                     "created_at": r.created_at.isoformat() if r.created_at else None
                 }
-                for r in (c.replies or [])
+                for r in sorted_replies
             ]
         })
     return res_list
