@@ -1603,6 +1603,68 @@ class MetaGraphService:
                 logger.error(f"[IG_REPLY] Meta Service Instagram reply error: {e}")
             raise
 
+    def fetch_instagram_media_info(self, media_id: str, access_token: str) -> Optional[Dict[str, Any]]:
+        """Fetch Instagram media metadata directly from Meta Graph API for post context preview."""
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if is_mock_allowed and (not media_id or not access_token or media_id.startswith("mock") or access_token.startswith("sandbox") or access_token.startswith("mock")):
+            logger.info(f"[IG_POST_FETCH] Sandbox Instagram Media Fetch for ID: {media_id}")
+            return {
+                "id": media_id,
+                "caption": "Sandbox Instagram Reel / Post",
+                "media_type": "VIDEO",
+                "media_url": "https://example.com/mock_ig_video.mp4",
+                "thumbnail_url": "https://example.com/mock_ig_thumb.jpg",
+                "permalink": "https://instagram.com"
+            }
+
+        if not media_id or not access_token:
+            return None
+
+        try:
+            url = f"{self.BASE_URL}/{media_id}"
+            params = {
+                "fields": "id,caption,media_type,media_url,thumbnail_url,permalink",
+                "access_token": access_token
+            }
+            res = requests.get(url, params=params, timeout=10)
+            if res.status_code == 200:
+                return res.json()
+            logger.warning(f"[IG_POST_FETCH] Meta API returned status {res.status_code} for IG media {media_id}")
+            return None
+        except Exception as e:
+            logger.warning(f"[IG_POST_FETCH] Error fetching IG media {media_id} from Meta: {e}")
+            return None
+
+    def fetch_facebook_post_info(self, post_id: str, access_token: str) -> Optional[Dict[str, Any]]:
+        """Fetch Facebook post metadata directly from Meta Graph API for post context preview."""
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if is_mock_allowed and (not post_id or not access_token or post_id.startswith("mock") or access_token.startswith("sandbox") or access_token.startswith("mock")):
+            logger.info(f"[FB_POST_FETCH] Sandbox Facebook Post Fetch for ID: {post_id}")
+            return {
+                "id": post_id,
+                "message": "Sandbox Facebook Page Post",
+                "full_picture": "https://example.com/mock_fb_photo.jpg",
+                "picture": "https://example.com/mock_fb_thumb.jpg"
+            }
+
+        if not post_id or not access_token:
+            return None
+
+        try:
+            url = f"{self.BASE_URL}/{post_id}"
+            params = {
+                "fields": "id,message,full_picture,picture,attachments",
+                "access_token": access_token
+            }
+            res = requests.get(url, params=params, timeout=10)
+            if res.status_code == 200:
+                return res.json()
+            logger.warning(f"[FB_POST_FETCH] Meta API returned status {res.status_code} for FB post {post_id}")
+            return None
+        except Exception as e:
+            logger.warning(f"[FB_POST_FETCH] Error fetching FB post {post_id} from Meta: {e}")
+            return None
+
 meta_service = MetaGraphService()
 
 

@@ -158,13 +158,14 @@ export interface SocialCommentReply {
 }
 
 export interface SocialCommentPostContext {
-  id: number;
+  id: number | string;
   title?: string;
   caption?: string;
   image_url?: string;
   media_type?: string;
   thumbnail_url?: string;
   platform: 'facebook' | 'instagram';
+  source?: 'local' | 'meta';
 }
 
 export interface SocialComment {

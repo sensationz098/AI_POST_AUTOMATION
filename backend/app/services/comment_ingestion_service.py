@@ -84,6 +84,18 @@ class MetaCommentIngestionService:
             if not comment_id:
                 continue
 
+            # Check if this incoming webhook comment ID matches a known owner reply
+            from app.models.social_comment_reply import SocialCommentReply
+            existing_reply = db.query(SocialCommentReply).filter(
+                SocialCommentReply.user_id == account.user_id,
+                SocialCommentReply.platform == "facebook",
+                SocialCommentReply.external_reply_id == comment_id
+            ).first()
+
+            if existing_reply:
+                logger.info(f"[META_WEBHOOK_INGEST] Skipping Facebook webhook comment {comment_id} as it is an echo of an owner reply.")
+                continue
+
             post_id = value.get("post_id") or value.get("parent_id")
             parent_id = value.get("parent_id") if value.get("parent_id") != post_id else None
             comment_text = value.get("message")
@@ -144,6 +156,18 @@ class MetaCommentIngestionService:
 
             comment_id = str(value.get("id", ""))
             if not comment_id:
+                continue
+
+            # Check if this incoming webhook comment ID matches a known owner reply
+            from app.models.social_comment_reply import SocialCommentReply
+            existing_reply = db.query(SocialCommentReply).filter(
+                SocialCommentReply.user_id == account.user_id,
+                SocialCommentReply.platform == "instagram",
+                SocialCommentReply.external_reply_id == comment_id
+            ).first()
+
+            if existing_reply:
+                logger.info(f"[META_WEBHOOK_INGEST] Skipping Instagram webhook comment {comment_id} as it is an echo of an owner reply.")
                 continue
 
             media = value.get("media", {}) if isinstance(value.get("media"), dict) else {}
