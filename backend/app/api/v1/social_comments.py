@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, Query, HTTPException, status
@@ -11,6 +12,8 @@ from app.models.social_comment_reply import SocialCommentReply
 from app.repositories.social_comment_repository import social_comment_repo
 from app.core.security_encryption import decrypt_token
 from app.services.meta_service import meta_service, MetaPublishException
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/social-comments", tags=["Social Comments"])
 
@@ -333,4 +336,94 @@ def reply_to_social_comment(
             "status": "failed",
             "message": "Unable to publish reply. Please try again."
         }
+
+
+@router.delete("/{comment_id}", response_model=dict)
+def delete_social_comment(
+    comment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Production-safe deletion of a social comment from Meta Graph API and local DB.
+    Strictly verifies ownership for current_user.
+    Decrypts token server-side only.
+    Only marks local comment deleted after Meta confirms successful deletion.
+    """
+    # 1. Ownership & Comment Existence Check
+    comment = social_comment_repo.get_by_id_and_user_id(db, comment_id=comment_id, user_id=current_user.id)
+    if not comment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Comment not found or access denied."
+        )
+
+    if comment.is_deleted:
+        return {
+            "status": "success",
+            "message": "Comment is already deleted.",
+            "comment_id": comment.id
+        }
+
+    # 2. Associated SocialAccount Ownership & Status Verification
+    social_account = db.query(SocialAccount).filter(
+        SocialAccount.id == comment.social_account_id,
+        SocialAccount.user_id == current_user.id
+    ).first()
+
+    if not social_account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Associated social account not found or access denied."
+        )
+
+    if social_account.status != "CONNECTED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Social account is not active (status: {social_account.status}). Please reconnect your account."
+        )
+
+    # 3. Decrypt Token Server-Side
+    decrypted_access_token = decrypt_token(social_account.access_token)
+    if not decrypted_access_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to decrypt social account credentials. Please reconnect your account."
+        )
+
+    # 4. Meta Graph API Deletion
+    platform = (comment.platform or "").lower()
+    try:
+        if platform == "facebook":
+            meta_service.delete_facebook_comment(
+                external_comment_id=comment.external_comment_id,
+                access_token=decrypted_access_token
+            )
+        elif platform == "instagram":
+            meta_service.delete_instagram_comment(
+                external_comment_id=comment.external_comment_id,
+                access_token=decrypted_access_token
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported platform '{comment.platform}' for comment deletion."
+            )
+    except HTTPException:
+        raise
+    except Exception as meta_err:
+        logger.error(f"[COMMENT_DELETE_ERROR] Failed to delete comment {comment_id} on {platform}: {meta_err}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unable to delete this comment from {platform.capitalize()}. Please check account permissions or try again."
+        )
+
+    # 5. Update Local Database State Only After Meta Deletion Success
+    social_comment_repo.mark_as_deleted(db, comment_id=comment.id, user_id=current_user.id)
+
+    return {
+        "status": "success",
+        "message": f"Comment deleted from {platform.capitalize()} successfully.",
+        "comment_id": comment.id
+    }
 

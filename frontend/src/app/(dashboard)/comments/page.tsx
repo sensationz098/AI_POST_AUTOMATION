@@ -18,7 +18,8 @@ import {
   ExternalLink,
   Image as ImageIcon,
   Video,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
@@ -258,6 +259,7 @@ function ReplyComposer({
   onClose,
   onTextChange,
   onSubmit,
+  onDelete,
 }: {
   comment: SocialComment;
   isReplying: boolean;
@@ -268,17 +270,29 @@ function ReplyComposer({
   onClose: () => void;
   onTextChange: (text: string) => void;
   onSubmit: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div className="pt-1">
       {!isReplying ? (
-        <button
-          onClick={onOpen}
-          className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white border border-indigo-500/30 font-semibold text-xs transition flex items-center space-x-1.5 shadow-sm"
-        >
-          <CornerDownRight className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Reply</span>
-        </button>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onOpen}
+            className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white border border-indigo-500/30 font-semibold text-xs transition flex items-center space-x-1.5 shadow-sm"
+          >
+            <CornerDownRight className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Reply</span>
+          </button>
+
+          <button
+            onClick={onDelete}
+            className="px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white border border-rose-800/50 font-semibold text-xs transition flex items-center space-x-1.5 shadow-sm"
+            title="Delete comment permanently from social media platform"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <span>Delete</span>
+          </button>
+        </div>
       ) : (
         <div className="bg-slate-950/90 p-3.5 rounded-xl border border-indigo-500/40 space-y-3 shadow-xl animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="flex items-center justify-between text-xs font-bold text-slate-200 border-b border-slate-800 pb-2">
@@ -362,7 +376,87 @@ function ReplyComposer({
   );
 }
 
-// 5. Main Conversation Container Component
+// 5. Delete Confirmation Modal Component
+function DeleteConfirmationModal({
+  comment,
+  isDeleting,
+  error,
+  onConfirm,
+  onCancel,
+}: {
+  comment: SocialComment | null;
+  isDeleting: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!comment) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 font-sans text-xs">
+        <div className="flex items-start space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-rose-950/80 border border-rose-800/80 flex items-center justify-center text-rose-400 flex-shrink-0">
+            <AlertCircle className="w-5 h-5" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-100">Delete this comment?</h3>
+            <p className="text-slate-300 leading-relaxed text-xs">
+              This will permanently remove the comment from <strong className="text-slate-100 capitalize">{comment.platform}</strong>. This action cannot be undone.
+            </p>
+          </div>
+        </div>
+
+        {/* Comment Preview Box */}
+        <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-bold text-slate-200">{comment.commenter_name || comment.commenter_id || 'Commenter'}</span>
+            <span className="text-slate-400 font-mono capitalize">{comment.platform}</span>
+          </div>
+          <p className="text-slate-300 text-xs italic line-clamp-3">"{comment.comment_text || 'No comment text'}"</p>
+        </div>
+
+        {error && (
+          <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end space-x-2.5 pt-2 border-t border-slate-800">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isDeleting}
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:bg-slate-800 text-white font-bold text-xs transition flex items-center space-x-2 shadow-lg disabled:text-slate-500 disabled:cursor-not-allowed"
+          >
+            {isDeleting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>Deleting...</span>
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Comment</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 6. Main Conversation Container Component
 function CommentConversation({
   comment,
   formatDate,
@@ -374,6 +468,7 @@ function CommentConversation({
   handleCloseReplyForm,
   handleReplyTextChange,
   handleSendReply,
+  onRequestDelete,
 }: {
   comment: SocialComment;
   formatDate: (iso?: string) => string;
@@ -385,6 +480,7 @@ function CommentConversation({
   handleCloseReplyForm: (id: number) => void;
   handleReplyTextChange: (id: number, text: string) => void;
   handleSendReply: (comment: SocialComment) => void;
+  onRequestDelete: (comment: SocialComment) => void;
 }) {
   const isReplying = activeReplyCommentId === comment.id;
   const replyText = replyTextMap[comment.id] || '';
@@ -413,6 +509,7 @@ function CommentConversation({
         onClose={() => handleCloseReplyForm(comment.id)}
         onTextChange={(text) => handleReplyTextChange(comment.id, text)}
         onSubmit={() => handleSendReply(comment)}
+        onDelete={() => onRequestDelete(comment)}
       />
     </div>
   );
@@ -522,6 +619,45 @@ export default function CommentsPage() {
     }
   };
 
+  // Delete Comment Modal States & Handlers
+  const [deletingComment, setDeletingComment] = useState<SocialComment | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleRequestDelete = (comment: SocialComment) => {
+    setDeletingComment(comment);
+    setDeleteError(null);
+  };
+
+  const handleCancelDelete = () => {
+    if (isDeleting) return;
+    setDeletingComment(null);
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingComment) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const res = await apiClient.delete(`/social-comments/${deletingComment.id}`);
+      if (res.data?.status === 'success') {
+        // Immediately remove comment from local state and update counts
+        setComments((prev) => prev.filter((c) => c.id !== deletingComment.id));
+        setDeletingComment(null);
+      } else {
+        setDeleteError(res.data?.message || 'Unable to delete comment.');
+      }
+    } catch (e: any) {
+      console.error('Failed to delete social comment:', e);
+      const errDetail = e?.response?.data?.detail || 'Unable to delete this comment from the social media platform.';
+      setDeleteError(errDetail);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const filteredComments = comments.filter((comment) => {
     if (platformFilter === 'all') return true;
     return comment.platform === platformFilter;
@@ -542,6 +678,15 @@ export default function CommentsPage() {
 
   return (
     <div className="space-y-6 max-w-5xl select-none font-sans text-xs">
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        comment={deletingComment}
+        isDeleting={isDeleting}
+        error={deleteError}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
+
       {/* Page Header Banner */}
       <div className="linear-panel p-6 rounded-2xl space-y-4 border border-slate-800 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -688,6 +833,7 @@ export default function CommentsPage() {
               handleCloseReplyForm={handleCloseReplyForm}
               handleReplyTextChange={handleReplyTextChange}
               handleSendReply={handleSendReply}
+              onRequestDelete={handleRequestDelete}
             />
           ))}
         </div>

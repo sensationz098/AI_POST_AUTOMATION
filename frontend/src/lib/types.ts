@@ -180,9 +180,16 @@ export interface SocialComment {
   commenter_name?: string;
   event_timestamp?: string;
   webhook_object: string;
-  processing_status: 'RECEIVED' | string;
+  processing_status: 'RECEIVED' | 'DELETED' | string;
+  is_deleted?: boolean;
+  deleted_at?: string;
   created_at: string;
   post?: SocialCommentPostContext | null;
   replies?: SocialCommentReply[];
 }
 
+export interface SocialCommentDeleteResponse {
+  status: 'success' | 'failed';
+  message: string;
+  comment_id?: number;
+}

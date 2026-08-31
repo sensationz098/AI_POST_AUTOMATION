@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import enum
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, ForeignKey, UniqueConstraint, Boolean
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -10,6 +10,7 @@ class CommentProcessingStatus(str, enum.Enum):
     PROCESSED = "PROCESSED"
     IGNORED = "IGNORED"
     FAILED = "FAILED"
+    DELETED = "DELETED"
 
 class SocialComment(Base):
     __tablename__ = "social_comments"
@@ -27,6 +28,8 @@ class SocialComment(Base):
     event_timestamp = Column(DateTime(timezone=True), nullable=True)
     webhook_object = Column(String(50), nullable=False)  # 'page' or 'instagram'
     processing_status = Column(String(50), nullable=False, default="RECEIVED", index=True)
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     metadata_json = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

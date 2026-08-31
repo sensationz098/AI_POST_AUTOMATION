@@ -84,6 +84,16 @@ class MetaCommentIngestionService:
             if not comment_id:
                 continue
 
+            # Resurrection Protection: Skip if comment is already marked deleted locally
+            from app.models.social_comment import SocialComment
+            existing_comment = db.query(SocialComment).filter(
+                SocialComment.platform == "facebook",
+                SocialComment.external_comment_id == comment_id
+            ).first()
+            if existing_comment and existing_comment.is_deleted:
+                logger.info(f"[META_WEBHOOK_INGEST] Skipping Facebook webhook comment {comment_id} as it is marked as deleted.")
+                continue
+
             # Check if this incoming webhook comment ID matches a known owner reply
             from app.models.social_comment_reply import SocialCommentReply
             existing_reply = db.query(SocialCommentReply).filter(
@@ -156,6 +166,15 @@ class MetaCommentIngestionService:
 
             comment_id = str(value.get("id", ""))
             if not comment_id:
+                continue
+
+            # Resurrection Protection: Skip if comment is already marked deleted locally
+            existing_comment = db.query(SocialComment).filter(
+                SocialComment.platform == "instagram",
+                SocialComment.external_comment_id == comment_id
+            ).first()
+            if existing_comment and existing_comment.is_deleted:
+                logger.info(f"[META_WEBHOOK_INGEST] Skipping Instagram webhook comment {comment_id} as it is marked as deleted.")
                 continue
 
             # Check if this incoming webhook comment ID matches a known owner reply
