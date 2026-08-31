@@ -27,22 +27,33 @@ def get_user_social_comments(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     platform: Optional[str] = Query(None, description="Filter by platform ('facebook' or 'instagram')"),
+    social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Retrieve ingested social comments for the authenticated user only.
     Enforces user isolation and excludes any sensitive credentials.
+    Supports filtering by specific social_account_id owned by current_user.
     Filters out owner reply echoes at DB and API response layers.
     Includes persistent, chronologically sorted reply history for each comment.
     Includes associated post context (local DB or Meta Graph API fallback).
     """
+    if social_account_id is not None:
+        account = db.query(SocialAccount).filter(
+            SocialAccount.id == social_account_id,
+            SocialAccount.user_id == current_user.id
+        ).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Social account not found")
+
     comments = social_comment_repo.get_by_user_id(
         db=db,
         user_id=current_user.id,
         skip=skip,
         limit=limit,
-        platform=platform
+        platform=platform,
+        social_account_id=social_account_id
     )
     
     # Defensive Protection: Fetch external_reply_ids for current_user to exclude any webhook echoes
