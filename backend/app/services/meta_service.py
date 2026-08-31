@@ -1665,6 +1665,94 @@ class MetaGraphService:
             logger.warning(f"[FB_POST_FETCH] Error fetching FB post {post_id} from Meta: {e}")
             return None
 
+    def delete_facebook_comment(self, external_comment_id: str, access_token: str) -> Dict[str, Any]:
+        """Delete a Facebook comment from Meta Graph API."""
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if is_mock_allowed and (not external_comment_id or not access_token or external_comment_id.startswith("mock") or external_comment_id.startswith("fb_") or access_token.startswith("sandbox") or access_token.startswith("mock")):
+            logger.info(f"[FB_COMMENT_DELETE] Executing Sandbox Facebook Comment Delete Simulation for ID: {external_comment_id}")
+            return {"success": True, "status": "deleted_sandbox"}
+
+        if not external_comment_id or not access_token:
+            raise Exception("External Comment ID and valid Access Token are required for Facebook comment deletion.")
+
+        try:
+            logger.info(f"[DELETE_TRACE] FACEBOOK_COMMENT_DELETE_STARTED | external_comment_id={external_comment_id}")
+            url = f"{self.BASE_URL}/{external_comment_id}"
+            params = {"access_token": access_token}
+            response = requests.delete(url, params=params, timeout=20)
+            res_data = response.json()
+            logger.info(f"[DELETE_TRACE] FACEBOOK_COMMENT_DELETE_RESPONSE | external_comment_id={external_comment_id} | status_code={response.status_code}")
+
+            if response.status_code != 200:
+                err_dict = res_data.get("error", {}) if isinstance(res_data, dict) else {}
+                error_msg = err_dict.get("message", "Facebook API Comment Delete Error")
+                err_code = err_dict.get("code")
+                err_subcode = err_dict.get("error_subcode")
+
+                # Check for idempotent / already deleted object indication
+                msg_lower = error_msg.lower()
+                is_already_deleted = (
+                    err_code in [100, 10, 200, 210] and
+                    ("does not exist" in msg_lower or "unsupported delete" in msg_lower or "cannot be loaded" in msg_lower or "unknown path" in msg_lower)
+                ) or ("does not exist" in msg_lower or "not found" in msg_lower)
+
+                if is_already_deleted:
+                    logger.info(f"[DELETE_TRACE] FACEBOOK_COMMENT_DELETE_IDEMPOTENT | external_comment_id={external_comment_id} | message={error_msg}")
+                    return {"success": True, "already_deleted": True, "status": "already_deleted"}
+
+                logger.error(f"[DELETE_TRACE] FACEBOOK_COMMENT_DELETE_FAILED | external_comment_id={external_comment_id} | status_code={response.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={error_msg}")
+                raise Exception(f"Facebook Graph API Comment Delete Error ({response.status_code}) [code={err_code}, subcode={err_subcode}]: {error_msg}")
+
+            logger.info(f"[DELETE_TRACE] FACEBOOK_COMMENT_DELETE_SUCCESS | external_comment_id={external_comment_id}")
+            return {"success": True, "status": "deleted"}
+        except Exception as e:
+            logger.error(f"[FB_COMMENT_DELETE] Meta Service Facebook comment delete error: {e}")
+            raise e
+
+    def delete_instagram_comment(self, external_comment_id: str, access_token: str) -> Dict[str, Any]:
+        """Delete an Instagram comment from Meta Graph API."""
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if is_mock_allowed and (not external_comment_id or not access_token or external_comment_id.startswith("mock") or external_comment_id.startswith("ig_") or access_token.startswith("sandbox") or access_token.startswith("mock")):
+            logger.info(f"[IG_COMMENT_DELETE] Executing Sandbox Instagram Comment Delete Simulation for ID: {external_comment_id}")
+            return {"success": True, "status": "deleted_sandbox"}
+
+        if not external_comment_id or not access_token:
+            raise Exception("External Comment ID and valid Access Token are required for Instagram comment deletion.")
+
+        try:
+            logger.info(f"[DELETE_TRACE] INSTAGRAM_COMMENT_DELETE_STARTED | external_comment_id={external_comment_id}")
+            url = f"{self.BASE_URL}/{external_comment_id}"
+            params = {"access_token": access_token}
+            response = requests.delete(url, params=params, timeout=20)
+            res_data = response.json()
+            logger.info(f"[DELETE_TRACE] INSTAGRAM_COMMENT_DELETE_RESPONSE | external_comment_id={external_comment_id} | status_code={response.status_code}")
+
+            if response.status_code != 200:
+                err_dict = res_data.get("error", {}) if isinstance(res_data, dict) else {}
+                error_msg = err_dict.get("message", "Instagram API Comment Delete Error")
+                err_code = err_dict.get("code")
+                err_subcode = err_dict.get("error_subcode")
+
+                # Check for idempotent / already deleted object indication
+                msg_lower = error_msg.lower()
+                is_already_deleted = (
+                    err_code in [100, 10, 200, 210] and
+                    ("does not exist" in msg_lower or "unsupported delete" in msg_lower or "cannot be loaded" in msg_lower or "unknown path" in msg_lower)
+                ) or ("does not exist" in msg_lower or "not found" in msg_lower)
+
+                if is_already_deleted:
+                    logger.info(f"[DELETE_TRACE] INSTAGRAM_COMMENT_DELETE_IDEMPOTENT | external_comment_id={external_comment_id} | message={error_msg}")
+                    return {"success": True, "already_deleted": True, "status": "already_deleted"}
+
+                logger.error(f"[DELETE_TRACE] INSTAGRAM_COMMENT_DELETE_FAILED | external_comment_id={external_comment_id} | status_code={response.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={error_msg}")
+                raise Exception(f"Instagram Graph API Comment Delete Error ({response.status_code}) [code={err_code}, subcode={err_subcode}]: {error_msg}")
+
+            logger.info(f"[DELETE_TRACE] INSTAGRAM_COMMENT_DELETE_SUCCESS | external_comment_id={external_comment_id}")
+            return {"success": True, "status": "deleted"}
+        except Exception as e:
+            logger.error(f"[IG_COMMENT_DELETE] Meta Service Instagram comment delete error: {e}")
+            raise e
+
 meta_service = MetaGraphService()
 
 

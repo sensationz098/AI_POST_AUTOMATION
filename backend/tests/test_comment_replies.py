@@ -735,3 +735,175 @@ def test_pagination_with_owner_reply_exclusion(client: TestClient, auth_headers:
     assert "pag_c_4" not in returned_ids
 
 
+# ==============================================================================
+# COMMENT DELETION TESTS
+# ==============================================================================
+
+def test_delete_facebook_comment_success(client: TestClient, auth_headers: dict, test_user: User, fb_comment: SocialComment, db_session: Session):
+    """Verify owner can delete Facebook comment: calls Meta API, marks DB deleted, and excludes from list API."""
+    with patch.object(meta_service, "delete_facebook_comment", return_value={"success": True, "status": "deleted"}) as mock_meta_del:
+        res = client.delete(f"/api/v1/social-comments/{fb_comment.id}", headers=auth_headers)
+        assert res.status_code == 200
+        assert res.json()["status"] == "success"
+
+        # Verify Meta API call
+        mock_meta_del.assert_called_once_with(
+            external_comment_id=fb_comment.external_comment_id,
+            access_token="EAANNCr_test_fb_page_token"
+        )
+
+    # Verify DB state updated
+    db_session.refresh(fb_comment)
+    assert fb_comment.is_deleted is True
+    assert fb_comment.processing_status == "DELETED"
+    assert fb_comment.deleted_at is not None
+
+    # Verify excluded from GET comments API
+    get_res = client.get("/api/v1/social-comments/", headers=auth_headers)
+    assert get_res.status_code == 200
+    ids = [c["id"] for c in get_res.json()]
+    assert fb_comment.id not in ids
+
+
+def test_delete_instagram_comment_success(client: TestClient, auth_headers: dict, test_user: User, ig_comment: SocialComment, db_session: Session):
+    """Verify owner can delete Instagram comment: calls Meta API, marks DB deleted, and excludes from list API."""
+    with patch.object(meta_service, "delete_instagram_comment", return_value={"success": True, "status": "deleted"}) as mock_meta_del:
+        res = client.delete(f"/api/v1/social-comments/{ig_comment.id}", headers=auth_headers)
+        assert res.status_code == 200
+        assert res.json()["status"] == "success"
+
+        # Verify Meta API call
+        mock_meta_del.assert_called_once_with(
+            external_comment_id=ig_comment.external_comment_id,
+            access_token="EAANNCr_test_ig_page_token"
+        )
+
+    # Verify DB state updated
+    db_session.refresh(ig_comment)
+    assert ig_comment.is_deleted is True
+
+    # Verify excluded from GET comments API
+    get_res = client.get("/api/v1/social-comments/", headers=auth_headers)
+    assert get_res.status_code == 200
+    ids = [c["id"] for c in get_res.json()]
+    assert ig_comment.id not in ids
+
+
+def test_delete_comment_meta_failure_retains_local_record(client: TestClient, auth_headers: dict, test_user: User, fb_comment: SocialComment, db_session: Session):
+    """Verify Meta API failure prevents local DB deletion mark and comment remains active in list API."""
+    with patch.object(meta_service, "delete_facebook_comment", side_effect=Exception("Meta API permissions error")):
+        res = client.delete(f"/api/v1/social-comments/{fb_comment.id}", headers=auth_headers)
+        assert res.status_code == 400
+        assert "Unable to delete this comment from Facebook" in res.json()["detail"]
+
+    # Verify DB record remains active
+    db_session.refresh(fb_comment)
+    assert fb_comment.is_deleted is False
+
+    # Verify comment still visible in GET comments API
+    get_res = client.get("/api/v1/social-comments/", headers=auth_headers)
+    assert get_res.status_code == 200
+    ids = [c["id"] for c in get_res.json()]
+    assert fb_comment.id in ids
+
+
+def test_user_cannot_delete_another_users_comment(client: TestClient, other_user: User, fb_comment: SocialComment, db_session: Session):
+    """Verify User B cannot delete User A's comment (returns 404, Meta API never called)."""
+    from app.core.security import create_access_token
+    other_headers = {"Authorization": f"Bearer {create_access_token(subject=str(other_user.id), role=other_user.role or 'user')}"}
+    with patch.object(meta_service, "delete_facebook_comment") as mock_meta_del:
+        res = client.delete(f"/api/v1/social-comments/{fb_comment.id}", headers=other_headers)
+        assert res.status_code == 404
+        assert not mock_meta_del.called
+
+    # DB comment remains untouched
+    db_session.refresh(fb_comment)
+    assert fb_comment.is_deleted is False
+
+
+def test_already_deleted_comment_idempotent(client: TestClient, auth_headers: dict, fb_comment: SocialComment, db_session: Session):
+    """Verify repeated delete request on an already deleted comment is idempotent."""
+    fb_comment.is_deleted = True
+    fb_comment.processing_status = "DELETED"
+    db_session.commit()
+
+    with patch.object(meta_service, "delete_facebook_comment") as mock_meta_del:
+        res = client.delete(f"/api/v1/social-comments/{fb_comment.id}", headers=auth_headers)
+        assert res.status_code == 200
+        assert res.json()["message"] == "Comment is already deleted."
+        assert not mock_meta_del.called
+
+
+def test_webhook_resurrection_protection(db_session: Session, fb_comment: SocialComment):
+    """Verify a comment marked is_deleted=True is not resurrected when a subsequent webhook arrives."""
+    from app.services.comment_ingestion_service import meta_comment_ingestion_service
+
+    # Mark comment as deleted
+    fb_comment.is_deleted = True
+    db_session.commit()
+
+    # Simulate webhook entry for the same external_comment_id
+    payload = {
+        "object": "page",
+        "entry": [
+            {
+                "id": "1001",
+                "time": 1700000000,
+                "changes": [
+                    {
+                        "field": "feed",
+                        "value": {
+                            "item": "comment",
+                            "verb": "add",
+                            "id": fb_comment.external_comment_id,
+                            "post_id": "post_100",
+                            "message": "Resurrection attempt"
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    ingested = meta_comment_ingestion_service.parse_and_ingest_payload(db_session, payload)
+    assert len(ingested) == 0
+
+    # Ensure comment in DB remains deleted and text is unedited
+    db_session.refresh(fb_comment)
+    assert fb_comment.is_deleted is True
+    assert fb_comment.comment_text != "Resurrection attempt"
+
+
+def test_pagination_with_deleted_comments(client: TestClient, auth_headers: dict, test_user: User, fb_comment: SocialComment, db_session: Session):
+    """Verify soft-deleted comments do not break pagination limits or offset ordering."""
+    from app.models.social_account import SocialAccount
+
+    acc = db_session.query(SocialAccount).filter_by(user_id=test_user.id).first()
+
+    # Create 5 comments, mark 2 as deleted
+    created_comments = []
+    for i in range(1, 6):
+        c = SocialComment(
+            user_id=test_user.id,
+            social_account_id=acc.id,
+            platform="facebook",
+            external_comment_id=f"del_pag_c_{i}",
+            comment_text=f"Pag comment {i}",
+            webhook_object="page",
+            is_deleted=(i in (2, 4))
+        )
+        db_session.add(c)
+        created_comments.append(c)
+    db_session.commit()
+
+    # Query skip=0, limit=3
+    res = client.get("/api/v1/social-comments/?skip=0&limit=3", headers=auth_headers)
+    assert res.status_code == 200
+    comments = res.json()
+
+    returned_ids = [c["external_comment_id"] for c in comments]
+    assert len(returned_ids) == 3
+    assert "del_pag_c_2" not in returned_ids
+    assert "del_pag_c_4" not in returned_ids
+
+

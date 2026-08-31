@@ -85,6 +85,7 @@ class SocialCommentRepository:
 
         query = db.query(SocialComment).filter(
             SocialComment.user_id == user_id,
+            SocialComment.is_deleted.isnot(True),
             ~SocialComment.external_comment_id.in_(reply_subquery)
         )
         if platform:
@@ -103,6 +104,25 @@ class SocialCommentRepository:
             SocialComment.id == comment_id,
             SocialComment.user_id == user_id
         ).first()
+
+    def mark_as_deleted(
+        self,
+        db: Session,
+        comment_id: int,
+        user_id: int
+    ) -> Optional[SocialComment]:
+        """Mark a social comment as deleted after successful Meta Graph API deletion."""
+        comment = self.get_by_id_and_user_id(db, comment_id=comment_id, user_id=user_id)
+        if not comment:
+            return None
+        now = datetime.now(timezone.utc)
+        comment.is_deleted = True
+        comment.deleted_at = now
+        comment.processing_status = "DELETED"
+        comment.updated_at = now
+        db.commit()
+        db.refresh(comment)
+        return comment
 
     def create_reply_audit(
         self,
