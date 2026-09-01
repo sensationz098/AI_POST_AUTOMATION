@@ -39,4 +39,10 @@ class MetaAdSyncResponse(BaseModel):
     mapped_count: int
     partially_mapped_count: int
     unmapped_count: int
+    ads_fetched: Optional[int] = None
+    ads_synced: Optional[int] = None
+    unique_creatives: Optional[int] = None
+    creatives_enriched: Optional[int] = None
+    creative_fetch_failures: Optional[int] = None
+    mapping_summary: Optional[Dict[str, int]] = None
     ads: List[MetaAdResponse]

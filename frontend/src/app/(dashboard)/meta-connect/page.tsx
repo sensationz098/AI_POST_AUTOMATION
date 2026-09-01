@@ -123,14 +123,26 @@ export default function MetaConnectPage() {
       const res = await apiClient.post(`/meta/ad-accounts/${adAccountId}/ads/sync`);
       if (res.data?.ads && Array.isArray(res.data.ads)) {
         setAdsByAccount(prev => ({ ...prev, [adAccountId]: res.data.ads }));
-        setAdSyncSuccess(prev => ({
-          ...prev,
-          [adAccountId]: res.data.message || `Synced ${res.data.synced_count} Ad(s) (${res.data.mapped_count} mapped to engagement objects).`
-        }));
+        const mapped = res.data.mapped_count ?? 0;
+        const total = res.data.synced_count ?? res.data.ads.length;
+        const msg = res.data.message || `Successfully synced ${total} Ad(s) (${mapped} mapped to engagement objects).`;
+        setAdSyncSuccess(prev => ({ ...prev, [adAccountId]: msg }));
+        setAdSyncError(prev => ({ ...prev, [adAccountId]: null }));
       }
     } catch (e: any) {
       console.error(`Failed to sync ads for account ${adAccountId}:`, e);
-      const errMsg = e?.response?.data?.detail || 'Failed to sync Meta Ads. Please check permissions.';
+      let errMsg = e?.response?.data?.detail;
+      if (!errMsg) {
+        if (e?.code === 'ECONNABORTED' || e?.message?.includes('timeout')) {
+          errMsg = 'Ad sync request timed out. Please check your network connection and try again.';
+        } else if (e?.response?.status === 400) {
+          errMsg = 'Unable to sync Meta Ads. Please verify permissions or reconnect your Meta account.';
+        } else if (e?.response?.status === 404) {
+          errMsg = 'Meta Ad Account not found or access denied.';
+        } else {
+          errMsg = 'An unexpected error occurred while syncing Meta Ads. Please try again.';
+        }
+      }
       setAdSyncError(prev => ({ ...prev, [adAccountId]: errMsg }));
     } finally {
       setIsSyncingAds(prev => ({ ...prev, [adAccountId]: false }));

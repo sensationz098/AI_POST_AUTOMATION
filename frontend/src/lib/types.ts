@@ -241,5 +241,16 @@ export interface MetaAdSyncResponse {
   mapped_count: number;
   partially_mapped_count: number;
   unmapped_count: number;
+  ads_fetched?: number;
+  ads_synced?: number;
+  unique_creatives?: number;
+  creatives_enriched?: number;
+  creative_fetch_failures?: number;
+  mapping_summary?: {
+    mapped: number;
+    partially_mapped: number;
+    not_available: number;
+    error: number;
+  };
   ads: MetaAd[];
 }

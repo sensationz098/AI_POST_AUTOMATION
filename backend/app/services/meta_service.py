@@ -1,7 +1,8 @@
 import time
 import requests
 import logging
-from typing import Dict, Any, Optional, Callable, Tuple
+from typing import Dict, Any, Optional, Callable, Tuple, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 from app.core.config import settings
 from app.core.logging_config import sanitize_url
@@ -1803,6 +1804,65 @@ class MetaGraphService:
         except Exception as e:
             logger.error(f"[META_ADS] Exception fetching creative {creative_id_str}: {e}")
             return None
+
+    def fetch_creatives_batch(
+        self,
+        user_access_token: str,
+        creative_ids: List[str],
+        max_workers: int = 10
+    ) -> Dict[str, Optional[Dict[str, Any]]]:
+        """
+        Concurrently fetch lightweight Ad Creative details for a list of creative IDs using a bounded thread pool.
+        Deduplicates input creative_ids so each unique ID is fetched at most once.
+        Handles individual creative fetch failures gracefully without aborting the batch.
+        NEVER logs access tokens or raw credentials.
+        """
+        if not user_access_token or not creative_ids:
+            return {}
+
+        unique_ids = list(dict.fromkeys(str(c_id) for c_id in creative_ids if c_id))
+        total_unique = len(unique_ids)
+        if total_unique == 0:
+            return {}
+
+        start_time = time.time()
+        logger.info(f"[META_ADS_SYNC] Starting creative enrichment for {total_unique} unique creative ID(s) with max_workers={max_workers}")
+
+        creative_cache: Dict[str, Optional[Dict[str, Any]]] = {}
+
+        def _fetch_single(cid: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+            try:
+                res_data = self.fetch_creative(user_access_token, cid)
+                return cid, res_data
+            except Exception as exc:
+                logger.warning(f"[META_ADS_SYNC] Exception in worker fetching creative {cid}: {exc}")
+                return cid, None
+
+        workers = min(max_workers, max(1, total_unique))
+        completed_count = 0
+        failure_count = 0
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_id = {executor.submit(_fetch_single, cid): cid for cid in unique_ids}
+            for future in as_completed(future_to_id):
+                completed_count += 1
+                cid, result = future.result()
+                creative_cache[cid] = result
+                if result is None:
+                    failure_count += 1
+
+                if completed_count % 50 == 0 or completed_count == total_unique:
+                    logger.info(
+                        f"[META_ADS_SYNC] Creative enrichment progress: {completed_count}/{total_unique} processed "
+                        f"({failure_count} failed) in {time.time() - start_time:.2f}s"
+                    )
+
+        duration = time.time() - start_time
+        logger.info(
+            f"[META_ADS_SYNC] Creative enrichment completed successfully in {duration:.2f}s: "
+            f"total_unique={total_unique}, enriched={total_unique - failure_count}, failures={failure_count}"
+        )
+        return creative_cache
 
     def fetch_user_pages_and_instagram_accounts(self, user_access_token: str) -> Dict[str, Any]:
         """

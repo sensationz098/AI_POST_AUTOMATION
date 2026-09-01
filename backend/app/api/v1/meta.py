@@ -1,3 +1,4 @@
+import time
 import secrets
 import logging
 from typing import Dict, Any, Optional, List
@@ -365,6 +366,9 @@ def sync_meta_ads_for_account(
     from app.repositories.meta_ad_account_repository import meta_ad_account_repo
     from app.repositories.meta_ad_repository import meta_ad_repo
 
+    sync_start_time = time.time()
+    logger.info(f"[META_ADS_SYNC] Starting sync for account {ad_account_id}")
+
     # 1. Verify user ownership of this Ad Account
     ad_acct = meta_ad_account_repo.get_by_user_and_ad_account_id(db, current_user.id, ad_account_id)
     if not ad_acct:
@@ -388,6 +392,7 @@ def sync_meta_ads_for_account(
         )
 
     # 3. Fetch Ads from Meta Graph API
+    start_ad_disc = time.time()
     try:
         raw_ads = meta_service.fetch_ads_for_ad_account(user_token, ad_account_id)
     except Exception as e:
@@ -396,8 +401,34 @@ def sync_meta_ads_for_account(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Meta API error during Ad discovery: {str(e)}"
         )
+    disc_duration = time.time() - start_ad_disc
+    logger.info(f"[META_ADS_SYNC] Ad discovery completed: fetched {len(raw_ads)} ads in {disc_duration:.2f}s")
 
-    # 4. Fetch Creative separately for each Ad & extract engagement mappings
+    # 4. Collect & deduplicate creative IDs
+    creative_id_list = []
+    for ad_data in raw_ads:
+        creative_obj = ad_data.get("creative") or ad_data.get("adcreative")
+        if isinstance(creative_obj, dict) and creative_obj.get("id"):
+            creative_id_list.append(str(creative_obj["id"]))
+
+    unique_creatives = list(dict.fromkeys(creative_id_list))
+    logger.info(f"[META_ADS_SYNC] Discovered {len(creative_id_list)} creative reference(s), {len(unique_creatives)} unique creative ID(s)")
+
+    # 5. Fetch Creative batch concurrently with bounded thread pool
+    start_enrich = time.time()
+    logger.info(f"[META_ADS_SYNC] Starting creative enrichment for {len(unique_creatives)} unique creative(s)")
+    creative_cache = meta_service.fetch_creatives_batch(user_token, unique_creatives, max_workers=10)
+    enrich_duration = time.time() - start_enrich
+    creatives_enriched = sum(1 for c in creative_cache.values() if c is not None)
+    creative_fetch_failures = sum(1 for c in creative_cache.values() if c is None)
+    logger.info(
+        f"[META_ADS_SYNC] Creative enrichment completed in {enrich_duration:.2f}s: "
+        f"enriched={creatives_enriched}, failures={creative_fetch_failures}"
+    )
+
+    # 6. Extract engagement object mappings
+    start_map = time.time()
+    logger.info(f"[META_ADS_SYNC] Starting engagement mapping for {len(raw_ads)} ads")
     mappings_map = {}
     for ad_data in raw_ads:
         ad_id = str(ad_data.get("id", ""))
@@ -406,17 +437,8 @@ def sync_meta_ads_for_account(
         if isinstance(creative_obj, dict):
             creative_id = creative_obj.get("id")
 
-        creative_data = None
-        creative_fetch_failed = False
-
-        if creative_id:
-            try:
-                creative_data = meta_service.fetch_creative(user_token, str(creative_id))
-                if not creative_data:
-                    creative_fetch_failed = True
-            except Exception as e:
-                logger.warning(f"[META_ADS_SYNC] Creative fetch exception for {creative_id}: {e}")
-                creative_fetch_failed = True
+        creative_data = creative_cache.get(str(creative_id)) if creative_id else None
+        creative_fetch_failed = (creative_id is not None and creative_data is None)
 
         mapping = meta_service.extract_engagement_mapping(ad_data, creative_data=creative_data)
         if creative_fetch_failed and mapping.get("mapping_status") != "MAPPED":
@@ -424,13 +446,28 @@ def sync_meta_ads_for_account(
 
         if ad_id:
             mappings_map[ad_id] = mapping
+    logger.info(f"[META_ADS_SYNC] Engagement mapping completed in {time.time() - start_map:.2f}s")
 
-    # 5. Upsert / sync into database
+    # 7. Upsert / sync into database in a single transaction
+    start_db = time.time()
+    logger.info(f"[META_ADS_SYNC] Starting database persistence for {len(raw_ads)} ads")
     synced_ads = meta_ad_repo.sync_ads_for_user(db, current_user.id, ad_account_id, raw_ads, mappings_map)
+    db_duration = time.time() - start_db
+    logger.info(f"[META_ADS_SYNC] Database persistence completed in {db_duration:.2f}s")
 
     mapped_cnt = sum(1 for a in synced_ads if a.mapping_status == "MAPPED")
     partially_cnt = sum(1 for a in synced_ads if a.mapping_status == "PARTIALLY_MAPPED")
-    unmapped_cnt = sum(1 for a in synced_ads if a.mapping_status in ("NOT_AVAILABLE", "UNSUPPORTED", "ERROR"))
+    not_avail_cnt = sum(1 for a in synced_ads if a.mapping_status in ("NOT_AVAILABLE", "UNSUPPORTED"))
+    error_cnt = sum(1 for a in synced_ads if a.mapping_status == "ERROR")
+    unmapped_cnt = not_avail_cnt + error_cnt
+
+    total_sync_duration = time.time() - sync_start_time
+
+    logger.info(
+        f"[META_ADS_SYNC] Sync completed successfully in {total_sync_duration:.2f}s: "
+        f"fetched={len(raw_ads)}, synced={len(synced_ads)}, mapped={mapped_cnt}, "
+        f"partially_mapped={partially_cnt}, not_available={not_avail_cnt}, errors={error_cnt}"
+    )
 
     return MetaAdSyncResponse(
         success=True,
@@ -439,6 +476,17 @@ def sync_meta_ads_for_account(
         mapped_count=mapped_cnt,
         partially_mapped_count=partially_cnt,
         unmapped_count=unmapped_cnt,
+        ads_fetched=len(raw_ads),
+        ads_synced=len(synced_ads),
+        unique_creatives=len(unique_creatives),
+        creatives_enriched=creatives_enriched,
+        creative_fetch_failures=creative_fetch_failures,
+        mapping_summary={
+            "mapped": mapped_cnt,
+            "partially_mapped": partially_cnt,
+            "not_available": not_avail_cnt,
+            "error": error_cnt
+        },
         ads=synced_ads
     )
 
