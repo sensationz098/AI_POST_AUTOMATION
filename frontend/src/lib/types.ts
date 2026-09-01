@@ -157,6 +157,16 @@ export interface SocialCommentReply {
   created_at: string;
 }
 
+export interface SocialCommentAccountContext {
+  id: number;
+  account_id: string;
+  account_name: string;
+  username?: string | null;
+  display_name?: string | null;
+  platform: 'facebook' | 'instagram';
+  logo_url?: string | null;
+}
+
 export interface SocialCommentPostContext {
   id: number | string;
   title?: string;
@@ -164,6 +174,7 @@ export interface SocialCommentPostContext {
   image_url?: string;
   media_type?: string;
   thumbnail_url?: string;
+  permalink?: string;
   platform: 'facebook' | 'instagram';
   source?: 'local' | 'meta';
 }
@@ -171,6 +182,7 @@ export interface SocialCommentPostContext {
 export interface SocialComment {
   id: number;
   social_account_id: number;
+  account?: SocialCommentAccountContext | null;
   platform: 'facebook' | 'instagram';
   external_comment_id: string;
   external_post_id?: string;

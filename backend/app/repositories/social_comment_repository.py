@@ -76,6 +76,7 @@ class SocialCommentRepository:
     ) -> List[SocialComment]:
         """Fetch comments belonging to a specific user with pagination, excluding owner reply echoes."""
         from app.models.social_comment_reply import SocialCommentReply
+        from sqlalchemy.orm import joinedload
 
         reply_subquery = db.query(SocialCommentReply.external_reply_id).filter(
             SocialCommentReply.user_id == user_id,
@@ -84,7 +85,9 @@ class SocialCommentRepository:
         if platform:
             reply_subquery = reply_subquery.filter(SocialCommentReply.platform == platform)
 
-        query = db.query(SocialComment).filter(
+        query = db.query(SocialComment).options(
+            joinedload(SocialComment.social_account)
+        ).filter(
             SocialComment.user_id == user_id,
             SocialComment.is_deleted.isnot(True),
             ~SocialComment.external_comment_id.in_(reply_subquery)
