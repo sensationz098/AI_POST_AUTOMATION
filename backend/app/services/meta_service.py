@@ -946,7 +946,8 @@ class MetaGraphService:
         "instagram_basic",
         "instagram_content_publish",
         "instagram_manage_comments",
-        "business_management"
+        "business_management",
+        "ads_read"
     ]
 
     REQUIRED_COMMENT_AUTOMATION_SCOPES = [
@@ -1056,6 +1057,25 @@ class MetaGraphService:
                 "http_status": 500,
                 "permissions": {scope: "inspection_failed" for scope in self.REQUIRED_META_OAUTH_SCOPES}
             }
+
+    def verify_ads_read_permission(self, permissions_map: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Determine whether 'ads_read' permission was actually granted during OAuth token exchange / inspection.
+        Distinguishes between requested scope ('ads_read' in REQUIRED_META_OAUTH_SCOPES) vs explicitly granted status.
+        NEVER logs or exposes sensitive credentials or access tokens.
+        """
+        status = permissions_map.get("ads_read", "declined")
+        is_granted = (status == "granted")
+        logger.info(
+            f"[META_PERMISSIONS] ads_read permission verification: "
+            f"requested=True | granted={is_granted} | status='{status}'"
+        )
+        return {
+            "permission": "ads_read",
+            "requested": "ads_read" in self.REQUIRED_META_OAUTH_SCOPES,
+            "granted": is_granted,
+            "status": status
+        }
 
     def verify_facebook_page_capabilities(
         self,

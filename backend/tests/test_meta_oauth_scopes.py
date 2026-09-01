@@ -37,8 +37,11 @@ def test_meta_oauth_authorization_url_contains_all_scopes():
     for s in new_comment_scopes:
         assert s in scopes, f"New comment scope '{s}' missing from OAuth URL"
 
-    # Total expected scope count
-    assert len(scopes) == 10
+    # 3. Meta Ads read-only permission present
+    assert "ads_read" in scopes, "Permission 'ads_read' missing from OAuth URL"
+
+    # Total expected scope count (10 existing + 1 ads_read = 11)
+    assert len(scopes) == 11
 
 def test_oauth_authorization_url_logging_does_not_leak_secrets():
     """Verify OAuth authorization URL generation logs scope names but NEVER logs secrets or tokens."""
