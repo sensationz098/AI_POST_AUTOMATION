@@ -554,3 +554,80 @@ def test_main_ads_request_failure_fails_sync(
             if get_current_user in app.dependency_overrides:
                 del app.dependency_overrides[get_current_user]
 
+
+# 19. Creative Deduplication & Batch Enrichment Test
+def test_creative_deduplication_and_batch_enrichment(
+    client: TestClient,
+    db_session: Session,
+    ad_test_user: User,
+    user1_social_account: SocialAccount,
+    user1_ad_account: MetaAdAccount
+):
+    from app.main import app
+    app.dependency_overrides[get_current_user] = lambda: ad_test_user
+
+    # 10 Ads sharing 2 unique creatives (cr_1 and cr_2)
+    mock_ads = [
+        {"id": f"ad_{i}", "name": f"Ad {i}", "creative": {"id": "cr_1" if i % 2 == 0 else "cr_2"}}
+        for i in range(10)
+    ]
+
+    mock_creative_cache = {
+        "cr_1": {"id": "cr_1", "effective_object_story_id": "109823471029481_1111"},
+        "cr_2": {"id": "cr_2", "effective_object_story_id": "109823471029481_2222"}
+    }
+
+    with patch.object(meta_service, "fetch_ads_for_ad_account", return_value=mock_ads), \
+         patch.object(meta_service, "fetch_creatives_batch", return_value=mock_creative_cache) as mock_batch:
+        try:
+            res = client.post(f"/api/v1/meta/ad-accounts/{user1_ad_account.meta_ad_account_id}/ads/sync")
+            assert res.status_code == 200
+            data = res.json()
+
+            assert data["success"] is True
+            assert data["ads_fetched"] == 10
+            assert data["ads_synced"] == 10
+            assert data["unique_creatives"] == 2
+            assert data["creatives_enriched"] == 2
+            assert data["creative_fetch_failures"] == 0
+
+            mapping_summary = data["mapping_summary"]
+            assert mapping_summary["mapped"] == 10
+            assert mapping_summary["error"] == 0
+
+            # Verify batch fetcher was called once with deduplicated creative IDs
+            mock_batch.assert_called_once()
+            args, kwargs = mock_batch.call_args
+            passed_ids = args[1]
+            assert set(passed_ids) == {"cr_1", "cr_2"}
+            assert len(passed_ids) == 2
+        finally:
+            if get_current_user in app.dependency_overrides:
+                del app.dependency_overrides[get_current_user]
+
+
+# 20. Bulk DB persistence idempotency test
+def test_bulk_db_persistence_idempotency(db_session: Session, ad_test_user: User):
+    from app.repositories.meta_ad_repository import meta_ad_repo
+
+    mock_ads = [
+        {"id": f"ad_idempotent_{i}", "name": f"Ad {i}", "creative": {"id": "cr_100"}}
+        for i in range(5)
+    ]
+    mappings_map = {
+        f"ad_idempotent_{i}": {"creative_id": "cr_100", "mapping_status": "NOT_AVAILABLE"}
+        for i in range(5)
+    }
+
+    # First sync
+    res1 = meta_ad_repo.sync_ads_for_user(db_session, ad_test_user.id, "act_100200300", mock_ads, mappings_map)
+    assert len(res1) == 5
+
+    # Second sync (same ads)
+    res2 = meta_ad_repo.sync_ads_for_user(db_session, ad_test_user.id, "act_100200300", mock_ads, mappings_map)
+    assert len(res2) == 5
+
+    # Check total records in DB for this account & user (must still be 5, no duplicates)
+    all_db_ads = meta_ad_repo.get_by_ad_account(db_session, ad_test_user.id, "act_100200300")
+    assert len(all_db_ads) == 5
+
