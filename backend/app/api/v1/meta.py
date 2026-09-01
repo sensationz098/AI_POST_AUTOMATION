@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.schemas.meta import MetaConnectRequest, MetaAccountResponse
 from app.schemas.meta_ad_account import MetaAdAccountResponse, MetaAdAccountSyncResponse
+from app.schemas.meta_ad import MetaAdResponse, MetaAdSyncResponse
 from app.repositories.brand_repository import brand_repo
 from app.repositories.social_account_repository import social_account_repo
 from app.services.meta_service import meta_service
@@ -348,4 +349,102 @@ def get_meta_ad_accounts(
     from app.repositories.meta_ad_account_repository import meta_ad_account_repo
     accounts = meta_ad_account_repo.get_by_user(db, current_user.id)
     return accounts
+
+
+@router.post("/ad-accounts/{ad_account_id}/ads/sync", response_model=MetaAdSyncResponse)
+def sync_meta_ads_for_account(
+    ad_account_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Discover Ads for a specific Meta Ad Account and extract creative engagement object mappings.
+    Verifies user ownership of Ad Account, ads_read permission, retrieves Ads via Meta Graph API GET /{act_ad_account_id}/ads,
+    parses Facebook Page Post ID & Instagram Media ID from Ad Creative data, and idempotently upserts.
+    """
+    from app.repositories.meta_ad_account_repository import meta_ad_account_repo
+    from app.repositories.meta_ad_repository import meta_ad_repo
+
+    # 1. Verify user ownership of this Ad Account
+    ad_acct = meta_ad_account_repo.get_by_user_and_ad_account_id(db, current_user.id, ad_account_id)
+    if not ad_acct:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meta Ad Account not found or access denied."
+        )
+
+    # 2. Verify user token & ads_read permission
+    user_token = meta_service.get_user_access_token_for_user(db, current_user.id)
+    if not user_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No connected Meta account found for this user. Please connect Meta first."
+        )
+
+    if not meta_service.has_ads_read_permission(db, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Meta Ads read permission is not granted. Please reconnect Meta and grant ads_read."
+        )
+
+    # 3. Fetch Ads from Meta Graph API
+    try:
+        raw_ads = meta_service.fetch_ads_for_ad_account(user_token, ad_account_id)
+    except Exception as e:
+        logger.error(f"[META_ADS_SYNC] Failed to fetch Ads for account {ad_account_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Meta API error during Ad discovery: {str(e)}"
+        )
+
+    # 4. Extract creative engagement mappings
+    mappings_map = {}
+    for ad_data in raw_ads:
+        ad_id = str(ad_data.get("id", ""))
+        if ad_id:
+            mappings_map[ad_id] = meta_service.extract_engagement_mapping(ad_data)
+
+    # 5. Upsert / sync into database
+    synced_ads = meta_ad_repo.sync_ads_for_user(db, current_user.id, ad_account_id, raw_ads, mappings_map)
+
+    mapped_cnt = sum(1 for a in synced_ads if a.mapping_status == "MAPPED")
+    partially_cnt = sum(1 for a in synced_ads if a.mapping_status == "PARTIALLY_MAPPED")
+    unmapped_cnt = sum(1 for a in synced_ads if a.mapping_status in ("NOT_AVAILABLE", "UNSUPPORTED", "ERROR"))
+
+    return MetaAdSyncResponse(
+        success=True,
+        message=f"Successfully synced {len(synced_ads)} Meta Ad(s) for account {ad_account_id}.",
+        synced_count=len(synced_ads),
+        mapped_count=mapped_cnt,
+        partially_mapped_count=partially_cnt,
+        unmapped_count=unmapped_cnt,
+        ads=synced_ads
+    )
+
+
+@router.get("/ad-accounts/{ad_account_id}/ads", response_model=List[MetaAdResponse])
+def get_meta_ads_for_account(
+    ad_account_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieve cached discovered Ads for a Meta Ad Account belonging to the current user.
+    Enforces tenant ownership validation and does NOT invoke Meta API directly.
+    """
+    from app.repositories.meta_ad_account_repository import meta_ad_account_repo
+    from app.repositories.meta_ad_repository import meta_ad_repo
+
+    # 1. Verify user ownership of Ad Account
+    ad_acct = meta_ad_account_repo.get_by_user_and_ad_account_id(db, current_user.id, ad_account_id)
+    if not ad_acct:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meta Ad Account not found or access denied."
+        )
+
+    # 2. Retrieve Ads for this user and account
+    ads = meta_ad_repo.get_by_ad_account(db, current_user.id, ad_account_id)
+    return ads
+
 

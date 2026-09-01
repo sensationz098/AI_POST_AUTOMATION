@@ -22,3 +22,4 @@ class User(Base):
     posts = relationship("Post", back_populates="author", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan")
     meta_ad_accounts = relationship("MetaAdAccount", back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
+    meta_ads = relationship("MetaAd", back_populates="user", cascade="all, delete-orphan", passive_deletes=True)

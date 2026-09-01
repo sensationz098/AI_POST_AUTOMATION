@@ -5,10 +5,10 @@ import {
   Share2, CheckCircle2, Facebook, Instagram, ShieldCheck,
   ChevronRight, ExternalLink, RefreshCw, AlertCircle,
   Loader2, Unlink, Link2, Edit3, Sparkles, Key, Lock, ArrowRight,
-  Megaphone, Globe, DollarSign
+  Megaphone, Globe, DollarSign, ChevronDown, Layers, FileText, Check, HelpCircle
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { SocialAccount, MetaAdAccount } from '@/lib/types';
+import { SocialAccount, MetaAdAccount, MetaAd } from '@/lib/types';
 
 export default function MetaConnectPage() {
   // Connected Accounts State
@@ -22,6 +22,14 @@ export default function MetaConnectPage() {
   const [isSyncingAdAccounts, setIsSyncingAdAccounts] = useState(false);
   const [adAccountError, setAdAccountError] = useState<string | null>(null);
   const [adAccountSuccess, setAdAccountSuccess] = useState<string | null>(null);
+
+  // Meta Ads & Creative Engagement Mappings State
+  const [adsByAccount, setAdsByAccount] = useState<Record<string, MetaAd[]>>({});
+  const [expandedAdAccountId, setExpandedAdAccountId] = useState<string | null>(null);
+  const [isSyncingAds, setIsSyncingAds] = useState<Record<string, boolean>>({});
+  const [isLoadingAds, setIsLoadingAds] = useState<Record<string, boolean>>({});
+  const [adSyncError, setAdSyncError] = useState<Record<string, string | null>>({});
+  const [adSyncSuccess, setAdSyncSuccess] = useState<Record<string, string | null>>({});
 
   // OAuth State
   const [isOAuthStarting, setIsOAuthStarting] = useState(false);
@@ -87,6 +95,56 @@ export default function MetaConnectPage() {
       setAdAccountError(errMsg);
     } finally {
       setIsSyncingAdAccounts(false);
+    }
+  };
+
+  // Fetch cached ads for a specific Ad Account
+  const fetchAdsForAccount = async (adAccountId: string) => {
+    setIsLoadingAds(prev => ({ ...prev, [adAccountId]: true }));
+    setAdSyncError(prev => ({ ...prev, [adAccountId]: null }));
+    try {
+      const res = await apiClient.get(`/meta/ad-accounts/${adAccountId}/ads`);
+      if (Array.isArray(res.data)) {
+        setAdsByAccount(prev => ({ ...prev, [adAccountId]: res.data }));
+      }
+    } catch (e: any) {
+      console.error(`Failed to fetch ads for account ${adAccountId}:`, e);
+    } finally {
+      setIsLoadingAds(prev => ({ ...prev, [adAccountId]: false }));
+    }
+  };
+
+  // Sync ads & creative engagement mappings for a specific Ad Account
+  const handleSyncAdsForAccount = async (adAccountId: string) => {
+    setIsSyncingAds(prev => ({ ...prev, [adAccountId]: true }));
+    setAdSyncError(prev => ({ ...prev, [adAccountId]: null }));
+    setAdSyncSuccess(prev => ({ ...prev, [adAccountId]: null }));
+    try {
+      const res = await apiClient.post(`/meta/ad-accounts/${adAccountId}/ads/sync`);
+      if (res.data?.ads && Array.isArray(res.data.ads)) {
+        setAdsByAccount(prev => ({ ...prev, [adAccountId]: res.data.ads }));
+        setAdSyncSuccess(prev => ({
+          ...prev,
+          [adAccountId]: res.data.message || `Synced ${res.data.synced_count} Ad(s) (${res.data.mapped_count} mapped to engagement objects).`
+        }));
+      }
+    } catch (e: any) {
+      console.error(`Failed to sync ads for account ${adAccountId}:`, e);
+      const errMsg = e?.response?.data?.detail || 'Failed to sync Meta Ads. Please check permissions.';
+      setAdSyncError(prev => ({ ...prev, [adAccountId]: errMsg }));
+    } finally {
+      setIsSyncingAds(prev => ({ ...prev, [adAccountId]: false }));
+    }
+  };
+
+  const toggleExpandAdAccount = (adAccountId: string) => {
+    if (expandedAdAccountId === adAccountId) {
+      setExpandedAdAccountId(null);
+    } else {
+      setExpandedAdAccountId(adAccountId);
+      if (!adsByAccount[adAccountId]) {
+        fetchAdsForAccount(adAccountId);
+      }
     }
   };
 
@@ -518,41 +576,213 @@ export default function MetaConnectPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-4">
             {adAccounts.map((acc) => {
               const isActive = acc.status_label === 'ACTIVE' || acc.account_status === 1;
+              const acctId = acc.meta_ad_account_id;
+              const isExpanded = expandedAdAccountId === acctId;
+              const ads = adsByAccount[acctId] || [];
+              const syncing = isSyncingAds[acctId] || false;
+              const loading = isLoadingAds[acctId] || false;
+              const sError = adSyncError[acctId];
+              const sSuccess = adSyncSuccess[acctId];
+
               return (
-                <div key={acc.id} className="bg-slate-900/60 p-3.5 rounded-lg border border-slate-800 flex items-start justify-between">
-                  <div className="space-y-1 min-w-0 pr-2">
-                    <h4 className="text-xs font-bold text-slate-100 truncate">{acc.name || 'Meta Ad Account'}</h4>
-                    <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-400">
-                      <span>ID: {acc.meta_ad_account_id}</span>
+                <div key={acc.id} className="bg-slate-900/60 rounded-xl border border-slate-800 overflow-hidden">
+                  {/* Ad Account Header */}
+                  <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/80">
+                    <div className="space-y-1 min-w-0 pr-2">
+                      <div className="flex items-center space-x-2">
+                        <h4 className="text-xs font-bold text-slate-100 truncate">{acc.name || 'Meta Ad Account'}</h4>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold flex-shrink-0 border ${
+                            isActive
+                              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
+                              : 'bg-amber-950/60 text-amber-300 border-amber-800/60'
+                          }`}
+                        >
+                          ● {acc.status_label || (isActive ? 'ACTIVE' : 'DISABLED')}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3 text-[10px] text-slate-400 font-mono">
+                        <span>ID: {acctId}</span>
+                        {acc.currency && (
+                          <span className="flex items-center space-x-1">
+                            <DollarSign className="w-3 h-3 text-slate-500" />
+                            <span>{acc.currency}</span>
+                          </span>
+                        )}
+                        {acc.timezone_name && (
+                          <span className="flex items-center space-x-1 truncate max-w-[140px]" title={acc.timezone_name}>
+                            <Globe className="w-3 h-3 text-slate-500" />
+                            <span className="truncate">{acc.timezone_name}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-3 text-[10px] text-slate-400 pt-0.5">
-                      {acc.currency && (
-                        <span className="flex items-center space-x-1">
-                          <DollarSign className="w-3 h-3 text-slate-500" />
-                          <span>{acc.currency}</span>
-                        </span>
-                      )}
-                      {acc.timezone_name && (
-                        <span className="flex items-center space-x-1 truncate max-w-[140px]" title={acc.timezone_name}>
-                          <Globe className="w-3 h-3 text-slate-500" />
-                          <span className="truncate">{acc.timezone_name}</span>
-                        </span>
-                      )}
+
+                    <div className="flex items-center space-x-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleSyncAdsForAccount(acctId)}
+                        disabled={syncing || loading}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 text-white font-medium text-xs transition flex items-center space-x-1.5 disabled:opacity-50"
+                      >
+                        {syncing ? (
+                          <Loader2 className="w-3 h-3 animate-spin text-white" />
+                        ) : (
+                          <RefreshCw className="w-3 h-3 text-indigo-200" />
+                        )}
+                        <span>{syncing ? 'Syncing Ads...' : 'Sync Ads'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => toggleExpandAdAccount(acctId)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs transition flex items-center space-x-1 border border-slate-700/60"
+                      >
+                        <span>{isExpanded ? 'Hide Ads' : `View Ads (${ads.length})`}</span>
+                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </button>
                     </div>
                   </div>
 
-                  <span
-                    className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold flex-shrink-0 border ${
-                      isActive
-                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
-                        : 'bg-amber-950/60 text-amber-300 border-amber-800/60'
-                    }`}
-                  >
-                    ● {acc.status_label || (isActive ? 'ACTIVE' : 'DISABLED')}
-                  </span>
+                  {/* Sync Feedback messages */}
+                  {sSuccess && (
+                    <div className="mx-4 mt-3 bg-emerald-950/40 border border-emerald-800/60 rounded-lg p-2.5 text-xs text-emerald-300 flex items-center space-x-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                      <span>{sSuccess}</span>
+                    </div>
+                  )}
+
+                  {sError && (
+                    <div className="mx-4 mt-3 bg-rose-950/40 border border-rose-800/60 rounded-lg p-2.5 text-xs text-rose-300 flex items-center justify-between gap-2">
+                      <div className="flex items-center space-x-2">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                        <span>{sError}</span>
+                      </div>
+                      {sError.toLowerCase().includes('permission') && (
+                        <button
+                          onClick={handleConnectMetaOAuth}
+                          className="px-2 py-0.5 bg-rose-900 hover:bg-rose-800 text-white rounded text-[10px] font-bold transition flex-shrink-0"
+                        >
+                          Reconnect Meta
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Expanded Ads & Engagement Mappings List */}
+                  {isExpanded && (
+                    <div className="p-4 border-t border-slate-800/80 bg-slate-950/50 space-y-3">
+                      {loading ? (
+                        <div className="p-4 text-center space-y-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-indigo-400 mx-auto" />
+                          <p className="text-[11px] text-slate-400">Loading discovered ads for account...</p>
+                        </div>
+                      ) : ads.length === 0 ? (
+                        <div className="p-4 text-center space-y-1 bg-slate-900/40 rounded-lg border border-slate-800/60">
+                          <FileText className="w-5 h-5 text-slate-600 mx-auto" />
+                          <p className="text-xs font-semibold text-slate-300">No Ads Discovered</p>
+                          <p className="text-[11px] text-slate-400">Click "Sync Ads" to fetch ads and extract engagement mappings from Meta.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
+                            <span>Discovered Ads ({ads.length})</span>
+                            <span>Engagement Object Mappings</span>
+                          </div>
+
+                          {ads.map((ad) => {
+                            const isMapped = ad.mapping_status === 'MAPPED';
+                            const isPartial = ad.mapping_status === 'PARTIALLY_MAPPED';
+
+                            return (
+                              <div key={ad.id} className="bg-slate-900/90 rounded-lg p-3 border border-slate-800/90 space-y-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <div className="space-y-0.5 min-w-0">
+                                    <div className="flex items-center space-x-2">
+                                      <h5 className="text-xs font-bold text-slate-100 truncate">{ad.name || 'Meta Ad'}</h5>
+                                      {ad.effective_status && (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                                          {ad.effective_status}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] font-mono text-slate-400">
+                                      <span>Ad ID: {ad.meta_ad_id}</span>
+                                      {ad.campaign_name && <span>Campaign: {ad.campaign_name}</span>}
+                                      {ad.adset_name && <span>AdSet: {ad.adset_name}</span>}
+                                      {ad.creative_id && <span>Creative ID: {ad.creative_id}</span>}
+                                    </div>
+                                  </div>
+
+                                  {/* Mapping Status Badge */}
+                                  <span
+                                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold flex items-center space-x-1 border flex-shrink-0 self-start sm:self-center ${
+                                      isMapped
+                                        ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/70'
+                                        : isPartial
+                                        ? 'bg-amber-950/70 text-amber-300 border-amber-800/70'
+                                        : 'bg-slate-800/80 text-slate-400 border-slate-700/60'
+                                    }`}
+                                  >
+                                    {isMapped ? (
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                    ) : isPartial ? (
+                                      <AlertCircle className="w-3 h-3 text-amber-400" />
+                                    ) : (
+                                      <HelpCircle className="w-3 h-3 text-slate-400" />
+                                    )}
+                                    <span>
+                                      {isMapped
+                                        ? 'Engagement Object Mapped'
+                                        : isPartial
+                                        ? 'Partially Mapped'
+                                        : 'No Engagement Object'}
+                                    </span>
+                                  </span>
+                                </div>
+
+                                {/* Engagement Object Details Box */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/60 text-[11px]">
+                                  {/* Facebook Engagement */}
+                                  <div className="bg-slate-950/60 p-2 rounded border border-slate-800/80 space-y-1">
+                                    <div className="flex items-center space-x-1.5 text-blue-400 font-semibold text-[10px]">
+                                      <Facebook className="w-3.5 h-3.5 text-blue-400" />
+                                      <span>Facebook Engagement Object</span>
+                                    </div>
+                                    {ad.facebook_post_id ? (
+                                      <div className="space-y-0.5 font-mono text-[10px] text-slate-300">
+                                        <div className="truncate"><span className="text-slate-500">Post ID:</span> {ad.facebook_post_id}</div>
+                                        {ad.facebook_page_id && <div className="truncate"><span className="text-slate-500">Page ID:</span> {ad.facebook_page_id}</div>}
+                                      </div>
+                                    ) : (
+                                      <p className="text-[10px] text-slate-500 italic">No Facebook Post linked</p>
+                                    )}
+                                  </div>
+
+                                  {/* Instagram Engagement */}
+                                  <div className="bg-slate-950/60 p-2 rounded border border-slate-800/80 space-y-1">
+                                    <div className="flex items-center space-x-1.5 text-pink-400 font-semibold text-[10px]">
+                                      <Instagram className="w-3.5 h-3.5 text-pink-400" />
+                                      <span>Instagram Engagement Object</span>
+                                    </div>
+                                    {ad.instagram_media_id ? (
+                                      <div className="space-y-0.5 font-mono text-[10px] text-slate-300">
+                                        <div className="truncate"><span className="text-slate-500">Media ID:</span> {ad.instagram_media_id}</div>
+                                        {ad.instagram_account_id && <div className="truncate"><span className="text-slate-500">IG Account ID:</span> {ad.instagram_account_id}</div>}
+                                      </div>
+                                    ) : (
+                                      <p className="text-[10px] text-slate-500 italic">No Instagram Media linked</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -29,6 +29,7 @@ class MetaAdAccount(Base):
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     user = relationship("User", back_populates="meta_ad_accounts")
+    ads = relationship("MetaAd", back_populates="ad_account", cascade="all, delete-orphan", passive_deletes=True)
 
     @property
     def status_label(self) -> str:
