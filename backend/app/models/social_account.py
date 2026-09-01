@@ -35,6 +35,18 @@ class SocialAccount(Base):
 
     owner = relationship("User")
     brand = relationship("BrandProfile")
+    comments = relationship(
+        "SocialComment",
+        back_populates="social_account",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
+    publishing_jobs = relationship(
+        "PublishingJob",
+        back_populates="social_account",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
 
     @property
     def requires_reconnection_for_comment_automation(self) -> bool:

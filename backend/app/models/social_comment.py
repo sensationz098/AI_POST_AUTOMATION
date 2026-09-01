@@ -35,7 +35,13 @@ class SocialComment(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", backref="social_comments")
-    social_account = relationship("SocialAccount", backref="social_comments")
+    social_account = relationship("SocialAccount", back_populates="comments")
+    replies = relationship(
+        "SocialCommentReply",
+        back_populates="comment",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
 
     __table_args__ = (
         UniqueConstraint("platform", "external_comment_id", name="uq_social_comment_platform_ext_id"),

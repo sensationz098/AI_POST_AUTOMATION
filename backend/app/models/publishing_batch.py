@@ -56,7 +56,7 @@ class PublishingJob(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     batch_id = Column(Integer, ForeignKey("publishing_batches.id"), nullable=False)
-    social_account_id = Column(Integer, ForeignKey("social_accounts.id"), nullable=False)
+    social_account_id = Column(Integer, ForeignKey("social_accounts.id", ondelete="CASCADE"), nullable=False)
     
     platform = Column(String(50), nullable=False)  # "facebook" or "instagram"
     status = Column(String(50), default=JobStatus.QUEUED.value, index=True)
@@ -78,4 +78,4 @@ class PublishingJob(Base):
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     batch = relationship("PublishingBatch", back_populates="jobs")
-    social_account = relationship("SocialAccount")
+    social_account = relationship("SocialAccount", back_populates="publishing_jobs")
