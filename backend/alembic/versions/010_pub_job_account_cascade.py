@@ -1,6 +1,6 @@
 """Add ON DELETE CASCADE constraint to publishing_jobs.social_account_id foreign key
 
-Revision ID: 010_publishing_job_account_cascade
+Revision ID: 010_pub_job_account_cascade
 Revises: 009_comment_deletion
 Create Date: 2026-09-01 12:00:00.000000
 
@@ -9,7 +9,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = '010_publishing_job_account_cascade'
+revision: str = '010_pub_job_account_cascade'
 down_revision: Union[str, None] = '009_comment_deletion'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
