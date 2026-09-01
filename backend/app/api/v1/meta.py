@@ -78,6 +78,20 @@ def meta_oauth_callback(
         short_token = meta_service.exchange_code_for_user_token(code)
         long_token = meta_service.get_long_lived_user_token(short_token)
 
+        # 3b. Verify granted permissions safely via Graph API /me/permissions
+        token_perm_info = meta_service.inspect_token_permissions(long_token)
+        perm_map = token_perm_info.get("permissions", {})
+        granted_scopes = [scope for scope, st in perm_map.items() if st == "granted"]
+        ads_read_info = meta_service.verify_ads_read_permission(perm_map)
+        ads_read_granted = ads_read_info.get("granted", False)
+
+        logger.info(
+            f"[META_OAUTH] Meta OAuth completed successfully for user {user_id}. "
+            f"Requested permissions include 'ads_read'. "
+            f"Granted scopes ({len(granted_scopes)}): {granted_scopes}. "
+            f"ads_read_granted={ads_read_granted}"
+        )
+
         # 4. Discover authorized Facebook Pages & linked Instagram accounts via Graph API
         discovered = meta_service.fetch_user_pages_and_instagram_accounts(long_token)
         fb_pages = discovered.get("facebook_pages", [])
@@ -99,7 +113,8 @@ def meta_oauth_callback(
             sub_err = sub_res.get("reason")
 
             fb_meta = {
-                "granted_scopes": meta_service.REQUIRED_META_OAUTH_SCOPES,
+                "granted_scopes": granted_scopes or meta_service.REQUIRED_META_OAUTH_SCOPES,
+                "ads_read_granted": ads_read_granted,
                 "comment_automation_ready": False,
                 "comment_automation": {
                     "facebook_webhook_subscription": {
@@ -141,7 +156,8 @@ def meta_oauth_callback(
                 }
             })
             ig_meta.update({
-                "granted_scopes": meta_service.REQUIRED_META_OAUTH_SCOPES,
+                "granted_scopes": granted_scopes or meta_service.REQUIRED_META_OAUTH_SCOPES,
+                "ads_read_granted": ads_read_granted,
                 "comment_automation_ready": False,
                 "comment_automation": existing_ca
             })
