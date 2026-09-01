@@ -397,12 +397,33 @@ def sync_meta_ads_for_account(
             detail=f"Meta API error during Ad discovery: {str(e)}"
         )
 
-    # 4. Extract creative engagement mappings
+    # 4. Fetch Creative separately for each Ad & extract engagement mappings
     mappings_map = {}
     for ad_data in raw_ads:
         ad_id = str(ad_data.get("id", ""))
+        creative_id = None
+        creative_obj = ad_data.get("creative") or ad_data.get("adcreative")
+        if isinstance(creative_obj, dict):
+            creative_id = creative_obj.get("id")
+
+        creative_data = None
+        creative_fetch_failed = False
+
+        if creative_id:
+            try:
+                creative_data = meta_service.fetch_creative(user_token, str(creative_id))
+                if not creative_data:
+                    creative_fetch_failed = True
+            except Exception as e:
+                logger.warning(f"[META_ADS_SYNC] Creative fetch exception for {creative_id}: {e}")
+                creative_fetch_failed = True
+
+        mapping = meta_service.extract_engagement_mapping(ad_data, creative_data=creative_data)
+        if creative_fetch_failed and mapping.get("mapping_status") != "MAPPED":
+            mapping["mapping_status"] = "ERROR"
+
         if ad_id:
-            mappings_map[ad_id] = meta_service.extract_engagement_mapping(ad_data)
+            mappings_map[ad_id] = mapping
 
     # 5. Upsert / sync into database
     synced_ads = meta_ad_repo.sync_ads_for_user(db, current_user.id, ad_account_id, raw_ads, mappings_map)
