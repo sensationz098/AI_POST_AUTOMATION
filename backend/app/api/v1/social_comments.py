@@ -63,111 +63,204 @@ def get_user_social_comments(
             SocialCommentReply.external_reply_id.isnot(None)
         ).all() if r[0]
     }
-    
-    # Stage 1: Batch lookup matching posts in local DB for current_user
+
+    # Tier 1: Batch lookup matching posts in local DB for current_user
     ext_post_ids = list({c.external_post_id.strip() for c in comments if c.external_post_id and c.external_post_id.strip()})
     fb_posts = {}
     ig_posts = {}
-    
+
     if ext_post_ids:
         from app.models.post import Post
         matched_posts = db.query(Post).filter(
             Post.user_id == current_user.id,
             (Post.fb_post_id.in_(ext_post_ids)) | (Post.ig_media_id.in_(ext_post_ids))
         ).all()
-        
+
         for p in matched_posts:
             if p.fb_post_id:
                 fb_posts[p.fb_post_id.strip()] = p
             if p.ig_media_id:
                 ig_posts[p.ig_media_id.strip()] = p
 
-    # Stage 2: In-Memory Request Cache for Meta Graph API Fallback Lookups
-    meta_resolved_posts: dict = {}
-    
-    # Pre-fetch user's connected social accounts for Meta API fallback
-    connected_accounts = db.query(SocialAccount).filter(
-        SocialAccount.user_id == current_user.id,
-        SocialAccount.status == "CONNECTED"
-    ).all()
-    
-    fb_account = next((a for a in connected_accounts if (a.platform or "").lower() == "facebook"), None)
-    ig_account = next((a for a in connected_accounts if (a.platform or "").lower() == "instagram"), None)
+    # Tier 2: Batch lookup in ExternalPostContext database cache table
+    remaining_comments = [
+        c for c in comments
+        if c.external_post_id and c.external_post_id.strip() and
+        c.external_post_id.strip() not in fb_posts and
+        c.external_post_id.strip() not in ig_posts
+    ]
 
+    cached_ext_posts = {}
+    if remaining_comments:
+        from app.models.external_post_context import ExternalPostContext
+        req_acc_ids = {c.social_account_id for c in remaining_comments if c.social_account_id}
+        req_pids = {c.external_post_id.strip() for c in remaining_comments}
+
+        if req_acc_ids and req_pids:
+            ext_contexts = db.query(ExternalPostContext).filter(
+                ExternalPostContext.social_account_id.in_(req_acc_ids),
+                ExternalPostContext.external_post_id.in_(req_pids)
+            ).all()
+            for ctx in ext_contexts:
+                key = (ctx.social_account_id, (ctx.platform or "").lower(), ctx.external_post_id.strip())
+                cached_ext_posts[key] = ctx
+
+    # Tier 3: Fetch missing post context from Meta Graph API using specific connected SocialAccount token & persist
+    missing_tuples = []
+    for c in comments:
+        if c.external_post_id and c.external_post_id.strip():
+            pid = c.external_post_id.strip()
+            c_plat = (c.platform or "").lower()
+            acc_id = c.social_account_id
+            if pid not in fb_posts and pid not in ig_posts:
+                key = (acc_id, c_plat, pid)
+                if key not in cached_ext_posts:
+                    missing_tuples.append((c_plat, acc_id, pid))
+
+    unique_missing = list(dict.fromkeys(missing_tuples))
+    if unique_missing:
+        from app.models.external_post_context import ExternalPostContext
+        account_ids = {item[1] for item in unique_missing if item[1]}
+        social_acc_map = {}
+        if account_ids:
+            accs = db.query(SocialAccount).filter(
+                SocialAccount.id.in_(account_ids),
+                SocialAccount.user_id == current_user.id
+            ).all()
+            social_acc_map = {a.id: a for a in accs}
+
+        new_contexts_to_add = []
+        for c_platform, acc_id, pid in unique_missing:
+            acc = social_acc_map.get(acc_id)
+            if not acc:
+                acc = db.query(SocialAccount).filter(
+                    SocialAccount.user_id == current_user.id,
+                    SocialAccount.platform == c_platform,
+                    SocialAccount.status == "CONNECTED"
+                ).first()
+                if acc:
+                    acc_id = acc.id
+
+            token = decrypt_token(acc.access_token) if (acc and acc.access_token) else None
+            meta_data = None
+            if token:
+                try:
+                    if c_platform == "facebook":
+                        meta_data = meta_service.fetch_facebook_post_info(pid, token)
+                    elif c_platform == "instagram":
+                        meta_data = meta_service.fetch_instagram_media_info(pid, token)
+                except Exception as fetch_err:
+                    logger.warning(f"[COMMENTS_API] Error fetching post {pid} for platform {c_platform}: {fetch_err}")
+
+            if acc_id:
+                if meta_data and isinstance(meta_data, dict):
+                    cap = meta_data.get("caption") or meta_data.get("message") or ""
+                    media_url = meta_data.get("media_url") or meta_data.get("full_picture") or meta_data.get("picture")
+                    thumb_url = meta_data.get("thumbnail_url") or meta_data.get("picture") or media_url
+                    permalink = meta_data.get("permalink") or meta_data.get("permalink_url")
+                    media_type = (meta_data.get("media_type") or "IMAGE").upper()
+
+                    ctx = ExternalPostContext(
+                        platform=c_platform,
+                        social_account_id=acc_id,
+                        external_post_id=pid,
+                        caption=cap,
+                        media_type=media_type,
+                        media_url=media_url,
+                        thumbnail_url=thumb_url,
+                        permalink=permalink,
+                        status="ACTIVE",
+                        metadata_json=meta_data
+                    )
+                else:
+                    # Save placeholder status='UNAVAILABLE' so subsequent loads hit Tier 2 cache directly
+                    ctx = ExternalPostContext(
+                        platform=c_platform,
+                        social_account_id=acc_id,
+                        external_post_id=pid,
+                        status="UNAVAILABLE"
+                    )
+                new_contexts_to_add.append(ctx)
+
+        if new_contexts_to_add:
+            try:
+                db.add_all(new_contexts_to_add)
+                db.commit()
+                for ctx in new_contexts_to_add:
+                    key = (ctx.social_account_id, (ctx.platform or "").lower(), ctx.external_post_id.strip())
+                    cached_ext_posts[key] = ctx
+            except Exception as commit_err:
+                db.rollback()
+                logger.error(f"[COMMENTS_API] Exception committing external post contexts: {commit_err}")
+
+    # Build final response list with account context & resolved post context
     res_list = []
     for c in comments:
         # Defensive Check: Skip if this comment is an owner reply echo
         if c.external_comment_id in owner_reply_ids:
             continue
 
+        # Account Context Resolution
+        acc_obj = None
+        sa = c.social_account
+        if sa:
+            is_ig = (sa.platform or "").lower() == "instagram"
+            acc_obj = {
+                "id": sa.id,
+                "account_id": sa.account_id,
+                "account_name": sa.account_name,
+                "username": sa.account_name if is_ig else None,
+                "display_name": sa.account_name,
+                "platform": sa.platform,
+                "logo_url": sa.logo_url
+            }
+        else:
+            acc_obj = {
+                "id": c.social_account_id,
+                "account_id": "unknown",
+                "account_name": f"{c.platform.capitalize()} Account #{c.social_account_id}",
+                "username": None,
+                "display_name": f"{c.platform.capitalize()} Account #{c.social_account_id}",
+                "platform": c.platform,
+                "logo_url": None
+            }
+
+        # Post Context Resolution
         post_obj = None
         if c.external_post_id and c.external_post_id.strip():
             ext_pid = c.external_post_id.strip()
             c_platform = (c.platform or "").lower()
-            matched_post = None
 
-            if c_platform == "facebook":
-                matched_post = fb_posts.get(ext_pid)
-            elif c_platform == "instagram":
-                matched_post = ig_posts.get(ext_pid)
-
-            if matched_post:
+            matched_local = fb_posts.get(ext_pid) if c_platform == "facebook" else ig_posts.get(ext_pid)
+            if matched_local:
+                title_txt = matched_local.title or (matched_local.caption[:60] if matched_local.caption else "Social Post")
                 post_obj = {
-                    "id": matched_post.id,
-                    "title": matched_post.title,
-                    "caption": matched_post.caption,
-                    "image_url": matched_post.image_url,
-                    "media_type": matched_post.media_type,
-                    "thumbnail_url": matched_post.thumbnail_url,
+                    "id": matched_local.id,
+                    "title": title_txt,
+                    "caption": matched_local.caption,
+                    "image_url": matched_local.image_url,
+                    "media_type": matched_local.media_type,
+                    "thumbnail_url": matched_local.thumbnail_url,
+                    "permalink": None,
                     "platform": c.platform,
                     "source": "local"
                 }
             else:
-                # Stage 2: Meta Graph API Fallback with Request-Level Caching
-                cache_key = f"{c_platform}:{ext_pid}"
-                if cache_key in meta_resolved_posts:
-                    post_obj = meta_resolved_posts[cache_key]
-                else:
-                    try:
-                        if c_platform == "facebook" and fb_account:
-                            token = decrypt_token(fb_account.access_token)
-                            if token:
-                                fb_meta = meta_service.fetch_facebook_post_info(ext_pid, token)
-                                if fb_meta and isinstance(fb_meta, dict):
-                                    msg = fb_meta.get("message") or ""
-                                    title_text = msg.split("\n")[0][:60] if msg else "Facebook Post"
-                                    post_obj = {
-                                        "id": str(fb_meta.get("id") or ext_pid),
-                                        "title": title_text,
-                                        "caption": msg,
-                                        "image_url": fb_meta.get("full_picture") or fb_meta.get("picture"),
-                                        "media_type": "image",
-                                        "thumbnail_url": fb_meta.get("picture") or fb_meta.get("full_picture"),
-                                        "platform": "facebook",
-                                        "source": "meta"
-                                    }
-                        elif c_platform == "instagram" and ig_account:
-                            token = decrypt_token(ig_account.access_token)
-                            if token:
-                                ig_meta = meta_service.fetch_instagram_media_info(ext_pid, token)
-                                if ig_meta and isinstance(ig_meta, dict):
-                                    cap = ig_meta.get("caption") or ""
-                                    title_text = cap.split("\n")[0][:60] if cap else "Instagram Post"
-                                    post_obj = {
-                                        "id": str(ig_meta.get("id") or ext_pid),
-                                        "title": title_text,
-                                        "caption": cap,
-                                        "image_url": ig_meta.get("media_url") or ig_meta.get("thumbnail_url"),
-                                        "media_type": (ig_meta.get("media_type") or "IMAGE").lower(),
-                                        "thumbnail_url": ig_meta.get("thumbnail_url") or ig_meta.get("media_url"),
-                                        "platform": "instagram",
-                                        "source": "meta"
-                                    }
-                    except Exception as meta_err:
-                        # Graceful Fallback: Log warning and leave post_obj as None
-                        pass
-                    
-                    meta_resolved_posts[cache_key] = post_obj
+                key = (c.social_account_id, c_platform, ext_pid)
+                ext_ctx = cached_ext_posts.get(key)
+                if ext_ctx and ext_ctx.status == "ACTIVE":
+                    title_txt = ext_ctx.caption.split("\n")[0][:60] if ext_ctx.caption else f"{c.platform.capitalize()} Post"
+                    post_obj = {
+                        "id": ext_ctx.external_post_id,
+                        "title": title_txt,
+                        "caption": ext_ctx.caption,
+                        "image_url": ext_ctx.media_url,
+                        "media_type": (ext_ctx.media_type or "IMAGE").lower(),
+                        "thumbnail_url": ext_ctx.thumbnail_url or ext_ctx.media_url,
+                        "permalink": ext_ctx.permalink,
+                        "platform": c.platform,
+                        "source": "meta"
+                    }
 
         # Sort replies chronologically (oldest first: Oldest reply -> Newest reply)
         sorted_replies = sorted(
@@ -178,6 +271,7 @@ def get_user_social_comments(
         res_list.append({
             "id": c.id,
             "social_account_id": c.social_account_id,
+            "account": acc_obj,
             "platform": c.platform,
             "external_comment_id": c.external_comment_id,
             "external_post_id": c.external_post_id,

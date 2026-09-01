@@ -12,6 +12,7 @@ from app.models.refresh_token import RefreshToken
 
 from app.models.social_comment import SocialComment, CommentProcessingStatus
 from app.models.social_comment_reply import SocialCommentReply
+from app.models.external_post_context import ExternalPostContext
 
 __all__ = [
     "User", 
@@ -31,7 +32,8 @@ __all__ = [
     "RefreshToken",
     "SocialComment",
     "CommentProcessingStatus",
-    "SocialCommentReply"
+    "SocialCommentReply",
+    "ExternalPostContext"
 ]
 
 

@@ -648,11 +648,23 @@ def test_meta_post_fallback_success_and_failure(client: TestClient, auth_headers
         assert mock_fetch.called
 
     # Test Meta Fallback Failure returns post: null without breaking comments API (returns HTTP 200)
+    c2 = SocialComment(
+        user_id=test_user.id,
+        social_account_id=ig_account.id,
+        platform="instagram",
+        external_comment_id="c_meta_2",
+        external_post_id="unresolved_ig_post_fail",
+        comment_text="Comment on failing post",
+        webhook_object="instagram"
+    )
+    db_session.add(c2)
+    db_session.commit()
+
     with patch.object(meta_service, "fetch_instagram_media_info", side_effect=Exception("Meta API Down")):
         res = client.get("/api/v1/social-comments/", headers=auth_headers)
         assert res.status_code == 200
         comments = res.json()
-        target = next((c for c in comments if c["external_comment_id"] == "c_meta_1"), None)
+        target = next((c for c in comments if c["external_comment_id"] == "c_meta_2"), None)
         assert target is not None
         assert target["post"] is None
 

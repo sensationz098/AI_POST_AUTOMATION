@@ -25,42 +25,105 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
-import { SocialComment, SocialCommentPostContext, SocialCommentReply, SocialAccount } from '@/lib/types';
+import { SocialComment, SocialCommentPostContext, SocialCommentAccountContext, SocialCommentReply, SocialAccount } from '@/lib/types';
 
 // 1. Post Context Preview Component
 function PostContextCard({
   post,
+  account,
   externalPostId,
   platform,
 }: {
   post?: SocialCommentPostContext | null;
+  account?: SocialCommentAccountContext | null;
   externalPostId?: string;
   platform: 'facebook' | 'instagram';
 }) {
   const isFb = platform === 'facebook';
+  const accountDisplayName = account?.account_name || account?.display_name || (isFb ? 'Facebook Page' : 'Instagram Account');
 
-  if (!post) {
-    return (
-      <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs mb-3">
-        <div className="flex items-center space-x-2.5 min-w-0">
+  return (
+    <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800/90 flex flex-col space-y-2 mb-3.5 shadow-sm">
+      {/* Receiving Social Account Header Badge */}
+      <div className="flex items-center justify-between text-[11px] pb-2 border-b border-slate-900/80">
+        <div className="flex items-center space-x-2 min-w-0">
+          {isFb ? (
+            <span className="px-2 py-0.5 rounded bg-blue-950/90 text-blue-300 border border-blue-800/70 font-bold text-[10px] flex items-center space-x-1 flex-shrink-0">
+              <Facebook className="w-3 h-3 fill-current" />
+              <span>Facebook Page</span>
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded bg-pink-950/90 text-pink-300 border border-pink-800/70 font-bold text-[10px] flex items-center space-x-1 flex-shrink-0">
+              <Instagram className="w-3 h-3" />
+              <span>Instagram</span>
+            </span>
+          )}
+          <span className="font-semibold text-slate-200 truncate">
+            {isFb ? accountDisplayName : `@${accountDisplayName.replace(/^@/, '')}`}
+          </span>
+        </div>
+
+        {post?.permalink ? (
+          <a
+            href={post.permalink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-indigo-300 hover:text-white text-[10px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
+          >
+            <span>View Post</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        ) : post?.source === 'local' ? (
+          <Link
+            href="/posts"
+            className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-indigo-300 hover:text-white text-[10px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
+          >
+            <span>View Post</span>
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        ) : null}
+      </div>
+
+      {/* Post Context Body */}
+      {post ? (
+        <div className="flex items-start space-x-3 min-w-0 pt-0.5">
+          {post.thumbnail_url || post.image_url ? (
+            <img
+              src={post.thumbnail_url || post.image_url}
+              alt={post.title || 'Social post'}
+              className="w-11 h-11 rounded-lg object-cover border border-slate-800 flex-shrink-0 bg-slate-900"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+          ) : post.media_type === 'video' ? (
+            <div className="w-11 h-11 rounded-lg bg-indigo-950/40 border border-indigo-800/50 flex items-center justify-center text-indigo-400 flex-shrink-0">
+              <Video className="w-5 h-5" />
+            </div>
+          ) : (
+            <div className="w-11 h-11 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 flex-shrink-0">
+              <ImageIcon className="w-5 h-5" />
+            </div>
+          )}
+
+          <div className="min-w-0 space-y-0.5">
+            <span className="font-bold text-slate-100 text-xs line-clamp-1">
+              {post.title || 'Social Post'}
+            </span>
+            {post.caption && (
+              <p className="text-[11px] text-slate-300 line-clamp-2 leading-snug font-sans">
+                {post.caption}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center space-x-2.5 min-w-0 py-1">
           <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 flex-shrink-0">
             <FileText className="w-4 h-4 text-slate-400" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center space-x-2">
-              <span className="font-semibold text-slate-300 text-xs">Post information unavailable</span>
-              {isFb ? (
-                <span className="px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-800/60 font-bold text-[9px] flex items-center space-x-1">
-                  <Facebook className="w-2.5 h-2.5 fill-current" />
-                  <span>Facebook</span>
-                </span>
-              ) : (
-                <span className="px-1.5 py-0.5 rounded bg-pink-950/80 text-pink-300 border border-pink-800/60 font-bold text-[9px] flex items-center space-x-1">
-                  <Instagram className="w-2.5 h-2.5" />
-                  <span>Instagram</span>
-                </span>
-              )}
-            </div>
+            <span className="font-semibold text-slate-300 text-xs">Post details could not be loaded</span>
             {externalPostId && (
               <p className="text-[10px] font-mono text-slate-500 truncate mt-0.5">
                 External Post ID: {externalPostId}
@@ -68,66 +131,7 @@ function PostContextCard({
             )}
           </div>
         </div>
-      </div>
-    );
-  }
-
-  const hasMedia = Boolean(post.thumbnail_url || post.image_url);
-
-  return (
-    <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5 shadow-sm">
-      <div className="flex items-start space-x-3 min-w-0">
-        {hasMedia ? (
-          <img
-            src={post.thumbnail_url || post.image_url}
-            alt={post.title || 'Social post'}
-            className="w-11 h-11 rounded-lg object-cover border border-slate-800 flex-shrink-0 bg-slate-900"
-            onError={(e) => {
-              (e.target as HTMLElement).style.display = 'none';
-            }}
-          />
-        ) : post.media_type === 'video' ? (
-          <div className="w-11 h-11 rounded-lg bg-indigo-950/40 border border-indigo-800/50 flex items-center justify-center text-indigo-400 flex-shrink-0">
-            <Video className="w-5 h-5" />
-          </div>
-        ) : (
-          <div className="w-11 h-11 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 flex-shrink-0">
-            <ImageIcon className="w-5 h-5" />
-          </div>
-        )}
-
-        <div className="min-w-0 space-y-1">
-          <div className="flex items-center space-x-2">
-            <span className="font-bold text-slate-100 text-xs truncate">
-              {post.title || 'Untitled Social Post'}
-            </span>
-            {isFb ? (
-              <span className="px-2 py-0.5 rounded bg-blue-950/90 text-blue-300 border border-blue-800/70 font-bold text-[9px] flex items-center space-x-1 flex-shrink-0">
-                <Facebook className="w-2.5 h-2.5 fill-current" />
-                <span>Facebook</span>
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 rounded bg-pink-950/90 text-pink-300 border border-pink-800/70 font-bold text-[9px] flex items-center space-x-1 flex-shrink-0">
-                <Instagram className="w-2.5 h-2.5" />
-                <span>Instagram</span>
-              </span>
-            )}
-          </div>
-          {post.caption && (
-            <p className="text-[11px] text-slate-300 line-clamp-2 leading-snug font-sans">
-              {post.caption}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <Link
-        href="/posts"
-        className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-indigo-300 hover:text-white text-[10px] font-semibold transition flex items-center space-x-1 flex-shrink-0 self-start sm:self-center"
-      >
-        <span>View Post</span>
-        <ExternalLink className="w-3 h-3" />
-      </Link>
+      )}
     </div>
   );
 }
@@ -492,7 +496,7 @@ function CommentConversation({
   return (
     <div className="linear-panel p-4 sm:p-5 rounded-2xl border border-slate-800/80 hover:border-slate-700 transition space-y-3 bg-slate-900/40 shadow-lg">
       {/* POST CONTEXT HEADER */}
-      <PostContextCard post={comment.post} externalPostId={comment.external_post_id} platform={comment.platform} />
+      <PostContextCard post={comment.post} account={comment.account} externalPostId={comment.external_post_id} platform={comment.platform} />
 
       {/* ORIGINAL CUSTOMER COMMENT */}
       <OriginalComment comment={comment} formatDate={formatDate} />
@@ -765,7 +769,7 @@ export default function CommentsPage() {
                 </option>
                 {socialAccounts.map((acc) => (
                   <option key={acc.id} value={String(acc.id)} className="bg-slate-900 text-slate-100 font-medium">
-                    {acc.platform === 'facebook' ? '📘' : '📸'} {acc.account_name} ({acc.platform})
+                    {acc.platform === 'facebook' ? `📘 Facebook: ${acc.account_name}` : `📸 Instagram: @${acc.account_name.replace(/^@/, '')}`}
                   </option>
                 ))}
               </select>

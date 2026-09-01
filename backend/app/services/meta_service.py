@@ -2283,6 +2283,79 @@ class MetaGraphService:
             logger.error(f"[IG_COMMENT_DELETE] Meta Service Instagram comment delete error: {e}")
             raise e
 
+    def fetch_instagram_media_info(self, media_id: str, access_token: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch lightweight media metadata for an Instagram post via GET /{ig_media_id}.
+        Requests fields: id, caption, media_type, media_url, thumbnail_url, permalink, timestamp.
+        """
+        if not media_id or not access_token:
+            return None
+
+        raw_token = decrypt_token(access_token) or access_token
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            return {
+                "id": media_id,
+                "caption": "Mock Instagram Post",
+                "media_type": "IMAGE",
+                "media_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe",
+                "thumbnail_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe",
+                "permalink": f"https://www.instagram.com/p/{media_id}",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+        url = f"{self.BASE_URL}/{media_id}"
+        params = {
+            "fields": "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp",
+            "access_token": raw_token
+        }
+        try:
+            res = requests.get(url, params=params, timeout=10)
+            if res.status_code == 200:
+                return res.json()
+            else:
+                logger.warning(f"[META_POST_FETCH] IG media fetch status {res.status_code} for {media_id}: {res.text[:200]}")
+                return None
+        except Exception as e:
+            logger.error(f"[META_POST_FETCH] Exception fetching IG media {media_id}: {e}")
+            return None
+
+    def fetch_facebook_post_info(self, post_id: str, access_token: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch lightweight post metadata for a Facebook post via GET /{fb_post_id}.
+        Requests fields: id, message, created_time, full_picture, picture, permalink_url.
+        """
+        if not post_id or not access_token:
+            return None
+
+        raw_token = decrypt_token(access_token) or access_token
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            return {
+                "id": post_id,
+                "message": "Mock Facebook Post",
+                "full_picture": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe",
+                "picture": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe",
+                "permalink_url": f"https://www.facebook.com/{post_id}",
+                "created_time": datetime.now(timezone.utc).isoformat()
+            }
+
+        url = f"{self.BASE_URL}/{post_id}"
+        params = {
+            "fields": "id,message,created_time,full_picture,picture,permalink_url",
+            "access_token": raw_token
+        }
+        try:
+            res = requests.get(url, params=params, timeout=10)
+            if res.status_code == 200:
+                return res.json()
+            else:
+                logger.warning(f"[META_POST_FETCH] FB post fetch status {res.status_code} for {post_id}: {res.text[:200]}")
+                return None
+        except Exception as e:
+            logger.error(f"[META_POST_FETCH] Exception fetching FB post {post_id}: {e}")
+            return None
+
 meta_service = MetaGraphService()
 
 
