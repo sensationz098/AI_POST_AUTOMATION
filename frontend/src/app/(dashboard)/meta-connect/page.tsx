@@ -4,16 +4,24 @@ import React, { useState, useEffect } from 'react';
 import {
   Share2, CheckCircle2, Facebook, Instagram, ShieldCheck,
   ChevronRight, ExternalLink, RefreshCw, AlertCircle,
-  Loader2, Unlink, Link2, Edit3, Sparkles, Key, Lock, ArrowRight
+  Loader2, Unlink, Link2, Edit3, Sparkles, Key, Lock, ArrowRight,
+  Megaphone, Globe, DollarSign
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { SocialAccount } from '@/lib/types';
+import { SocialAccount, MetaAdAccount } from '@/lib/types';
 
 export default function MetaConnectPage() {
   // Connected Accounts State
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [disconnectingId, setDisconnectingId] = useState<number | string | 'all' | null>(null);
+
+  // Meta Ad Accounts State
+  const [adAccounts, setAdAccounts] = useState<MetaAdAccount[]>([]);
+  const [isLoadingAdAccounts, setIsLoadingAdAccounts] = useState(false);
+  const [isSyncingAdAccounts, setIsSyncingAdAccounts] = useState(false);
+  const [adAccountError, setAdAccountError] = useState<string | null>(null);
+  const [adAccountSuccess, setAdAccountSuccess] = useState<string | null>(null);
 
   // OAuth State
   const [isOAuthStarting, setIsOAuthStarting] = useState(false);
@@ -46,8 +54,45 @@ export default function MetaConnectPage() {
     }
   };
 
+  // Fetch stored Meta Ad Accounts
+  const fetchAdAccounts = async () => {
+    setIsLoadingAdAccounts(true);
+    setAdAccountError(null);
+    try {
+      const res = await apiClient.get('/meta/ad-accounts');
+      if (Array.isArray(res.data)) {
+        setAdAccounts(res.data);
+      }
+    } catch (e: any) {
+      console.error('Failed to load Meta Ad Accounts:', e);
+    } finally {
+      setIsLoadingAdAccounts(false);
+    }
+  };
+
+  // Sync Meta Ad Accounts from Meta Graph API
+  const handleSyncAdAccounts = async () => {
+    setIsSyncingAdAccounts(true);
+    setAdAccountError(null);
+    setAdAccountSuccess(null);
+    try {
+      const res = await apiClient.post('/meta/ad-accounts/sync');
+      if (res.data?.accounts && Array.isArray(res.data.accounts)) {
+        setAdAccounts(res.data.accounts);
+        setAdAccountSuccess(res.data.message || `Successfully synced ${res.data.synced_count} Meta Ad Account(s).`);
+      }
+    } catch (e: any) {
+      console.error('Failed to sync Meta Ad Accounts:', e);
+      const errMsg = e?.response?.data?.detail || 'Failed to sync Meta Ad Accounts. Please check permissions and try again.';
+      setAdAccountError(errMsg);
+    } finally {
+      setIsSyncingAdAccounts(false);
+    }
+  };
+
   useEffect(() => {
     fetchSocialAccounts();
+    fetchAdAccounts();
 
     // Check OAuth return params
     if (typeof window !== 'undefined') {
@@ -394,6 +439,124 @@ export default function MetaConnectPage() {
             </div>
           </div>
 
+        )}
+      </div>
+
+      {/* Meta Ad Accounts Discovery Section */}
+      <div className="linear-panel p-5 rounded-xl space-y-4 border border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-950/60 border border-indigo-800/60 flex items-center justify-center text-indigo-400">
+              <Megaphone className="w-4 h-4 text-indigo-400" />
+            </div>
+            <div>
+              <h2 className="text-xs font-bold text-slate-100 uppercase tracking-wider">
+                Meta Ad Accounts ({adAccounts.length})
+              </h2>
+              <p className="text-[10px] text-slate-400">
+                Discovered accessible Meta Ad Accounts via ads_read permission.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleSyncAdAccounts}
+            disabled={isSyncingAdAccounts || isLoadingAdAccounts}
+            className="px-3.5 py-2 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-white font-semibold text-xs transition flex items-center space-x-2 shadow-md disabled:opacity-50 flex-shrink-0"
+          >
+            {isSyncingAdAccounts ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5 text-indigo-200" />
+            )}
+            <span>{isSyncingAdAccounts ? 'Syncing...' : 'Sync Ad Accounts'}</span>
+          </button>
+        </div>
+
+        {adAccountSuccess && (
+          <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-lg p-3 text-xs text-emerald-300 flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <span>{adAccountSuccess}</span>
+          </div>
+        )}
+
+        {adAccountError && (
+          <div className="bg-rose-950/40 border border-rose-800/60 rounded-lg p-3 text-xs text-rose-300 flex items-center justify-between gap-2">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              <span>{adAccountError}</span>
+            </div>
+            {adAccountError.toLowerCase().includes('permission') && (
+              <button
+                onClick={handleConnectMetaOAuth}
+                className="px-2.5 py-1 bg-rose-900 hover:bg-rose-800 text-white rounded text-[10px] font-bold transition flex-shrink-0"
+              >
+                Reconnect Meta
+              </button>
+            )}
+          </div>
+        )}
+
+        {isLoadingAdAccounts ? (
+          <div className="p-6 text-center space-y-2">
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-400 mx-auto" />
+            <p className="text-xs text-slate-400">Loading accessible Meta Ad Accounts...</p>
+          </div>
+        ) : adAccounts.length === 0 ? (
+          <div className="p-5 rounded-lg bg-slate-900/40 border border-slate-800/80 text-center space-y-2">
+            <Megaphone className="w-6 h-6 text-slate-600 mx-auto" />
+            <p className="text-xs font-semibold text-slate-300">No Meta Ad Accounts Discovered</p>
+            <p className="text-[11px] text-slate-400 max-w-md mx-auto">
+              Ensure your Meta user account has access to Ad Accounts in Meta Business Manager and that <strong>ads_read</strong> permission was granted.
+            </p>
+            <button
+              onClick={handleSyncAdAccounts}
+              disabled={isSyncingAdAccounts}
+              className="mt-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium transition"
+            >
+              Sync Ad Accounts Now
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {adAccounts.map((acc) => {
+              const isActive = acc.status_label === 'ACTIVE' || acc.account_status === 1;
+              return (
+                <div key={acc.id} className="bg-slate-900/60 p-3.5 rounded-lg border border-slate-800 flex items-start justify-between">
+                  <div className="space-y-1 min-w-0 pr-2">
+                    <h4 className="text-xs font-bold text-slate-100 truncate">{acc.name || 'Meta Ad Account'}</h4>
+                    <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-400">
+                      <span>ID: {acc.meta_ad_account_id}</span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-[10px] text-slate-400 pt-0.5">
+                      {acc.currency && (
+                        <span className="flex items-center space-x-1">
+                          <DollarSign className="w-3 h-3 text-slate-500" />
+                          <span>{acc.currency}</span>
+                        </span>
+                      )}
+                      {acc.timezone_name && (
+                        <span className="flex items-center space-x-1 truncate max-w-[140px]" title={acc.timezone_name}>
+                          <Globe className="w-3 h-3 text-slate-500" />
+                          <span className="truncate">{acc.timezone_name}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <span
+                    className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold flex-shrink-0 border ${
+                      isActive
+                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
+                        : 'bg-amber-950/60 text-amber-300 border-amber-800/60'
+                    }`}
+                  >
+                    ● {acc.status_label || (isActive ? 'ACTIVE' : 'DISABLED')}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 

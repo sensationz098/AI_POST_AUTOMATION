@@ -1077,6 +1077,64 @@ class MetaGraphService:
             "status": status
         }
 
+    def get_user_access_token_for_user(self, db: Any, user_id: int) -> Optional[str]:
+        """
+        Retrieve and decrypt the Meta USER access token associated with the user's connected accounts.
+        Checks metadata_json["user_access_token"] first, falling back to decrypted access_token.
+        NEVER logs or returns raw un-decrypted token strings.
+        """
+        from app.repositories.social_account_repository import social_account_repo
+        accounts = social_account_repo.get_by_user(db, user_id)
+        meta_accounts = [a for a in accounts if getattr(a, "platform", "").lower() in ("facebook", "instagram") and getattr(a, "status", "") == "CONNECTED"]
+
+        for acc in meta_accounts:
+            meta = getattr(acc, "metadata_json", {}) or {}
+            enc_user_tok = meta.get("user_access_token")
+            if enc_user_tok:
+                dec = decrypt_token(enc_user_tok)
+                if dec:
+                    return dec
+
+        for acc in meta_accounts:
+            raw_tok = getattr(acc, "access_token", None)
+            if raw_tok:
+                dec = decrypt_token(raw_tok)
+                if dec:
+                    return dec
+
+        return None
+
+    def has_ads_read_permission(self, db: Any, user_id: int) -> bool:
+        """
+        Evaluate if the authenticated user has granted ads_read permission on any connected Meta account.
+        Checks stored metadata_json["ads_read_granted"] and live token permission status.
+        """
+        from app.repositories.social_account_repository import social_account_repo
+        accounts = social_account_repo.get_by_user(db, user_id)
+        meta_accounts = [a for a in accounts if getattr(a, "platform", "").lower() in ("facebook", "instagram") and getattr(a, "status", "") == "CONNECTED"]
+
+        if not meta_accounts:
+            return False
+
+        for acc in meta_accounts:
+            meta = getattr(acc, "metadata_json", {}) or {}
+            if meta.get("ads_read_granted") is True:
+                return True
+            # Also check granted_scopes array in metadata
+            granted = meta.get("granted_scopes") or []
+            if "ads_read" in granted:
+                return True
+
+        # Live token fallback inspection
+        user_tok = self.get_user_access_token_for_user(db, user_id)
+        if user_tok:
+            perm_info = self.inspect_token_permissions(user_tok)
+            perms = perm_info.get("permissions", {})
+            if perms.get("ads_read") == "granted":
+                return True
+
+        return False
+
     def verify_facebook_page_capabilities(
         self,
         page_id: str,
@@ -1353,6 +1411,105 @@ class MetaGraphService:
             return data["access_token"]
         # Fallback to short lived token if exchange fails
         return short_lived_token
+
+    def fetch_ad_accounts(self, user_access_token: str) -> List[Dict[str, Any]]:
+        """
+        Retrieve all accessible Meta Ad Accounts for the user via Meta Graph API GET /me/adaccounts.
+        Handles full cursor-based pagination with loop protection and safety limits.
+        Requests fields: id, name, account_status, currency, timezone_name.
+        NEVER logs access tokens, secrets, or URLs containing tokens.
+        """
+        if not user_access_token:
+            raise Exception("Cannot fetch Meta Ad Accounts: Missing user access token.")
+
+        raw_token = decrypt_token(user_access_token) or user_access_token
+
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            logger.info("[META_ADS] Mock/sandbox token context; returning simulated Ad Accounts.")
+            return [
+                {
+                    "id": "act_109823471029",
+                    "name": "Sandbox Primary Ad Account",
+                    "account_status": 1,
+                    "currency": "USD",
+                    "timezone_name": "America/Los_Angeles"
+                },
+                {
+                    "id": "act_987654321098",
+                    "name": "Sandbox Secondary Ad Account",
+                    "account_status": 2,
+                    "currency": "USD",
+                    "timezone_name": "America/New_York"
+                }
+            ]
+
+        url: Optional[str] = f"{self.BASE_URL}/me/adaccounts"
+        params: Dict[str, Any] = {
+            "fields": "id,name,account_status,currency,timezone_name",
+            "limit": 50,
+            "access_token": raw_token
+        }
+
+        all_ad_accounts: List[Dict[str, Any]] = []
+        visited_cursors = set()
+        max_pages = 50
+        page_count = 0
+
+        while url and page_count < max_pages:
+            page_count += 1
+            try:
+                res = requests.get(url, params=params if page_count == 1 else None, timeout=20)
+                data = res.json()
+
+                if res.status_code != 200:
+                    err_msg = data.get("error", {}).get("message", f"HTTP {res.status_code} error")
+                    err_code = data.get("error", {}).get("code")
+                    logger.warning(f"[META_ADS] Ad Account fetch failed on page {page_count} (code {err_code}): {err_msg}")
+                    raise Exception(f"Meta Graph API error (code {err_code}): {err_msg}")
+
+                accounts_page = data.get("data", [])
+                if not isinstance(accounts_page, list):
+                    logger.warning(f"[META_ADS] Unexpected non-list data format on page {page_count}.")
+                    break
+
+                all_ad_accounts.extend(accounts_page)
+
+                paging = data.get("paging", {})
+                cursors = paging.get("cursors", {})
+                after_cursor = cursors.get("after")
+
+                next_url = paging.get("next")
+
+                # Infinite loop & repeated cursor protection
+                if after_cursor:
+                    if after_cursor in visited_cursors:
+                        logger.info(f"[META_ADS] Repeated pagination cursor detected. Halting pagination.")
+                        break
+                    visited_cursors.add(after_cursor)
+
+                if next_url and ("after=" in next_url or "access_token=" in next_url):
+                    url = next_url
+                    params = {}  # Parameters are embedded in next_url
+                elif after_cursor:
+                    url = f"{self.BASE_URL}/me/adaccounts"
+                    params = {
+                        "fields": "id,name,account_status,currency,timezone_name",
+                        "limit": 50,
+                        "after": after_cursor,
+                        "access_token": raw_token
+                    }
+                else:
+                    url = None
+
+            except Exception as e:
+                logger.error(f"[META_ADS] Exception during Ad Account pagination on page {page_count}: {e}")
+                if page_count == 1:
+                    raise e
+                break
+
+        logger.info(f"[META_ADS] Successfully fetched {len(all_ad_accounts)} Meta Ad Accounts across {page_count} page(s).")
+        return all_ad_accounts
 
     def fetch_user_pages_and_instagram_accounts(self, user_access_token: str) -> Dict[str, Any]:
         """
