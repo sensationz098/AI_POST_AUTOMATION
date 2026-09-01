@@ -20,5 +20,5 @@ class SocialCommentReply(Base):
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
 
-    comment = relationship("SocialComment", backref="replies")
+    comment = relationship("SocialComment", back_populates="replies")
     user = relationship("User")
