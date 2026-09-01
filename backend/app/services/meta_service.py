@@ -1415,9 +1415,10 @@ class MetaGraphService:
     def fetch_ad_accounts(self, user_access_token: str) -> List[Dict[str, Any]]:
         """
         Retrieve all accessible Meta Ad Accounts for the user via Meta Graph API GET /me/adaccounts.
-        Handles full cursor-based pagination with loop protection and safety limits.
+        Handles explicit cursor-based pagination with access_token preserved on every page.
         Requests fields: id, name, account_status, currency, timezone_name.
         NEVER logs access tokens, secrets, or URLs containing tokens.
+        Raises Exception if any page fails so sync fails cleanly without false success logging.
         """
         if not user_access_token:
             raise Exception("Cannot fetch Meta Ad Accounts: Missing user access token.")
@@ -1444,22 +1445,25 @@ class MetaGraphService:
                 }
             ]
 
-        url: Optional[str] = f"{self.BASE_URL}/me/adaccounts"
-        params: Dict[str, Any] = {
-            "fields": "id,name,account_status,currency,timezone_name",
-            "limit": 50,
-            "access_token": raw_token
-        }
-
+        endpoint = f"{self.BASE_URL}/me/adaccounts"
         all_ad_accounts: List[Dict[str, Any]] = []
         visited_cursors = set()
+        after_cursor: Optional[str] = None
         max_pages = 50
         page_count = 0
 
-        while url and page_count < max_pages:
+        while page_count < max_pages:
             page_count += 1
+            params: Dict[str, Any] = {
+                "fields": "id,name,account_status,currency,timezone_name",
+                "limit": 50,
+                "access_token": raw_token
+            }
+            if after_cursor:
+                params["after"] = after_cursor
+
             try:
-                res = requests.get(url, params=params if page_count == 1 else None, timeout=20)
+                res = requests.get(endpoint, params=params, timeout=20)
                 data = res.json()
 
                 if res.status_code != 200:
@@ -1471,49 +1475,39 @@ class MetaGraphService:
                 accounts_page = data.get("data", [])
                 if not isinstance(accounts_page, list):
                     logger.warning(f"[META_ADS] Unexpected non-list data format on page {page_count}.")
-                    break
+                    raise Exception(f"Unexpected non-list data format returned on page {page_count}.")
 
                 all_ad_accounts.extend(accounts_page)
 
                 paging = data.get("paging", {})
                 cursors = paging.get("cursors", {})
-                after_cursor = cursors.get("after")
+                next_after = cursors.get("after")
 
-                next_url = paging.get("next")
+                if not next_after or "next" not in paging:
+                    break
 
-                # Infinite loop & repeated cursor protection
-                if after_cursor:
-                    if after_cursor in visited_cursors:
-                        logger.info(f"[META_ADS] Repeated pagination cursor detected. Halting pagination.")
-                        break
-                    visited_cursors.add(after_cursor)
+                if next_after in visited_cursors:
+                    logger.info("[META_ADS] Repeated pagination cursor detected. Halting pagination.")
+                    break
 
-                if next_url and ("after=" in next_url or "access_token=" in next_url):
-                    url = next_url
-                    params = {}  # Parameters are embedded in next_url
-                elif after_cursor:
-                    url = f"{self.BASE_URL}/me/adaccounts"
-                    params = {
-                        "fields": "id,name,account_status,currency,timezone_name",
-                        "limit": 50,
-                        "after": after_cursor,
-                        "access_token": raw_token
-                    }
-                else:
-                    url = None
+                visited_cursors.add(next_after)
+                after_cursor = next_after
 
             except Exception as e:
                 logger.error(f"[META_ADS] Exception during Ad Account pagination on page {page_count}: {e}")
-                if page_count == 1:
-                    raise e
-                break
+                raise e
 
-        logger.info(f"[META_ADS] Successfully fetched {len(all_ad_accounts)} Meta Ad Accounts across {page_count} page(s).")
+        logger.info(f"[META_ADS] Successfully fetched {len(all_ad_accounts)} Meta Ad Account(s) across {page_count} page(s).")
         return all_ad_accounts
 
-    def extract_engagement_mapping(self, ad_data: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_engagement_mapping(
+        self,
+        ad_data: Dict[str, Any],
+        creative_data: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         Safely inspect and parse Ad Creative structure to extract Facebook Page Post ID and/or Instagram Media ID.
+        Supports passing creative_data fetched in a separate API call or fallback to ad_data["creative"].
         Distinguishes between Facebook ads, Instagram ads, partial mappings, and ads without engagement objects.
         Returns a dict containing:
         - creative_id
@@ -1525,8 +1519,10 @@ class MetaGraphService:
         - engagement_object_id (Primary ID)
         - mapping_status ("MAPPED", "PARTIALLY_MAPPED", "NOT_AVAILABLE", "UNSUPPORTED", "ERROR")
         """
-        creative = ad_data.get("creative") or ad_data.get("adcreative") or {}
-        creative_id = str(creative.get("id")) if creative.get("id") else None
+        creative = creative_data or ad_data.get("creative") or ad_data.get("adcreative") or {}
+        creative_id = str(creative.get("id")) if creative.get("id") else (
+            str(ad_data.get("creative", {}).get("id")) if isinstance(ad_data.get("creative"), dict) and ad_data.get("creative", {}).get("id") else None
+        )
 
         fb_page_id = None
         fb_post_id = None
@@ -1644,8 +1640,9 @@ class MetaGraphService:
     ) -> List[Dict[str, Any]]:
         """
         Fetch Ads for a specific Meta Ad Account via Graph API GET /{act_ad_account_id}/ads.
-        Requests fields: id,name,campaign{id,name},adset{id,name},effective_status,configured_status,creative{id,name,object_story_spec,effective_object_story_id,instagram_actor_id,object_id,asset_feed_spec}.
-        Supports cursor-based pagination with loop protection and max 50 pages safety cap.
+        Requests LIGHTWEIGHT fields only: id,name,campaign{id,name},adset{id,name},effective_status,configured_status,creative{id,name}.
+        Does NOT request nested creative expansions (object_story_spec, asset_feed_spec, etc.).
+        Supports explicit cursor-based pagination with loop protection and max 50 pages safety cap.
         NEVER logs access tokens, secrets, or URLs with credentials.
         """
         if not user_access_token:
@@ -1668,12 +1665,7 @@ class MetaGraphService:
                     "configured_status": "ACTIVE",
                     "creative": {
                         "id": "12020582928999",
-                        "name": "Summer Promo Creative",
-                        "effective_object_story_id": "109823471029481_12020582928371",
-                        "object_story_spec": {
-                            "page_id": "109823471029481",
-                            "instagram_actor_id": "17841400928371"
-                        }
+                        "name": "Summer Promo Creative"
                     }
                 },
                 {
@@ -1685,34 +1677,32 @@ class MetaGraphService:
                     "configured_status": "PAUSED",
                     "creative": {
                         "id": "12020582928998",
-                        "name": "IG Story Creative",
-                        "object_story_spec": {
-                            "instagram_actor_id": "17841400928371",
-                            "video_data": {
-                                "instagram_media_id": "17841400928999"
-                            }
-                        }
+                        "name": "IG Story Creative"
                     }
                 }
             ]
 
-        url = f"{self.BASE_URL}/{acct_id_str}/ads"
-        fields = "id,name,campaign{id,name},adset{id,name},effective_status,configured_status,creative{id,name,object_story_spec,effective_object_story_id,instagram_actor_id,object_id,asset_feed_spec}"
-        params = {
-            "fields": fields,
-            "limit": 50,
-            "access_token": raw_token
-        }
+        endpoint = f"{self.BASE_URL}/{acct_id_str}/ads"
+        fields = "id,name,campaign{id,name},adset{id,name},effective_status,configured_status,creative{id,name}"
 
         all_ads: List[Dict[str, Any]] = []
         visited_cursors = set()
+        after_cursor: Optional[str] = None
         max_pages = 50
         page_count = 0
 
-        while url and page_count < max_pages:
+        while page_count < max_pages:
             page_count += 1
+            params: Dict[str, Any] = {
+                "fields": fields,
+                "limit": 50,
+                "access_token": raw_token
+            }
+            if after_cursor:
+                params["after"] = after_cursor
+
             try:
-                res = requests.get(url, params=params if page_count == 1 else None, timeout=20)
+                res = requests.get(endpoint, params=params, timeout=20)
                 data = res.json()
 
                 if res.status_code != 200:
@@ -1724,43 +1714,95 @@ class MetaGraphService:
                 ads_page = data.get("data", [])
                 if not isinstance(ads_page, list):
                     logger.warning(f"[META_ADS] Unexpected non-list ads format on page {page_count}.")
-                    break
+                    raise Exception(f"Unexpected non-list ads format returned on page {page_count}.")
 
                 all_ads.extend(ads_page)
 
                 paging = data.get("paging", {})
                 cursors = paging.get("cursors", {})
-                after_cursor = cursors.get("after")
-                next_url = paging.get("next")
+                next_after = cursors.get("after")
 
-                if after_cursor:
-                    if after_cursor in visited_cursors:
-                        logger.info("[META_ADS] Repeated pagination cursor detected. Halting pagination.")
-                        break
-                    visited_cursors.add(after_cursor)
+                if not next_after or "next" not in paging:
+                    break
 
-                if next_url and ("after=" in next_url or "access_token=" in next_url):
-                    url = next_url
-                    params = {}
-                elif after_cursor:
-                    url = f"{self.BASE_URL}/{acct_id_str}/ads"
-                    params = {
-                        "fields": fields,
-                        "limit": 50,
-                        "after": after_cursor,
-                        "access_token": raw_token
-                    }
-                else:
-                    url = None
+                if next_after in visited_cursors:
+                    logger.info("[META_ADS] Repeated pagination cursor detected. Halting pagination.")
+                    break
+
+                visited_cursors.add(next_after)
+                after_cursor = next_after
 
             except Exception as e:
-                logger.error(f"[META_ADS] Exception during Ad pagination for {acct_id_str} on page {page_count}: {e}")
-                if page_count == 1:
-                    raise e
-                break
+                logger.error(f"[META_ADS] Exception during Ad pagination on page {page_count}: {e}")
+                raise e
 
-        logger.info(f"[META_ADS] Successfully fetched {len(all_ads)} Meta Ads for {acct_id_str} across {page_count} page(s).")
+        logger.info(f"[META_ADS] Successfully fetched {len(all_ads)} Meta Ad(s) for account {acct_id_str} across {page_count} page(s).")
         return all_ads
+
+    def fetch_creative(
+        self,
+        user_access_token: str,
+        creative_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Fetch lightweight Ad Creative details separately via GET /{creative_id}.
+        Requests fields: id,name,effective_object_story_id,object_story_spec,instagram_actor_id,object_id.
+        Does NOT request asset_feed_spec or large video/image asset payloads by default.
+        Handles mock mode and individual fetch errors safely.
+        NEVER logs access tokens or secrets.
+        """
+        if not user_access_token or not creative_id:
+            return None
+
+        raw_token = decrypt_token(user_access_token) or user_access_token
+        creative_id_str = str(creative_id)
+
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            if creative_id_str == "12020582928999":
+                return {
+                    "id": "12020582928999",
+                    "name": "Summer Promo Creative",
+                    "effective_object_story_id": "109823471029481_12020582928371",
+                    "object_story_spec": {
+                        "page_id": "109823471029481",
+                        "instagram_actor_id": "17841400928371"
+                    }
+                }
+            elif creative_id_str == "12020582928998":
+                return {
+                    "id": "12020582928998",
+                    "name": "IG Story Creative",
+                    "object_story_spec": {
+                        "instagram_actor_id": "17841400928371",
+                        "video_data": {
+                            "instagram_media_id": "17841400928999"
+                        }
+                    }
+                }
+            return {
+                "id": creative_id_str,
+                "name": f"Mock Creative {creative_id_str}"
+            }
+
+        endpoint = f"{self.BASE_URL}/{creative_id_str}"
+        params = {
+            "fields": "id,name,effective_object_story_id,object_story_spec,instagram_actor_id,object_id",
+            "access_token": raw_token
+        }
+
+        try:
+            res = requests.get(endpoint, params=params, timeout=15)
+            data = res.json()
+            if res.status_code == 200 and isinstance(data, dict) and "id" in data:
+                return data
+            else:
+                err_msg = data.get("error", {}).get("message", f"HTTP {res.status_code}")
+                logger.warning(f"[META_ADS] Creative fetch failed for creative_id {creative_id_str}: {err_msg}")
+                return None
+        except Exception as e:
+            logger.error(f"[META_ADS] Exception fetching creative {creative_id_str}: {e}")
+            return None
 
     def fetch_user_pages_and_instagram_accounts(self, user_access_token: str) -> Dict[str, Any]:
         """

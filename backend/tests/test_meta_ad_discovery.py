@@ -413,3 +413,144 @@ def test_no_sensitive_tokens_in_ad_sync_and_get_responses(
         finally:
             if get_current_user in app.dependency_overrides:
                 del app.dependency_overrides[get_current_user]
+
+
+# 14. Lightweight Ads fetch requests basic fields only (no nested creative expansions)
+def test_fetch_ads_lightweight_fields_only():
+    with patch("requests.get") as mock_get:
+        mock_res = MagicMock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {
+            "data": [
+                {
+                    "id": "12020582928371",
+                    "name": "Lightweight Ad",
+                    "creative": {"id": "cr_123", "name": "Creative 123"}
+                }
+            ],
+            "paging": {}
+        }
+        mock_get.return_value = mock_res
+
+        ads = meta_service.fetch_ads_for_ad_account("EAABwz1XkREYBAIJlLUXdAZBfq_token", "act_100200300")
+        assert len(ads) == 1
+
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        requested_fields = kwargs["params"]["fields"]
+
+        assert "creative{id,name}" in requested_fields
+        assert "object_story_spec" not in requested_fields
+        assert "asset_feed_spec" not in requested_fields
+
+
+# 15. Fetch Creative separately requests lightweight creative fields (no asset_feed_spec)
+def test_fetch_creative_separately_lightweight_fields():
+    with patch("requests.get") as mock_get:
+        mock_res = MagicMock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {
+            "id": "cr_123",
+            "name": "Standalone Creative",
+            "effective_object_story_id": "109823471029481_999888777",
+            "object_story_spec": {"page_id": "109823471029481"}
+        }
+        mock_get.return_value = mock_res
+
+        creative_data = meta_service.fetch_creative("EAABwz1XkREYBAIJlLUXdAZBfq_token", "cr_123")
+        assert creative_data is not None
+        assert creative_data["id"] == "cr_123"
+
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        assert "cr_123" in args[0]
+        requested_fields = kwargs["params"]["fields"]
+        assert "effective_object_story_id" in requested_fields
+        assert "object_story_spec" in requested_fields
+        assert "asset_feed_spec" not in requested_fields
+
+
+# 16. Instagram Actor ID alone results in PARTIALLY_MAPPED (not MAPPED)
+def test_instagram_actor_alone_is_partially_mapped():
+    ad_data = {"id": "ad_ig_actor", "creative": {"id": "cr_ig_actor"}}
+    creative_data = {
+        "id": "cr_ig_actor",
+        "object_story_spec": {
+            "instagram_actor_id": "17841400928371"
+            # No instagram_media_id, no video_data, no photo_data!
+        }
+    }
+
+    mapping = meta_service.extract_engagement_mapping(ad_data, creative_data=creative_data)
+    assert mapping["creative_id"] == "cr_ig_actor"
+    assert mapping["instagram_account_id"] == "17841400928371"
+    assert mapping["instagram_media_id"] is None
+    assert mapping["mapping_status"] == "PARTIALLY_MAPPED"
+    assert mapping["mapping_status"] != "MAPPED"
+
+
+# 17. Single creative fetch failure does not abort full ad sync
+def test_single_creative_failure_does_not_abort_ad_sync(
+    client: TestClient,
+    db_session: Session,
+    ad_test_user: User,
+    user1_social_account: SocialAccount,
+    user1_ad_account: MetaAdAccount
+):
+    from app.main import app
+    app.dependency_overrides[get_current_user] = lambda: ad_test_user
+
+    mock_ads = [
+        {"id": "ad_1", "name": "Ad 1", "creative": {"id": "cr_1"}},
+        {"id": "ad_2", "name": "Ad 2", "creative": {"id": "cr_2"}}
+    ]
+
+    def mock_fetch_creative(token, c_id):
+        if c_id == "cr_1":
+            return {"id": "cr_1", "effective_object_story_id": "109823471029481_1111"}
+        # cr_2 fails!
+        return None
+
+    with patch.object(meta_service, "fetch_ads_for_ad_account", return_value=mock_ads), \
+         patch.object(meta_service, "fetch_creative", side_effect=mock_fetch_creative):
+        try:
+            res = client.post(f"/api/v1/meta/ad-accounts/{user1_ad_account.meta_ad_account_id}/ads/sync")
+            assert res.status_code == 200
+            data = res.json()
+
+            assert data["success"] is True
+            assert data["synced_count"] == 2
+            assert data["mapped_count"] == 1
+            assert data["unmapped_count"] == 1
+
+            ads = data["ads"]
+            ad1_rec = next(a for a in ads if a["meta_ad_id"] == "ad_1")
+            ad2_rec = next(a for a in ads if a["meta_ad_id"] == "ad_2")
+
+            assert ad1_rec["mapping_status"] == "MAPPED"
+            assert ad2_rec["mapping_status"] == "ERROR"
+        finally:
+            if get_current_user in app.dependency_overrides:
+                del app.dependency_overrides[get_current_user]
+
+
+# 18. Main Ads request failure cleanly fails the sync
+def test_main_ads_request_failure_fails_sync(
+    client: TestClient,
+    db_session: Session,
+    ad_test_user: User,
+    user1_social_account: SocialAccount,
+    user1_ad_account: MetaAdAccount
+):
+    from app.main import app
+    app.dependency_overrides[get_current_user] = lambda: ad_test_user
+
+    with patch.object(meta_service, "fetch_ads_for_ad_account", side_effect=Exception("Meta Graph API error (code 1): Please reduce data")):
+        try:
+            res = client.post(f"/api/v1/meta/ad-accounts/{user1_ad_account.meta_ad_account_id}/ads/sync")
+            assert res.status_code == 400
+            assert "reduce data" in res.json()["detail"].lower() or "meta api error" in res.json()["detail"].lower()
+        finally:
+            if get_current_user in app.dependency_overrides:
+                del app.dependency_overrides[get_current_user]
+

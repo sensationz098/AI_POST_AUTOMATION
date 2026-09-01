@@ -150,6 +150,72 @@ def test_fetch_ad_accounts_pagination_and_cursor_deduplication():
         assert mock_get.call_count == 2
 
 
+# 2b. Test second page request preserves access_token in params
+def test_fetch_ad_accounts_page_2_preserves_access_token():
+    with patch("requests.get") as mock_get:
+        page1 = MagicMock()
+        page1.status_code = 200
+        page1.json.return_value = {
+            "data": [{"id": "act_1", "name": "Ad Account 1"}],
+            "paging": {
+                "cursors": {"after": "cursor_p2"},
+                "next": "https://graph.facebook.com/v19.0/me/adaccounts?limit=50&after=cursor_p2"
+            }
+        }
+        page2 = MagicMock()
+        page2.status_code = 200
+        page2.json.return_value = {
+            "data": [{"id": "act_2", "name": "Ad Account 2"}],
+            "paging": {}
+        }
+        mock_get.side_effect = [page1, page2]
+
+        test_token = "EAABwz1XkREYBAIJlLUXdAZBfq_secret_token"
+        res = meta_service.fetch_ad_accounts(test_token)
+
+        assert len(res) == 2
+        assert mock_get.call_count == 2
+
+        # Verify page 1 params
+        p1_kwargs = mock_get.call_args_list[0][1]
+        assert p1_kwargs["params"]["access_token"] == test_token
+        assert "after" not in p1_kwargs["params"]
+
+        # Verify page 2 params explicitly include access_token and after cursor
+        p2_kwargs = mock_get.call_args_list[1][1]
+        assert p2_kwargs["params"]["access_token"] == test_token
+        assert p2_kwargs["params"]["after"] == "cursor_p2"
+
+
+# 2c. Test pagination failure on page 2 raises exception and does not log false success
+def test_fetch_ad_accounts_pagination_error_raises_exception():
+    with patch("requests.get") as mock_get:
+        page1 = MagicMock()
+        page1.status_code = 200
+        page1.json.return_value = {
+            "data": [{"id": "act_1", "name": "Ad Account 1"}],
+            "paging": {
+                "cursors": {"after": "cursor_p2"},
+                "next": "https://graph.facebook.com/v19.0/me/adaccounts?limit=50&after=cursor_p2"
+            }
+        }
+        page2 = MagicMock()
+        page2.status_code = 400
+        page2.json.return_value = {
+            "error": {
+                "message": "An active access token must be used to query information about the current user.",
+                "type": "OAuthException",
+                "code": 2500
+            }
+        }
+        mock_get.side_effect = [page1, page2]
+
+        with pytest.raises(Exception) as exc_info:
+            meta_service.fetch_ad_accounts("EAABwz1XkREYBAIJlLUXdAZBfq_test_token")
+
+        assert "code 2500" in str(exc_info.value) or "OAuthException" in str(exc_info.value) or "access token" in str(exc_info.value).lower()
+
+
 # 3. Test sync_meta_ad_accounts endpoint blocks when ads_read permission is missing
 def test_sync_ad_accounts_fails_if_ads_read_missing(client: TestClient, db_session: Session, test_user: User, connected_account_without_ads: SocialAccount):
     from app.main import app
