@@ -1511,6 +1511,257 @@ class MetaGraphService:
         logger.info(f"[META_ADS] Successfully fetched {len(all_ad_accounts)} Meta Ad Accounts across {page_count} page(s).")
         return all_ad_accounts
 
+    def extract_engagement_mapping(self, ad_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Safely inspect and parse Ad Creative structure to extract Facebook Page Post ID and/or Instagram Media ID.
+        Distinguishes between Facebook ads, Instagram ads, partial mappings, and ads without engagement objects.
+        Returns a dict containing:
+        - creative_id
+        - facebook_page_id
+        - facebook_post_id
+        - instagram_account_id
+        - instagram_media_id
+        - engagement_object_type ("FACEBOOK_POST", "INSTAGRAM_MEDIA", "BOTH", "UNKNOWN")
+        - engagement_object_id (Primary ID)
+        - mapping_status ("MAPPED", "PARTIALLY_MAPPED", "NOT_AVAILABLE", "UNSUPPORTED", "ERROR")
+        """
+        creative = ad_data.get("creative") or ad_data.get("adcreative") or {}
+        creative_id = str(creative.get("id")) if creative.get("id") else None
+
+        fb_page_id = None
+        fb_post_id = None
+        ig_account_id = None
+        ig_media_id = None
+
+        # 1. Inspect effective_object_story_id (Standard FB page_post_id e.g. "109823471029_987654321")
+        eff_story_id = creative.get("effective_object_story_id") or ad_data.get("effective_object_story_id")
+        if eff_story_id:
+            eff_story_str = str(eff_story_id)
+            if "_" in eff_story_str:
+                parts = eff_story_str.split("_")
+                fb_page_id = parts[0]
+                fb_post_id = eff_story_str
+            else:
+                fb_post_id = eff_story_str
+
+        # 2. Inspect object_story_spec
+        spec = creative.get("object_story_spec") or {}
+        if isinstance(spec, dict):
+            page_id_spec = spec.get("page_id")
+            if page_id_spec:
+                fb_page_id = fb_page_id or str(page_id_spec)
+
+            ig_actor = spec.get("instagram_actor_id")
+            if ig_actor:
+                ig_account_id = str(ig_actor)
+
+            # Check post_id or object_story_id in spec
+            spec_post_id = spec.get("post_id") or spec.get("object_story_id")
+            if spec_post_id:
+                spec_post_str = str(spec_post_id)
+                if fb_page_id and "_" not in spec_post_str:
+                    fb_post_id = fb_post_id or f"{fb_page_id}_{spec_post_str}"
+                else:
+                    fb_post_id = fb_post_id or spec_post_str
+
+            # Check link_data / video_data / photo_data for instagram media
+            for media_key in ("link_data", "video_data", "photo_data"):
+                m_data = spec.get(media_key)
+                if isinstance(m_data, dict):
+                    ig_mid = m_data.get("instagram_media_id") or m_data.get("instagram_story_id")
+                    if ig_mid:
+                        ig_media_id = ig_media_id or str(ig_mid)
+
+        # 3. Direct creative object_id or instagram fields
+        obj_id = creative.get("object_id")
+        if obj_id and not fb_post_id:
+            obj_str = str(obj_id)
+            if fb_page_id:
+                fb_post_id = f"{fb_page_id}_{obj_str}"
+            else:
+                fb_post_id = obj_str
+
+        creative_ig_id = (
+            creative.get("instagram_story_id") or
+            creative.get("effective_instagram_story_id") or
+            creative.get("instagram_media_id") or
+            ad_data.get("instagram_media_id")
+        )
+        if creative_ig_id:
+            ig_media_id = ig_media_id or str(creative_ig_id)
+
+        creative_ig_actor = creative.get("instagram_actor_id")
+        if creative_ig_actor:
+            ig_account_id = ig_account_id or str(creative_ig_actor)
+
+        # Check asset_feed_spec if available
+        feed_spec = creative.get("asset_feed_spec") or {}
+        if isinstance(feed_spec, dict):
+            feed_ig_media = feed_spec.get("instagram_media_id")
+            if feed_ig_media:
+                ig_media_id = ig_media_id or str(feed_ig_media)
+
+        # Determine engagement_object_type, engagement_object_id, mapping_status
+        has_fb_post = bool(fb_post_id)
+        has_ig_media = bool(ig_media_id)
+
+        if has_fb_post and has_ig_media:
+            obj_type = "BOTH"
+            primary_id = fb_post_id
+            status = "MAPPED"
+        elif has_fb_post:
+            obj_type = "FACEBOOK_POST"
+            primary_id = fb_post_id
+            status = "MAPPED"
+        elif has_ig_media:
+            obj_type = "INSTAGRAM_MEDIA"
+            primary_id = ig_media_id
+            status = "MAPPED"
+        elif fb_page_id or ig_account_id or creative_id:
+            obj_type = "UNKNOWN"
+            primary_id = fb_page_id or ig_account_id or creative_id
+            status = "PARTIALLY_MAPPED"
+        else:
+            obj_type = "UNKNOWN"
+            primary_id = None
+            status = "NOT_AVAILABLE"
+
+        return {
+            "creative_id": creative_id,
+            "facebook_page_id": fb_page_id,
+            "facebook_post_id": fb_post_id,
+            "instagram_account_id": ig_account_id,
+            "instagram_media_id": ig_media_id,
+            "engagement_object_type": obj_type,
+            "engagement_object_id": primary_id,
+            "mapping_status": status
+        }
+
+    def fetch_ads_for_ad_account(
+        self,
+        user_access_token: str,
+        meta_ad_account_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch Ads for a specific Meta Ad Account via Graph API GET /{act_ad_account_id}/ads.
+        Requests fields: id,name,campaign{id,name},adset{id,name},effective_status,configured_status,creative{id,name,object_story_spec,effective_object_story_id,instagram_actor_id,object_id,asset_feed_spec}.
+        Supports cursor-based pagination with loop protection and max 50 pages safety cap.
+        NEVER logs access tokens, secrets, or URLs with credentials.
+        """
+        if not user_access_token:
+            raise Exception("Cannot fetch Meta Ads: Missing user access token.")
+
+        raw_token = decrypt_token(user_access_token) or user_access_token
+        raw_acct_id = str(meta_ad_account_id)
+        acct_id_str = raw_acct_id if raw_acct_id.startswith("act_") else f"act_{raw_acct_id}"
+
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            logger.info(f"[META_ADS] Mock/sandbox token context for {acct_id_str}; returning simulated Ads.")
+            return [
+                {
+                    "id": "12020582928371",
+                    "name": "Summer Promo Ad #1",
+                    "campaign": {"id": "2385019283710", "name": "Summer Conversion Campaign"},
+                    "adset": {"id": "2385019283711", "name": "Broad US 18-45"},
+                    "effective_status": "ACTIVE",
+                    "configured_status": "ACTIVE",
+                    "creative": {
+                        "id": "12020582928999",
+                        "name": "Summer Promo Creative",
+                        "effective_object_story_id": "109823471029481_12020582928371",
+                        "object_story_spec": {
+                            "page_id": "109823471029481",
+                            "instagram_actor_id": "17841400928371"
+                        }
+                    }
+                },
+                {
+                    "id": "12020582928372",
+                    "name": "Instagram Story Video Ad",
+                    "campaign": {"id": "2385019283710", "name": "Summer Conversion Campaign"},
+                    "adset": {"id": "2385019283712", "name": "Instagram Placement Only"},
+                    "effective_status": "PAUSED",
+                    "configured_status": "PAUSED",
+                    "creative": {
+                        "id": "12020582928998",
+                        "name": "IG Story Creative",
+                        "object_story_spec": {
+                            "instagram_actor_id": "17841400928371",
+                            "video_data": {
+                                "instagram_media_id": "17841400928999"
+                            }
+                        }
+                    }
+                }
+            ]
+
+        url = f"{self.BASE_URL}/{acct_id_str}/ads"
+        fields = "id,name,campaign{id,name},adset{id,name},effective_status,configured_status,creative{id,name,object_story_spec,effective_object_story_id,instagram_actor_id,object_id,asset_feed_spec}"
+        params = {
+            "fields": fields,
+            "limit": 50,
+            "access_token": raw_token
+        }
+
+        all_ads: List[Dict[str, Any]] = []
+        visited_cursors = set()
+        max_pages = 50
+        page_count = 0
+
+        while url and page_count < max_pages:
+            page_count += 1
+            try:
+                res = requests.get(url, params=params if page_count == 1 else None, timeout=20)
+                data = res.json()
+
+                if res.status_code != 200:
+                    err_msg = data.get("error", {}).get("message", f"HTTP {res.status_code} error")
+                    err_code = data.get("error", {}).get("code")
+                    logger.warning(f"[META_ADS] Ad fetch failed for {acct_id_str} on page {page_count} (code {err_code}): {err_msg}")
+                    raise Exception(f"Meta Graph API error (code {err_code}): {err_msg}")
+
+                ads_page = data.get("data", [])
+                if not isinstance(ads_page, list):
+                    logger.warning(f"[META_ADS] Unexpected non-list ads format on page {page_count}.")
+                    break
+
+                all_ads.extend(ads_page)
+
+                paging = data.get("paging", {})
+                cursors = paging.get("cursors", {})
+                after_cursor = cursors.get("after")
+                next_url = paging.get("next")
+
+                if after_cursor:
+                    if after_cursor in visited_cursors:
+                        logger.info("[META_ADS] Repeated pagination cursor detected. Halting pagination.")
+                        break
+                    visited_cursors.add(after_cursor)
+
+                if next_url and ("after=" in next_url or "access_token=" in next_url):
+                    url = next_url
+                    params = {}
+                elif after_cursor:
+                    url = f"{self.BASE_URL}/{acct_id_str}/ads"
+                    params = {
+                        "fields": fields,
+                        "limit": 50,
+                        "after": after_cursor,
+                        "access_token": raw_token
+                    }
+                else:
+                    url = None
+
+            except Exception as e:
+                logger.error(f"[META_ADS] Exception during Ad pagination for {acct_id_str} on page {page_count}: {e}")
+                if page_count == 1:
+                    raise e
+                break
+
+        logger.info(f"[META_ADS] Successfully fetched {len(all_ads)} Meta Ads for {acct_id_str} across {page_count} page(s).")
+        return all_ads
+
     def fetch_user_pages_and_instagram_accounts(self, user_access_token: str) -> Dict[str, Any]:
         """
         Discover all authorized Facebook Pages and linked Instagram Professional accounts.

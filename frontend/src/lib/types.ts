@@ -207,3 +207,39 @@ export interface MetaAdAccount {
   created_at: string;
   updated_at: string;
 }
+
+export interface MetaAd {
+  id: number;
+  user_id: number;
+  meta_ad_account_id: string;
+  ad_account_db_id?: number;
+  meta_ad_id: string;
+  name?: string;
+  campaign_id?: string;
+  campaign_name?: string;
+  adset_id?: string;
+  adset_name?: string;
+  effective_status?: string;
+  configured_status?: string;
+  creative_id?: string;
+  facebook_page_id?: string;
+  facebook_post_id?: string;
+  instagram_account_id?: string;
+  instagram_media_id?: string;
+  engagement_object_type?: 'FACEBOOK_POST' | 'INSTAGRAM_MEDIA' | 'BOTH' | 'UNKNOWN' | string;
+  engagement_object_id?: string;
+  mapping_status: 'MAPPED' | 'PARTIALLY_MAPPED' | 'NOT_AVAILABLE' | 'UNSUPPORTED' | 'ERROR' | string;
+  metadata_json?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MetaAdSyncResponse {
+  success: boolean;
+  message: string;
+  synced_count: number;
+  mapped_count: number;
+  partially_mapped_count: number;
+  unmapped_count: number;
+  ads: MetaAd[];
+}
