@@ -1,6 +1,6 @@
 import secrets
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from urllib.parse import quote
 from fastapi import APIRouter, Depends, status, Query, HTTPException
 from fastapi.responses import RedirectResponse
@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from app.core.database import get_db
 from app.core.config import settings
 from app.schemas.meta import MetaConnectRequest, MetaAccountResponse
+from app.schemas.meta_ad_account import MetaAdAccountResponse, MetaAdAccountSyncResponse
 from app.repositories.brand_repository import brand_repo
 from app.repositories.social_account_repository import social_account_repo
 from app.services.meta_service import meta_service
@@ -103,6 +104,8 @@ def meta_oauth_callback(
 
         # 5. Save connected accounts in social_accounts table & auto-create matching Brand Profiles
         from app.repositories.brand_repository import brand_repo
+        from app.core.security_encryption import encrypt_token
+        encrypted_user_token = encrypt_token(long_token)
         saved_fb = 0
         saved_ig = 0
 
@@ -115,6 +118,7 @@ def meta_oauth_callback(
             fb_meta = {
                 "granted_scopes": granted_scopes or meta_service.REQUIRED_META_OAUTH_SCOPES,
                 "ads_read_granted": ads_read_granted,
+                "user_access_token": encrypted_user_token,
                 "comment_automation_ready": False,
                 "comment_automation": {
                     "facebook_webhook_subscription": {
@@ -158,6 +162,7 @@ def meta_oauth_callback(
             ig_meta.update({
                 "granted_scopes": granted_scopes or meta_service.REQUIRED_META_OAUTH_SCOPES,
                 "ads_read_granted": ads_read_granted,
+                "user_access_token": encrypted_user_token,
                 "comment_automation_ready": False,
                 "comment_automation": existing_ca
             })
@@ -281,4 +286,66 @@ def disconnect_meta_accounts(
     """Disconnect all Meta social accounts and deactivate Meta integration for current user."""
     count = social_account_repo.delete_all_for_user(db, current_user.id)
     return {"message": "Meta accounts disconnected successfully.", "count": count}
+
+
+@router.post("/ad-accounts/sync", response_model=MetaAdAccountSyncResponse)
+def sync_meta_ad_accounts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Discover and sync accessible Meta Ad Accounts for the current authenticated user.
+    Verifies ads_read permission, retrieves ad accounts from Meta Graph API GET /me/adaccounts with full pagination,
+    and upserts into database. Strictly user-isolated.
+    """
+    from app.repositories.meta_ad_account_repository import meta_ad_account_repo
+
+    # 1. Retrieve user access token
+    user_token = meta_service.get_user_access_token_for_user(db, current_user.id)
+    if not user_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No connected Meta account found for this user. Please connect Meta first."
+        )
+
+    # 2. Verify ads_read permission is granted
+    if not meta_service.has_ads_read_permission(db, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Meta Ads read permission is not granted. Please reconnect Meta and grant ads_read."
+        )
+
+    # 3. Fetch Ad Accounts from Meta Graph API with pagination
+    try:
+        raw_ad_accounts = meta_service.fetch_ad_accounts(user_token)
+    except Exception as e:
+        logger.error(f"[META_ADS_SYNC] Failed to fetch Ad Accounts from Meta API: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Meta API error during Ad Account discovery: {str(e)}"
+        )
+
+    # 4. Upsert/sync into database
+    synced = meta_ad_account_repo.sync_ad_accounts_for_user(db, current_user.id, raw_ad_accounts)
+
+    return MetaAdAccountSyncResponse(
+        success=True,
+        message=f"Successfully synced {len(synced)} Meta Ad Account(s).",
+        synced_count=len(synced),
+        accounts=synced
+    )
+
+
+@router.get("/ad-accounts", response_model=List[MetaAdAccountResponse])
+def get_meta_ad_accounts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Retrieve stored Meta Ad Accounts for the current authenticated user.
+    Does NOT invoke Meta Graph API. Strictly user-isolated and non-sensitive.
+    """
+    from app.repositories.meta_ad_account_repository import meta_ad_account_repo
+    accounts = meta_ad_account_repo.get_by_user(db, current_user.id)
+    return accounts
 

@@ -193,3 +193,17 @@ export interface SocialCommentDeleteResponse {
   message: string;
   comment_id?: number;
 }
+
+export interface MetaAdAccount {
+  id: number;
+  user_id: number;
+  meta_ad_account_id: string;
+  name?: string;
+  account_status?: number;
+  status_label?: string;
+  currency?: string;
+  timezone_name?: string;
+  metadata_json?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
