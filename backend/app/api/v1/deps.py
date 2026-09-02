@@ -1,6 +1,6 @@
 from typing import Optional
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -9,14 +9,28 @@ from app.core.security import decode_token
 from app.repositories.user_repository import user_repo
 from app.models.user import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
+security_bearer = HTTPBearer(
+    bearerFormat="JWT",
+    scheme_name="HTTPBearer",
+    description="Enter your access token below.",
+    auto_error=False
+)
 
 
 def get_current_user(
+    request: Request,
     db: Session = Depends(get_db),
-    header_token: Optional[str] = Depends(oauth2_scheme)
+    auth_credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer)
 ) -> User:
     """Strictly authenticate current user via Authorization: Bearer header only."""
+    header_token = None
+    if auth_credentials and auth_credentials.credentials:
+        header_token = auth_credentials.credentials
+    else:
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            header_token = auth_header.split(" ", 1)[1].strip()
+
     if not header_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
