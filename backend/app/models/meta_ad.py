@@ -50,3 +50,4 @@ class MetaAd(Base):
 
     user = relationship("User", back_populates="meta_ads")
     ad_account = relationship("MetaAdAccount", back_populates="ads")
+    comments = relationship("SocialComment", back_populates="meta_ad", cascade="all, delete-orphan", passive_deletes=True)

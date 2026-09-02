@@ -2478,6 +2478,256 @@ class MetaGraphService:
             logger.error(f"[META_POST_FETCH] Exception fetching FB post {post_id}: {e}")
             return None
 
+    def fetch_comments_for_facebook_post(
+        self,
+        post_id: str,
+        access_token: str,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch comments for a Facebook backing Page Post (or ad creative post) via GET /{post_id}/comments.
+        Supports cursor-based pagination with a safety limit of up to 10 pages (max 1000 comments per post).
+        Gracefully catches API errors without raising exceptions.
+        """
+        if not post_id or not access_token:
+            return []
+
+        raw_token = decrypt_token(access_token) or access_token
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            return [
+                {
+                    "id": f"{post_id}_mock_c1",
+                    "message": "Is this class available online?",
+                    "created_time": datetime.now(timezone.utc).isoformat(),
+                    "from": {"id": "user_101", "name": "Jane Smith"}
+                }
+            ]
+
+        comments_acc = []
+        next_url = f"{self.BASE_URL}/{post_id}/comments"
+        params = {
+            "fields": "id,message,created_time,from,parent,like_count,comment_count,application,attachment",
+            "limit": limit,
+            "access_token": raw_token
+        }
+        page_count = 0
+        max_pages = 10
+
+        try:
+            while next_url and page_count < max_pages:
+                if page_count > 0:
+                    res = requests.get(next_url, timeout=15)
+                else:
+                    res = requests.get(next_url, params=params, timeout=15)
+
+                page_count += 1
+                if res.status_code != 200:
+                    err_msg = res.json().get("error", {}).get("message", "Graph API Error") if res.headers.get("content-type", "").startswith("application/json") else res.text[:200]
+                    logger.warning(f"[META_AD_COMMENT_SYNC] Post {post_id} comment fetch returned status {res.status_code}: {err_msg}")
+                    break
+
+                res_data = res.json()
+                data = res_data.get("data", [])
+                if isinstance(data, list):
+                    comments_acc.extend(data)
+
+                paging = res_data.get("paging", {})
+                next_url = paging.get("next")
+        except Exception as e:
+            logger.error(f"[META_AD_COMMENT_SYNC] Error fetching comments for post {post_id}: {e}")
+
+        return comments_acc
+
+    def sync_comments_for_meta_ads(
+        self,
+        db: Any,
+        user_id: int,
+        meta_ad_account_id: str
+    ) -> Dict[str, Any]:
+        """
+        Synchronize Meta Ad comments for all ads belonging to user_id and meta_ad_account_id.
+        Deduplicates post requests by facebook_post_id across shared ad creatives.
+        Processes in bounded batches with clear logging and metrics.
+        Returns comprehensive sync metrics dictionary.
+        """
+        import time
+        from app.models.meta_ad import MetaAd
+        from app.models.social_account import SocialAccount
+        from app.repositories.social_comment_repository import social_comment_repo
+
+        sync_start = time.time()
+        logger.info(f"[META_AD_COMMENT_SYNC] Starting comment sync for user_id={user_id}, ad_account_id={meta_ad_account_id}")
+
+        ads = db.query(MetaAd).filter(
+            MetaAd.user_id == user_id,
+            MetaAd.meta_ad_account_id == meta_ad_account_id
+        ).all()
+
+        total_ads_checked = len(ads)
+        ads_with_post_id = [a for a in ads if a.facebook_post_id and a.facebook_post_id.strip()]
+        ads_skipped = total_ads_checked - len(ads_with_post_id)
+
+        logger.info(f"[META_AD_COMMENT_SYNC] Ads eligible for comment sync: {len(ads_with_post_id)} (Skipped without post_id: {ads_skipped})")
+
+        if not ads_with_post_id:
+            return {
+                "success": True,
+                "ad_account_id": meta_ad_account_id,
+                "ads_checked": total_ads_checked,
+                "ads_with_engagement_posts": 0,
+                "ads_skipped_without_post_id": ads_skipped,
+                "comments_fetched": 0,
+                "new_comments": 0,
+                "existing_comments": 0,
+                "ads_with_no_comments": 0,
+                "ads_failed": 0,
+                "duration_seconds": round(time.time() - sync_start, 2)
+            }
+
+        post_to_ads_map: Dict[str, List[MetaAd]] = {}
+        for ad in ads_with_post_id:
+            pid = ad.facebook_post_id.strip()
+            if pid not in post_to_ads_map:
+                post_to_ads_map[pid] = []
+            post_to_ads_map[pid].append(ad)
+
+        user_social_accounts = db.query(SocialAccount).filter(
+            SocialAccount.user_id == user_id,
+            SocialAccount.status == "CONNECTED"
+        ).all()
+
+        page_token_map: Dict[str, SocialAccount] = {}
+        fallback_sa: Optional[SocialAccount] = None
+        for sa in user_social_accounts:
+            if sa.platform == "facebook":
+                page_token_map[sa.account_id] = sa
+                if not fallback_sa:
+                    fallback_sa = sa
+
+        total_comments_fetched = 0
+        new_comments_inserted = 0
+        existing_comments_reused = 0
+        ads_no_comments = 0
+        ads_failed = 0
+
+        for pid, ad_list in post_to_ads_map.items():
+            primary_ad = ad_list[0]
+            page_id = primary_ad.facebook_page_id
+
+            matched_sa = page_token_map.get(page_id) if page_id else fallback_sa
+            if not matched_sa and user_social_accounts:
+                matched_sa = user_social_accounts[0]
+
+            if not matched_sa:
+                logger.warning(f"[META_AD_COMMENT_SYNC] No connected SocialAccount found for user {user_id} to sync post {pid}")
+                ads_failed += len(ad_list)
+                continue
+
+            access_token = decrypt_token(matched_sa.access_token) if matched_sa.access_token else None
+            if not access_token:
+                logger.warning(f"[META_AD_COMMENT_SYNC] Invalid token for SocialAccount #{matched_sa.id}")
+                ads_failed += len(ad_list)
+                continue
+
+            comments_data = self.fetch_comments_for_facebook_post(post_id=pid, access_token=access_token)
+            total_comments_fetched += len(comments_data)
+
+            if not comments_data:
+                ads_no_comments += len(ad_list)
+                continue
+
+            for raw_comment in comments_data:
+                ext_c_id = raw_comment.get("id")
+                if not ext_c_id:
+                    continue
+
+                msg = raw_comment.get("message")
+                c_time_str = raw_comment.get("created_time")
+                event_ts = None
+                if c_time_str:
+                    try:
+                        event_ts = datetime.fromisoformat(c_time_str.replace("Z", "+00:00"))
+                    except Exception:
+                        event_ts = datetime.now(timezone.utc)
+
+                from_data = raw_comment.get("from") or {}
+                commenter_id = str(from_data.get("id")) if from_data.get("id") else None
+                commenter_name = from_data.get("name")
+
+                parent_id = None
+                parent_data = raw_comment.get("parent")
+                if isinstance(parent_data, dict):
+                    parent_id = str(parent_data.get("id")) if parent_data.get("id") else None
+
+                for ad in ad_list:
+                    meta_ctx = {
+                        "meta_ad_id": ad.meta_ad_id,
+                        "meta_ad_name": ad.name,
+                        "campaign_id": ad.campaign_id,
+                        "campaign_name": ad.campaign_name,
+                        "adset_id": ad.adset_id,
+                        "adset_name": ad.adset_name,
+                        "creative_id": ad.creative_id,
+                        "facebook_page_id": ad.facebook_page_id,
+                        "facebook_post_id": ad.facebook_post_id
+                    }
+
+                    comment_platform = "facebook"
+                    if "instagram" in (ad.name or "").lower() or "instagram" in (ad.adset_name or "").lower():
+                        comment_platform = "instagram"
+
+                    comment_rec = social_comment_repo.create_or_get_existing(
+                        db=db,
+                        user_id=user_id,
+                        social_account_id=matched_sa.id,
+                        platform=comment_platform,
+                        external_comment_id=ext_c_id,
+                        external_post_id=pid,
+                        parent_comment_id=parent_id,
+                        comment_text=msg,
+                        commenter_id=commenter_id,
+                        commenter_name=commenter_name,
+                        event_timestamp=event_ts,
+                        webhook_object="ad_comment",
+                        processing_status="RECEIVED",
+                        metadata_json=meta_ctx,
+                        meta_ad_id=ad.id
+                    )
+
+                    c_created = comment_rec.created_at
+                    if c_created and c_created.tzinfo is None:
+                        c_created = c_created.replace(tzinfo=timezone.utc)
+
+                    if comment_rec and (datetime.now(timezone.utc) - c_created).total_seconds() < 2.0:
+                        new_comments_inserted += 1
+                    else:
+                        existing_comments_reused += 1
+
+        duration = round(time.time() - sync_start, 2)
+        logger.info(
+            f"[META_AD_COMMENT_SYNC] Sync Completed in {duration}s: "
+            f"ads_checked={total_ads_checked}, eligible_ads={len(ads_with_post_id)}, "
+            f"comments_fetched={total_comments_fetched}, new_inserted={new_comments_inserted}, "
+            f"existing_reused={existing_comments_reused}, ads_no_comments={ads_no_comments}, "
+            f"ads_failed={ads_failed}"
+        )
+
+        return {
+            "success": True,
+            "ad_account_id": meta_ad_account_id,
+            "ads_checked": total_ads_checked,
+            "ads_with_engagement_posts": len(ads_with_post_id),
+            "ads_skipped_without_post_id": ads_skipped,
+            "comments_fetched": total_comments_fetched,
+            "new_comments": new_comments_inserted,
+            "existing_comments": existing_comments_reused,
+            "ads_with_no_comments": ads_no_comments,
+            "ads_failed": ads_failed,
+            "duration_seconds": duration
+        }
+
+
 meta_service = MetaGraphService()
 
 

@@ -20,11 +20,13 @@ class SocialCommentRepository:
         event_timestamp: Optional[datetime] = None,
         webhook_object: str = "page",
         processing_status: str = "RECEIVED",
-        metadata_json: Optional[Dict[str, Any]] = None
+        metadata_json: Optional[Dict[str, Any]] = None,
+        meta_ad_id: Optional[int] = None
     ) -> SocialComment:
         """
         Idempotent creation of SocialComment record.
         If a comment with the same (platform, external_comment_id) already exists, returns the existing record.
+        Links to meta_ad_id if provided.
         """
         existing = db.query(SocialComment).filter(
             SocialComment.platform == platform,
@@ -32,6 +34,10 @@ class SocialCommentRepository:
         ).first()
 
         if existing:
+            if meta_ad_id is not None and existing.meta_ad_id is None:
+                existing.meta_ad_id = meta_ad_id
+                db.commit()
+                db.refresh(existing)
             return existing
 
         now = datetime.now(timezone.utc)
@@ -49,6 +55,7 @@ class SocialCommentRepository:
             webhook_object=webhook_object,
             processing_status=processing_status,
             metadata_json=metadata_json or {},
+            meta_ad_id=meta_ad_id,
             created_at=now,
             updated_at=now
         )
@@ -60,10 +67,15 @@ class SocialCommentRepository:
             return new_comment
         except IntegrityError:
             db.rollback()
-            return db.query(SocialComment).filter(
+            ext = db.query(SocialComment).filter(
                 SocialComment.platform == platform,
                 SocialComment.external_comment_id == external_comment_id
             ).first()
+            if ext and meta_ad_id is not None and ext.meta_ad_id is None:
+                ext.meta_ad_id = meta_ad_id
+                db.commit()
+                db.refresh(ext)
+            return ext
 
     def get_by_user_id(
         self,
@@ -72,7 +84,8 @@ class SocialCommentRepository:
         skip: int = 0,
         limit: int = 50,
         platform: Optional[str] = None,
-        social_account_id: Optional[int] = None
+        social_account_id: Optional[int] = None,
+        meta_ad_id: Optional[int] = None
     ) -> List[SocialComment]:
         """Fetch comments belonging to a specific user with pagination, excluding owner reply echoes."""
         from app.models.social_comment_reply import SocialCommentReply
@@ -86,7 +99,8 @@ class SocialCommentRepository:
             reply_subquery = reply_subquery.filter(SocialCommentReply.platform == platform)
 
         query = db.query(SocialComment).options(
-            joinedload(SocialComment.social_account)
+            joinedload(SocialComment.social_account),
+            joinedload(SocialComment.meta_ad)
         ).filter(
             SocialComment.user_id == user_id,
             SocialComment.is_deleted.isnot(True),
@@ -96,6 +110,8 @@ class SocialCommentRepository:
             query = query.filter(SocialComment.platform == platform)
         if social_account_id:
             query = query.filter(SocialComment.social_account_id == social_account_id)
+        if meta_ad_id:
+            query = query.filter(SocialComment.meta_ad_id == meta_ad_id)
 
         return query.order_by(SocialComment.created_at.desc()).offset(skip).limit(limit).all()
 
