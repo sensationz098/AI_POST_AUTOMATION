@@ -2725,10 +2725,12 @@ class MetaGraphService:
         db: Any,
         user_id: int,
         meta_ad_account_id: str,
+        status_filter: Optional[str] = "ACTIVE",
         job_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Synchronize Meta Ad comments for all ads belonging to user_id and meta_ad_account_id.
+        Synchronize Meta Ad comments for ads belonging to user_id and meta_ad_account_id.
+        Supports status filtering (defaults to ACTIVE ads only).
         Deduplicates post requests by facebook_post_id across shared ad creatives.
         Uses Page Access Tokens associated with facebook_page_id where available.
         Performs safe diagnostic logging without exposing tokens.
@@ -2738,16 +2740,29 @@ class MetaGraphService:
         from app.models.meta_ad import MetaAd
         from app.models.social_account import SocialAccount
         from app.repositories.social_comment_repository import social_comment_repo
+        from app.repositories.meta_ad_repository import meta_ad_repo
 
         sync_start = time.time()
-        logger.info(f"[META_AD_COMMENT_SYNC] Starting comment sync for user_id={user_id}, ad_account_id={meta_ad_account_id}")
+        
+        norm_status_filter = status_filter.strip().upper() if status_filter and status_filter.strip() else "ACTIVE"
+        if norm_status_filter in ("ALL", "NONE"):
+            norm_status_filter = "ALL"
 
-        ads = db.query(MetaAd).filter(
-            MetaAd.user_id == user_id,
-            MetaAd.meta_ad_account_id == meta_ad_account_id
-        ).all()
+        ads_total = meta_ad_repo.count_by_ad_account(db, user_id, meta_ad_account_id, status_filter=None)
+        
+        repo_filter = None if norm_status_filter == "ALL" else norm_status_filter
+        ads = meta_ad_repo.get_by_ad_account(db, user_id, meta_ad_account_id, status_filter=repo_filter)
 
-        total_ads_checked = len(ads)
+        ads_matching_filter = len(ads)
+        ads_processed = len(ads)
+
+        logger.info(
+            f"[META_AD_COMMENT_SYNC] ad_account_id={meta_ad_account_id} "
+            f"user_id={user_id} ads_total={ads_total} status_filter={norm_status_filter} "
+            f"ads_matching_filter={ads_matching_filter}"
+        )
+
+        total_ads_checked = ads_matching_filter
         ads_with_post_id = [a for a in ads if a.facebook_post_id and a.facebook_post_id.strip()]
         ads_skipped = total_ads_checked - len(ads_with_post_id)
 
@@ -2757,14 +2772,31 @@ class MetaGraphService:
             return {
                 "success": True,
                 "ad_account_id": meta_ad_account_id,
+                "status_filter": norm_status_filter,
+                "ads_total": ads_total,
+                "ads_matching_filter": ads_matching_filter,
+                "ads_processed": ads_processed,
                 "ads_checked": total_ads_checked,
+                "ads_with_post_id": 0,
                 "ads_with_engagement_posts": 0,
                 "ads_skipped_without_post_id": ads_skipped,
+                "posts_processed": 0,
+                "pages_not_connected": 0,
+                "invalid_post_ids": 0,
+                "graph_requests_successful": 0,
+                "graph_requests_failed": 0,
+                "posts_returning_zero_comments": 0,
                 "comments_fetched": 0,
+                "comments_saved": 0,
+                "comments_reused": 0,
+                "comments_skipped": 0,
+                "database_comments_created": 0,
+                "database_comments_existing": 0,
                 "new_comments": 0,
                 "existing_comments": 0,
                 "ads_with_no_comments": 0,
                 "ads_failed": 0,
+                "permission_errors": 0,
                 "duration_seconds": round(time.time() - sync_start, 2)
             }
 
@@ -3020,7 +3052,10 @@ class MetaGraphService:
                 "message": err_msg_str,
                 "error_details": last_permission_err_details or {},
                 "ad_account_id": meta_ad_account_id,
-                "ads_total": total_ads_checked,
+                "status_filter": norm_status_filter,
+                "ads_total": ads_total,
+                "ads_matching_filter": ads_matching_filter,
+                "ads_processed": ads_processed,
                 "ads_checked": total_ads_checked,
                 "posts_processed": posts_processed_count,
                 "ads_with_post_id": len(ads_with_post_id),
@@ -3051,7 +3086,10 @@ class MetaGraphService:
             "success": True,
             "reconnect_required": False,
             "ad_account_id": meta_ad_account_id,
-            "ads_total": total_ads_checked,
+            "status_filter": norm_status_filter,
+            "ads_total": ads_total,
+            "ads_matching_filter": ads_matching_filter,
+            "ads_processed": ads_processed,
             "ads_checked": total_ads_checked,
             "posts_processed": posts_processed_count,
             "ads_with_post_id": len(ads_with_post_id),

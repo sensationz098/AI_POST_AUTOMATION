@@ -78,19 +78,15 @@ def test_sync_comments_for_meta_ads_returns_structured_permission_error(caplog):
     mock_ad.facebook_page_id = "711139875422034"
     mock_ad.facebook_post_id = "711139875422034_122142588518963628"
 
-    mock_db.query().filter().all.side_effect = [
-        [mock_ad],  # Ads query
-        [          # SocialAccount query
-            MagicMock(
-                spec=SocialAccount,
-                id=42,
-                platform="facebook",
-                account_id="711139875422034",
-                token_type="page_access_token",
-                access_token="encrypted_page_access_token_xyz"
-            )
-        ]
-    ]
+    mock_sa = MagicMock(
+        spec=SocialAccount,
+        id=42,
+        platform="facebook",
+        account_id="711139875422034",
+        token_type="page_access_token",
+        access_token="encrypted_page_access_token_xyz"
+    )
+    mock_db.query().filter().all.return_value = [mock_sa]
 
     mock_error_resp = MagicMock()
     mock_error_resp.status_code = 400
@@ -105,7 +101,9 @@ def test_sync_comments_for_meta_ads_returns_structured_permission_error(caplog):
 
     RAW_PAGE_TOKEN = "EAAG987654321_PAGE_TOKEN_SECRET"
 
-    with patch("app.services.meta_service.decrypt_token", return_value=RAW_PAGE_TOKEN), \
+    with patch("app.repositories.meta_ad_repository.meta_ad_repo.count_by_ad_account", return_value=1), \
+         patch("app.repositories.meta_ad_repository.meta_ad_repo.get_by_ad_account", return_value=[mock_ad]), \
+         patch("app.services.meta_service.decrypt_token", return_value=RAW_PAGE_TOKEN), \
          patch("requests.get", return_value=mock_error_resp):
         with caplog.at_level(logging.INFO):
             result = meta_service.sync_comments_for_meta_ads(

@@ -1,3 +1,4 @@
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
@@ -15,20 +16,65 @@ class MetaAdRepository:
         self,
         db: Session,
         user_id: int,
-        meta_ad_account_id: str
+        meta_ad_account_id: str,
+        status_filter: Optional[str] = "ACTIVE"
     ) -> List[MetaAd]:
         """
-        Retrieve all Meta Ads for a specific Meta Ad Account belonging to the authenticated user.
+        Retrieve Meta Ads for a specific Meta Ad Account belonging to the authenticated user.
+        Optionally filters by effective_status (defaults to 'ACTIVE').
+        If status_filter is None or 'ALL', retrieves all ads regardless of status.
         Normalizes account ID (supports both 'act_123456' and '123456').
         """
         raw_id = str(meta_ad_account_id)
         prefixed_id = raw_id if raw_id.startswith("act_") else f"act_{raw_id}"
         unprefixed_id = raw_id.replace("act_", "")
 
-        return db.query(MetaAd).filter(
+        query = db.query(MetaAd).filter(
             MetaAd.user_id == user_id,
             MetaAd.meta_ad_account_id.in_([prefixed_id, unprefixed_id])
-        ).order_by(MetaAd.created_at.desc()).all()
+        )
+
+        if status_filter and status_filter.upper() != "ALL":
+            target_status = status_filter.upper()
+            if target_status == "ACTIVE":
+                query = query.filter(
+                    or_(MetaAd.effective_status == "ACTIVE", MetaAd.effective_status.is_(None))
+                )
+            else:
+                query = query.filter(MetaAd.effective_status == target_status)
+
+        return query.order_by(MetaAd.created_at.desc()).all()
+
+    def count_by_ad_account(
+        self,
+        db: Session,
+        user_id: int,
+        meta_ad_account_id: str,
+        status_filter: Optional[str] = None
+    ) -> int:
+        """
+        Count Meta Ads for a specific Meta Ad Account belonging to the authenticated user.
+        Optionally filters by effective_status.
+        """
+        raw_id = str(meta_ad_account_id)
+        prefixed_id = raw_id if raw_id.startswith("act_") else f"act_{raw_id}"
+        unprefixed_id = raw_id.replace("act_", "")
+
+        query = db.query(MetaAd).filter(
+            MetaAd.user_id == user_id,
+            MetaAd.meta_ad_account_id.in_([prefixed_id, unprefixed_id])
+        )
+
+        if status_filter and status_filter.upper() != "ALL":
+            target_status = status_filter.upper()
+            if target_status == "ACTIVE":
+                query = query.filter(
+                    or_(MetaAd.effective_status == "ACTIVE", MetaAd.effective_status.is_(None))
+                )
+            else:
+                query = query.filter(MetaAd.effective_status == target_status)
+
+        return query.count()
 
     def get_by_user_and_ad_id(
         self,

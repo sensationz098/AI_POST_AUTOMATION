@@ -513,7 +513,13 @@ def get_meta_ads_for_account(
     return ads
 
 
-def run_background_comment_sync(job_id: str, user_id: int, ad_account_id: str, db: Optional[Session] = None):
+def run_background_comment_sync(
+    job_id: str,
+    user_id: int,
+    ad_account_id: str,
+    status_filter: str = "ACTIVE",
+    db: Optional[Session] = None
+):
     import app.core.database as db_mod
     from app.services.meta_comment_job_manager import job_manager
     should_close = False
@@ -528,10 +534,11 @@ def run_background_comment_sync(job_id: str, user_id: int, ad_account_id: str, d
             db=db_bg,
             user_id=user_id,
             meta_ad_account_id=ad_account_id,
+            status_filter=status_filter,
             job_id=job_id
         )
         job_manager.complete_job(job_id, res)
-        logger.info(f"[META_AD_COMMENT_SYNC_JOB_COMPLETE] job_id={job_id} status={res.get('success')}")
+        logger.info(f"[META_AD_COMMENT_SYNC_JOB_COMPLETE] job_id={job_id} status={res.get('success')} status_filter={status_filter}")
     except Exception as e:
         logger.error(f"[META_AD_COMMENT_SYNC_JOB_FAILED] job_id={job_id} error={e}")
         job_manager.fail_job(job_id, str(e))
@@ -545,6 +552,7 @@ def sync_meta_ad_comments(
     ad_account_id: str,
     background_tasks: BackgroundTasks,
     response: Response,
+    status_param: str = Query("ACTIVE", alias="status", description="Ad status filter: 'ACTIVE' (default) or 'ALL'"),
     run_sync: bool = Query(False, description="Run synchronously if True, else run in background (HTTP 202)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -567,41 +575,64 @@ def sync_meta_ad_comments(
             detail="Meta Ad Account not found or access denied."
         )
 
+    raw_status = status_param.strip().upper() if status_param and status_param.strip() else "ACTIVE"
+    status_filter = "ALL" if raw_status in ("ALL", "NONE") else raw_status
+
     # If run_sync=True requested, execute synchronously for legacy/direct callers
     if run_sync:
         response.status_code = status.HTTP_200_OK
         res = meta_service.sync_comments_for_meta_ads(
             db=db,
             user_id=current_user.id,
-            meta_ad_account_id=ad_account_id
+            meta_ad_account_id=ad_account_id,
+            status_filter=status_filter
         )
-        logger.info(f"[META_COMMENT_SYNC_RESPONSE] user_id={current_user.id} ad_account_id={ad_account_id} res_success={res.get('success')}")
+        logger.info(f"[META_COMMENT_SYNC_RESPONSE] user_id={current_user.id} ad_account_id={ad_account_id} status_filter={status_filter} res_success={res.get('success')}")
         return res
 
     # Count ads for progress tracking
-    ads = meta_ad_repo.get_by_ad_account(db, current_user.id, ad_account_id)
-    ads_total = len(ads)
+    ads_total = meta_ad_repo.count_by_ad_account(db, current_user.id, ad_account_id, status_filter=None)
+    repo_filter = None if status_filter == "ALL" else status_filter
+    ads_matching = meta_ad_repo.count_by_ad_account(db, current_user.id, ad_account_id, status_filter=repo_filter)
 
     # Initialize background job
-    job = job_manager.create_job(user_id=current_user.id, ad_account_id=ad_account_id, ads_total=ads_total)
+    job = job_manager.create_job(
+        user_id=current_user.id,
+        ad_account_id=ad_account_id,
+        ads_total=ads_total,
+        ads_matching_filter=ads_matching,
+        status_filter=status_filter
+    )
     job_id = job["job_id"]
 
-    background_tasks.add_task(run_background_comment_sync, job_id, current_user.id, ad_account_id)
+    background_tasks.add_task(
+        run_background_comment_sync,
+        job_id,
+        current_user.id,
+        ad_account_id,
+        status_filter=status_filter
+    )
 
-    logger.info(f"[META_COMMENT_SYNC_DISPATCHED] user_id={current_user.id} ad_account_id={ad_account_id} job_id={job_id} ads_total={ads_total}")
+    logger.info(
+        f"[META_COMMENT_SYNC_DISPATCHED] user_id={current_user.id} "
+        f"ad_account_id={ad_account_id} job_id={job_id} "
+        f"ads_total={ads_total} status_filter={status_filter} ads_matching_filter={ads_matching}"
+    )
 
     return {
         "success": True,
         "job_id": job_id,
         "status": "PROCESSING",
+        "status_filter": status_filter,
         "ads_total": ads_total,
+        "ads_matching_filter": ads_matching,
         "ads_processed": 0,
         "comments_fetched": 0,
         "comments_saved": 0,
         "comments_reused": 0,
         "comments_skipped": 0,
         "errors": 0,
-        "message": "Meta Ad comment synchronization job started."
+        "message": f"Meta Ad comment synchronization job started for {status_filter} ads."
     }
 
 
@@ -629,7 +660,9 @@ def get_meta_ad_comments_sync_status(
         "success": True,
         "job_id": job["job_id"],
         "status": job["status"],
+        "status_filter": job.get("status_filter", "ACTIVE"),
         "ads_total": job["ads_total"],
+        "ads_matching_filter": job.get("ads_matching_filter", job["ads_total"]),
         "ads_processed": job["ads_processed"],
         "comments_fetched": job["comments_fetched"],
         "comments_saved": job["comments_saved"],
