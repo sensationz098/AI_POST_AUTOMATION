@@ -26,6 +26,35 @@ def get_connected_social_accounts(
     ]
     return real_accounts
 
+@router.get("/diagnostics")
+def get_social_accounts_diagnostics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Inspect connected Facebook social accounts, stored creation/update timestamps,
+    granted scopes, and token health safely WITHOUT exposing raw access tokens.
+    """
+    from app.services.meta_service import meta_service
+    accounts = social_account_repo.get_by_user(db, current_user.id)
+    fake_ids = {"109823471029", "17841400928371", "17841400928372", "17841400928373", "109823471030", "sandbox"}
+    real_accounts = [
+        a for a in accounts
+        if a.account_id not in fake_ids and not (a.access_token and ("sandbox" in a.access_token or "mock" in a.access_token))
+    ]
+
+    diagnostics = []
+    for acc in real_accounts:
+        if acc.platform == "facebook":
+            health = meta_service.evaluate_social_account_token_health(acc)
+            diagnostics.append(health)
+
+    return {
+        "user_id": current_user.id,
+        "configured_oauth_scopes": meta_service.REQUIRED_META_OAUTH_SCOPES,
+        "facebook_accounts": diagnostics
+    }
+
 @router.get("/comment-automation/readiness")
 def get_comment_automation_readiness(
     db: Session = Depends(get_db),
