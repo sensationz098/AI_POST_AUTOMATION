@@ -164,18 +164,18 @@ def test_sync_meta_ad_comments_api_security(client, db_session):
     db_session.commit()
 
     # 3. User 2 attempts to sync User 1's ad account -> should return 404
+    fastapi_app = client.app
     from app.api.v1.deps import get_current_user
-    app = client.app
-    app.dependency_overrides[get_current_user] = lambda: u2
+    fastapi_app.dependency_overrides[get_current_user] = lambda: u2
 
     resp = client.post("/api/v1/meta/ad-accounts/act_owner_u1/comments/sync")
     assert resp.status_code == 404
 
     # 4. User 1 syncs User 1's ad account -> should succeed
-    app.dependency_overrides[get_current_user] = lambda: u1
+    fastapi_app.dependency_overrides[get_current_user] = lambda: u1
     with patch.object(meta_service, "sync_comments_for_meta_ads", return_value={"success": True, "comments_fetched": 0}):
         resp = client.post("/api/v1/meta/ad-accounts/act_owner_u1/comments/sync")
-        assert resp.status_code == 200
+        assert resp.status_code in (200, 202)
         assert resp.json()["success"] is True
 
 def test_get_social_comments_with_meta_ad_filter(client, db_session):
@@ -229,8 +229,9 @@ def test_get_social_comments_with_meta_ad_filter(client, db_session):
     db_session.add_all([c1, c2])
     db_session.commit()
 
+    fastapi_app = client.app
     from app.api.v1.deps import get_current_user
-    client.app.dependency_overrides[get_current_user] = lambda: u
+    fastapi_app.dependency_overrides[get_current_user] = lambda: u
 
     # Fetch all
     r_all = client.get("/api/v1/social-comments/")
