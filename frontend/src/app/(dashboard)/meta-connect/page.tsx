@@ -123,9 +123,12 @@ export default function MetaConnectPage() {
       const res = await apiClient.post(`/meta/ad-accounts/${adAccountId}/ads/sync`);
       if (res.data?.ads && Array.isArray(res.data.ads)) {
         setAdsByAccount(prev => ({ ...prev, [adAccountId]: res.data.ads }));
+        setExpandedAdAccountId(adAccountId);
         const mapped = res.data.mapped_count ?? 0;
+        const partial = res.data.partially_mapped_count ?? 0;
+        const unmapped = res.data.unmapped_count ?? 0;
         const total = res.data.synced_count ?? res.data.ads.length;
-        const msg = res.data.message || `Successfully synced ${total} Ad(s) (${mapped} mapped to engagement objects).`;
+        const msg = res.data.message || `Successfully synced ${total} Ad(s) (${mapped} mapped, ${partial} partially mapped, ${unmapped} unmapped).`;
         setAdSyncSuccess(prev => ({ ...prev, [adAccountId]: msg }));
         setAdSyncError(prev => ({ ...prev, [adAccountId]: null }));
       }

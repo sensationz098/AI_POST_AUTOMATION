@@ -1641,8 +1641,7 @@ class MetaGraphService:
     ) -> List[Dict[str, Any]]:
         """
         Fetch Ads for a specific Meta Ad Account via Graph API GET /{act_ad_account_id}/ads.
-        Requests LIGHTWEIGHT fields only: id,name,campaign{id,name},adset{id,name},effective_status,configured_status,creative{id,name}.
-        Does NOT request nested creative expansions (object_story_spec, asset_feed_spec, etc.).
+        Requests INLINE creative fields: id,name,campaign{id,name},adset{id,name},effective_status,configured_status,creative{id,name,effective_object_story_id,object_story_spec,asset_feed_spec,object_id,instagram_actor_id,thumbnail_url}.
         Supports explicit cursor-based pagination with loop protection and max 50 pages safety cap.
         NEVER logs access tokens, secrets, or URLs with credentials.
         """
@@ -1655,7 +1654,7 @@ class MetaGraphService:
 
         is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
         if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
-            logger.info(f"[META_ADS] Mock/sandbox token context for {acct_id_str}; returning simulated Ads.")
+            logger.info(f"[META_ADS] Mock/sandbox token context for {acct_id_str}; returning simulated Ads with inline creative data.")
             return [
                 {
                     "id": "12020582928371",
@@ -1666,7 +1665,12 @@ class MetaGraphService:
                     "configured_status": "ACTIVE",
                     "creative": {
                         "id": "12020582928999",
-                        "name": "Summer Promo Creative"
+                        "name": "Summer Promo Creative",
+                        "effective_object_story_id": "109823471029481_12020582928371",
+                        "object_story_spec": {
+                            "page_id": "109823471029481",
+                            "instagram_actor_id": "17841400928371"
+                        }
                     }
                 },
                 {
@@ -1678,13 +1682,19 @@ class MetaGraphService:
                     "configured_status": "PAUSED",
                     "creative": {
                         "id": "12020582928998",
-                        "name": "IG Story Creative"
+                        "name": "IG Story Creative",
+                        "object_story_spec": {
+                            "instagram_actor_id": "17841400928371",
+                            "video_data": {
+                                "instagram_media_id": "17841400928999"
+                            }
+                        }
                     }
                 }
             ]
 
         endpoint = f"{self.BASE_URL}/{acct_id_str}/ads"
-        fields = "id,name,campaign{id,name},adset{id,name},effective_status,configured_status,creative{id,name}"
+        fields = "id,name,campaign{id,name},adset{id,name},effective_status,configured_status,creative{id,name,effective_object_story_id,object_story_spec,asset_feed_spec,object_id,instagram_actor_id,thumbnail_url}"
 
         all_ads: List[Dict[str, Any]] = []
         visited_cursors = set()
@@ -1739,6 +1749,118 @@ class MetaGraphService:
 
         logger.info(f"[META_ADS] Successfully fetched {len(all_ads)} Meta Ad(s) for account {acct_id_str} across {page_count} page(s).")
         return all_ads
+
+    def process_creative_enrichment(
+        self,
+        user_access_token: str,
+        raw_ads: List[Dict[str, Any]],
+        existing_ads: Optional[List[Any]] = None,
+        max_workers: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Processes creative enrichment for a list of discovered Ads using a 3-tier resolution strategy:
+        1. Inline nested creative data returned during Ad discovery request.
+        2. Persisted database creative mapping cache (tenant and ad-account isolated).
+        3. Fallback batch Graph API creative requests for unresolved creatives only.
+        """
+        start_time = time.time()
+        total_ads = len(raw_ads)
+
+        # 1. Build lookup map for existing persisted DB records for caching (tenant & ad-account isolated)
+        db_creative_cache: Dict[str, Dict[str, Any]] = {}
+        if existing_ads:
+            for ad_obj in existing_ads:
+                c_id = getattr(ad_obj, "creative_id", None)
+                m_status = getattr(ad_obj, "mapping_status", None)
+                if c_id and m_status == "MAPPED":
+                    db_creative_cache[str(c_id)] = {
+                        "id": str(c_id),
+                        "effective_object_story_id": getattr(ad_obj, "facebook_post_id", None),
+                        "object_story_spec": {
+                            "page_id": getattr(ad_obj, "facebook_page_id", None),
+                            "instagram_actor_id": getattr(ad_obj, "instagram_account_id", None),
+                        },
+                        "instagram_media_id": getattr(ad_obj, "instagram_media_id", None),
+                        "from_db_cache": True
+                    }
+
+        creative_cache: Dict[str, Optional[Dict[str, Any]]] = {}
+        inline_resolved_ids: set = set()
+        cache_hit_ids: set = set()
+        fallback_ids_needed: set = set()
+
+        expanded_keys = {
+            "effective_object_story_id", "object_story_spec", "asset_feed_spec",
+            "object_id", "instagram_actor_id", "thumbnail_url", "instagram_story_id",
+            "effective_instagram_story_id", "instagram_media_id"
+        }
+
+        for ad_data in raw_ads:
+            creative_obj = ad_data.get("creative") or ad_data.get("adcreative")
+            if not isinstance(creative_obj, dict):
+                continue
+
+            c_id = creative_obj.get("id")
+            if not c_id:
+                continue
+            c_id_str = str(c_id)
+
+            if c_id_str in creative_cache:
+                continue
+
+            # Tier 1 Check: Inline nested creative data
+            has_inline_expanded = any(k in creative_obj for k in expanded_keys)
+            test_mapping = self.extract_engagement_mapping(ad_data, creative_data=creative_obj)
+            is_inline_mapped = test_mapping.get("mapping_status") == "MAPPED"
+
+            if has_inline_expanded or is_inline_mapped:
+                creative_cache[c_id_str] = creative_obj
+                inline_resolved_ids.add(c_id_str)
+            elif c_id_str in db_creative_cache:
+                # Tier 2 Check: DB Cache Hit
+                creative_cache[c_id_str] = db_creative_cache[c_id_str]
+                cache_hit_ids.add(c_id_str)
+            else:
+                # Tier 3 Check: Requires Fallback Fetch
+                fallback_ids_needed.add(c_id_str)
+
+        # Fallback Batch Fetch for unresolved creatives only
+        fallback_enriched_count = 0
+        if fallback_ids_needed:
+            fallback_list = list(fallback_ids_needed)
+            logger.info(f"[META_ADS_SYNC] Executing fallback Graph API fetch for {len(fallback_list)} unresolved creative(s)...")
+            fallback_res = self.fetch_creatives_batch(user_access_token, fallback_list, max_workers=max_workers)
+            for cid, res_data in fallback_res.items():
+                creative_cache[cid] = res_data
+                if res_data is not None:
+                    fallback_enriched_count += 1
+
+        duration = time.time() - start_time
+
+        inline_count = len(inline_resolved_ids)
+        fallback_req_count = len(fallback_ids_needed)
+        cache_hits_count = len(cache_hit_ids)
+
+        logger.info(f"[META_ADS_SYNC] Ads fetched: {total_ads}")
+        logger.info(f"[META_ADS_SYNC] Inline creatives resolved: {inline_count}")
+        logger.info(f"[META_ADS_SYNC] Creatives requiring fallback fetch: {fallback_req_count}")
+        logger.info(f"[META_ADS_SYNC] Fallback creatives successfully enriched: {fallback_enriched_count}")
+        logger.info(f"[META_ADS_SYNC] Creative cache hits: {cache_hits_count}")
+        logger.info(f"[META_ADS_SYNC] Creative enrichment total duration: {duration:.2f} seconds")
+
+        metrics = {
+            "ads_fetched": total_ads,
+            "inline_creatives_resolved": inline_count,
+            "creatives_requiring_fallback": fallback_req_count,
+            "fallback_creatives_enriched": fallback_enriched_count,
+            "creative_cache_hits": cache_hits_count,
+            "creative_enrichment_duration_seconds": round(duration, 2)
+        }
+
+        return {
+            "creative_cache": creative_cache,
+            "metrics": metrics
+        }
 
     def fetch_creative(
         self,

@@ -44,5 +44,8 @@ class MetaAdSyncResponse(BaseModel):
     unique_creatives: Optional[int] = None
     creatives_enriched: Optional[int] = None
     creative_fetch_failures: Optional[int] = None
+    inline_creatives_resolved: Optional[int] = None
+    creatives_requiring_fallback: Optional[int] = None
+    creative_cache_hits: Optional[int] = None
     mapping_summary: Optional[Dict[str, int]] = None
     ads: List[MetaAdResponse]
