@@ -1,7 +1,7 @@
 """Add meta_ad_id to social_comments table
 
-Revision ID: 015_meta_ad_comments_relationship
-Revises: 014_external_post_context_account_scope
+Revision ID: 015_meta_ad_comments_rel
+Revises: 014_ext_post_account_scope
 Create Date: 2026-09-02
 
 """
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '015_meta_ad_comments_relationship'
-down_revision = '014_external_post_context_account_scope'
+revision = '015_meta_ad_comments_rel'
+down_revision = '014_ext_post_account_scope'
 branch_labels = None
 depends_on = None
 
