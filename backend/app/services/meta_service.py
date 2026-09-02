@@ -50,6 +50,23 @@ def is_ambiguous_meta_error(
         return True
     return False
 
+
+def extract_page_id_from_post_id(post_id: str) -> Optional[str]:
+    """
+    Extract Facebook Page ID from a post ID string formatted as {page_id}_{post_id}.
+    Returns None if malformed or page_id cannot be extracted.
+    """
+    if not post_id or not isinstance(post_id, str):
+        return None
+    cleaned = post_id.strip()
+    if "_" not in cleaned:
+        return None
+    parts = cleaned.split("_", 1)
+    if parts[0] and parts[0].isdigit():
+        return parts[0]
+    return None
+
+
 class MetaGraphService:
     BASE_URL = f"https://graph.facebook.com/{settings.META_GRAPH_API_VERSION}"
 
@@ -2735,53 +2752,76 @@ class MetaGraphService:
                 post_to_ads_map[pid] = []
             post_to_ads_map[pid].append(ad)
 
+        # 1. Fetch connected Facebook SocialAccounts once for user
         user_social_accounts = db.query(SocialAccount).filter(
             SocialAccount.user_id == user_id,
+            SocialAccount.platform == "facebook",
             SocialAccount.status == "CONNECTED"
         ).all()
 
-        page_token_map: Dict[str, SocialAccount] = {}
-        fallback_sa: Optional[SocialAccount] = None
-        for sa in user_social_accounts:
-            if sa.platform == "facebook":
-                page_token_map[sa.account_id] = sa
-                if not fallback_sa:
-                    fallback_sa = sa
+        # 2. Map connected Facebook Page Access Tokens strictly by string account_id
+        page_token_map: Dict[str, SocialAccount] = {
+            str(sa.account_id).strip(): sa for sa in user_social_accounts if sa.account_id
+        }
 
         total_comments_fetched = 0
         new_comments_inserted = 0
         existing_comments_reused = 0
         ads_no_comments = 0
         ads_failed = 0
+        posts_processed_count = 0
         permission_errors_count = 0
+        pages_not_connected_count = 0
+        invalid_post_ids_count = 0
         last_permission_err_details: Optional[Dict[str, Any]] = None
 
         for pid, ad_list in post_to_ads_map.items():
             primary_ad = ad_list[0]
-            page_id = primary_ad.facebook_page_id
+            extracted_pid_page_id = extract_page_id_from_post_id(pid)
+            ad_page_id = str(primary_ad.facebook_page_id).strip() if primary_ad.facebook_page_id else None
 
-            matched_sa = page_token_map.get(page_id) if page_id else fallback_sa
-            if not matched_sa and user_social_accounts:
-                matched_sa = user_social_accounts[0]
+            # Extract Page ID strictly from post_id or primary_ad.facebook_page_id
+            page_id = extracted_pid_page_id or (ad_page_id if (ad_page_id and ad_page_id.isdigit()) else None)
+
+            if not page_id:
+                logger.warning(
+                    f"[META_AD_COMMENT_SYNC] Skipping post_id={pid}: INVALID_POST_ID. "
+                    f"Could not extract valid Facebook Page ID from post ID."
+                )
+                invalid_post_ids_count += len(ad_list)
+                continue
+
+            # Strict exact page match: NEVER fall back to another Facebook Page Access Token
+            matched_sa = page_token_map.get(str(page_id))
 
             if not matched_sa:
-                logger.warning(f"[META_AD_COMMENT_SYNC] No connected SocialAccount found for user_id={user_id} to sync post_id={pid} (page_id={page_id})")
-                ads_failed += len(ad_list)
+                logger.info(
+                    f"[META_AD_COMMENT_SYNC] Skipping post_id={pid} (page_id={page_id}): "
+                    f"PAGE_NOT_CONNECTED. No exact connected Facebook Page Access Token exists for this Page ID."
+                )
+                pages_not_connected_count += len(ad_list)
                 continue
 
             access_token = decrypt_token(matched_sa.access_token) if matched_sa.access_token else None
             if not access_token:
-                logger.warning(f"[META_AD_COMMENT_SYNC] Invalid/missing token for SocialAccount #{matched_sa.id} (platform={matched_sa.platform}, account_id={matched_sa.account_id})")
+                logger.warning(
+                    f"[META_AD_COMMENT_SYNC] Skipping post_id={pid} (page_id={page_id}): "
+                    f"INVALID_TOKEN. SocialAccount #{matched_sa.id} has no valid access token."
+                )
                 ads_failed += len(ad_list)
                 continue
 
-            is_exact_page_match = bool(page_id and matched_sa.account_id == page_id)
-            token_source_desc = f"SocialAccount #{matched_sa.id} (platform={matched_sa.platform}, account_id={matched_sa.account_id}, token_type={matched_sa.token_type or 'page_access_token'}, exact_page_match={is_exact_page_match})"
+            token_source_desc = (
+                f"SocialAccount #{matched_sa.id} (platform=facebook, account_id={page_id}, "
+                f"token_type={matched_sa.token_type or 'page_access_token'}, exact_page_match=True)"
+            )
 
             logger.info(
                 f"[META_AD_COMMENT_SYNC] Fetching comments for post_id={pid} (page_id={page_id}, ad_count={len(ad_list)}) "
                 f"using {token_source_desc}"
             )
+
+            posts_processed_count += 1
 
             raw_comments_res = self.fetch_comments_for_facebook_post(
                 post_id=pid,
@@ -2883,12 +2923,16 @@ class MetaGraphService:
                         existing_comments_reused += 1
 
         duration = round(time.time() - sync_start, 2)
+        total_skipped = ads_skipped + pages_not_connected_count + invalid_post_ids_count
+
         logger.info(
             f"[META_AD_COMMENT_SYNC] Sync Completed in {duration}s: "
             f"ads_checked={total_ads_checked}, eligible_ads={len(ads_with_post_id)}, "
-            f"comments_fetched={total_comments_fetched}, new_inserted={new_comments_inserted}, "
-            f"existing_reused={existing_comments_reused}, ads_no_comments={ads_no_comments}, "
-            f"ads_failed={ads_failed}, permission_errors={permission_errors_count}"
+            f"posts_processed={posts_processed_count}, comments_fetched={total_comments_fetched}, "
+            f"new_inserted={new_comments_inserted}, existing_reused={existing_comments_reused}, "
+            f"ads_no_comments={ads_no_comments}, ads_failed={ads_failed}, "
+            f"permission_errors={permission_errors_count}, pages_not_connected={pages_not_connected_count}, "
+            f"invalid_post_ids={invalid_post_ids_count}"
         )
 
         if permission_errors_count > 0:
@@ -2907,29 +2951,43 @@ class MetaGraphService:
                 "missing_permission": "pages_read_user_content",
                 "requires_app_review": True,
                 "message": err_msg_str,
+                "error_details": last_permission_err_details or {},
                 "ad_account_id": meta_ad_account_id,
                 "ads_checked": total_ads_checked,
+                "posts_processed": posts_processed_count,
                 "ads_with_engagement_posts": len(ads_with_post_id),
                 "ads_skipped_without_post_id": ads_skipped,
                 "comments_fetched": total_comments_fetched,
+                "comments_synced": total_comments_fetched,
                 "new_comments": new_comments_inserted,
                 "existing_comments": existing_comments_reused,
                 "ads_with_no_comments": ads_no_comments,
                 "ads_failed": ads_failed,
                 "permission_errors": permission_errors_count,
+                "pages_not_connected": pages_not_connected_count,
+                "invalid_post_ids": invalid_post_ids_count,
+                "skipped_posts": total_skipped,
                 "duration_seconds": duration
             }
 
         return {
             "success": True,
+            "reconnect_required": False,
             "ad_account_id": meta_ad_account_id,
             "ads_checked": total_ads_checked,
+            "posts_processed": posts_processed_count,
             "ads_with_engagement_posts": len(ads_with_post_id),
             "ads_skipped_without_post_id": ads_skipped,
             "comments_fetched": total_comments_fetched,
+            "comments_synced": total_comments_fetched,
             "new_comments": new_comments_inserted,
             "existing_comments": existing_comments_reused,
             "ads_with_no_comments": ads_no_comments,
+            "permission_errors": 0,
+            "meta_api_errors": ads_failed,
+            "pages_not_connected": pages_not_connected_count,
+            "invalid_post_ids": invalid_post_ids_count,
+            "skipped_posts": total_skipped,
             "ads_failed": ads_failed,
             "duration_seconds": duration
         }
