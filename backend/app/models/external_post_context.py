@@ -30,7 +30,7 @@ class ExternalPostContext(Base):
     created_at = Column(DateTime(timezone=True), default=utc_now)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
-    social_account = relationship("SocialAccount")
+    social_account = relationship("SocialAccount", back_populates="external_post_contexts")
 
     __table_args__ = (
         UniqueConstraint("social_account_id", "platform", "external_post_id", name="uq_ext_post_account_platform_ext_id"),

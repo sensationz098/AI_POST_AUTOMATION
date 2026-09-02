@@ -47,6 +47,12 @@ class SocialAccount(Base):
         cascade="all, delete-orphan",
         passive_deletes=True
     )
+    external_post_contexts = relationship(
+        "ExternalPostContext",
+        back_populates="social_account",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
 
     @property
     def requires_reconnection_for_comment_automation(self) -> bool:
