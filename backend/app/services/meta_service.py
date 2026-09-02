@@ -2631,7 +2631,7 @@ class MetaGraphService:
         comments_acc = []
         next_url = f"{self.BASE_URL}/{post_id}/comments"
         params = {
-            "fields": "id,message,created_time,from,parent,like_count,comment_count,application,attachment",
+            "fields": "id,message,created_time,from,parent",
             "limit": limit,
             "access_token": raw_token
         }
@@ -2662,6 +2662,12 @@ class MetaGraphService:
                     err_code = err_details["error_code"]
                     err_subcode = err_details["error_subcode"]
 
+                    logger.info(
+                        f"[META_AD_COMMENT_RESPONSE] post_id={post_id} http_status={res.status_code} "
+                        f"meta_error_code={err_code} meta_error_subcode={err_subcode} "
+                        f"comments_returned=0 has_paging=False next_page_exists=False"
+                    )
+
                     # Check for missing pages_read_user_content or Page Public Content Access feature approval
                     is_perm_err = (
                         err_code == 10 or
@@ -2691,10 +2697,26 @@ class MetaGraphService:
 
                 paging = res_data.get("paging", {})
                 next_url = paging.get("next")
+
+            logger.info(
+                f"[META_AD_COMMENT_RESPONSE] post_id={post_id} http_status=200 "
+                f"meta_error_code=None meta_error_subcode=None "
+                f"comments_returned={len(comments_acc)} has_paging={bool(next_url)} next_page_exists={bool(next_url)}"
+            )
+            if len(comments_acc) == 0:
+                logger.info(
+                    f"[META_AD_COMMENT_EMPTY] post_id={post_id} reason=Meta API returned successful empty data array"
+                )
+
         except Exception as e:
             logger.error(f"[META_AD_COMMENT_SYNC] Exception fetching comments for post {post_id} (page_id={page_id}): {e}")
             err_details["status_code"] = 500
             err_details["error_message"] = str(e)
+            logger.info(
+                f"[META_AD_COMMENT_RESPONSE] post_id={post_id} http_status=500 "
+                f"meta_error_code=None meta_error_subcode=None "
+                f"comments_returned=0 has_paging=False next_page_exists=False"
+            )
 
         return (comments_acc, err_details) if return_details else comments_acc
 
@@ -2767,172 +2789,200 @@ class MetaGraphService:
         total_comments_fetched = 0
         new_comments_inserted = 0
         existing_comments_reused = 0
+        comments_skipped_count = 0
         ads_no_comments = 0
         ads_failed = 0
         posts_processed_count = 0
+        graph_requests_successful_count = 0
+        posts_zero_comments_count = 0
         permission_errors_count = 0
         pages_not_connected_count = 0
         invalid_post_ids_count = 0
         last_permission_err_details: Optional[Dict[str, Any]] = None
 
         for pid, ad_list in post_to_ads_map.items():
-            primary_ad = ad_list[0]
-            extracted_pid_page_id = extract_page_id_from_post_id(pid)
-            ad_page_id = str(primary_ad.facebook_page_id).strip() if primary_ad.facebook_page_id else None
+            try:
+                primary_ad = ad_list[0]
+                extracted_pid_page_id = extract_page_id_from_post_id(pid)
+                ad_page_id = str(primary_ad.facebook_page_id).strip() if primary_ad.facebook_page_id else None
 
-            # Extract Page ID strictly from post_id or primary_ad.facebook_page_id
-            page_id = extracted_pid_page_id or (ad_page_id if (ad_page_id and ad_page_id.isdigit()) else None)
+                # Extract Page ID strictly from post_id or primary_ad.facebook_page_id
+                page_id = extracted_pid_page_id or (ad_page_id if (ad_page_id and ad_page_id.isdigit()) else None)
 
-            if not page_id:
-                logger.warning(
-                    f"[META_AD_COMMENT_SYNC] Skipping post_id={pid}: INVALID_POST_ID. "
-                    f"Could not extract valid Facebook Page ID from post ID."
-                )
-                invalid_post_ids_count += len(ad_list)
-                continue
-
-            # Strict exact page match: NEVER fall back to another Facebook Page Access Token
-            matched_sa = page_token_map.get(str(page_id))
-
-            if not matched_sa:
-                logger.info(
-                    f"[META_AD_COMMENT_SYNC] Skipping post_id={pid} (page_id={page_id}): "
-                    f"PAGE_NOT_CONNECTED. No exact connected Facebook Page Access Token exists for this Page ID."
-                )
-                pages_not_connected_count += len(ad_list)
-                continue
-
-            access_token = decrypt_token(matched_sa.access_token) if matched_sa.access_token else None
-            if not access_token:
-                logger.warning(
-                    f"[META_AD_COMMENT_SYNC] Skipping post_id={pid} (page_id={page_id}): "
-                    f"INVALID_TOKEN. SocialAccount #{matched_sa.id} has no valid access token."
-                )
-                ads_failed += len(ad_list)
-                continue
-
-            token_source_desc = (
-                f"SocialAccount #{matched_sa.id} (platform=facebook, account_id={page_id}, "
-                f"token_type={matched_sa.token_type or 'page_access_token'}, exact_page_match=True)"
-            )
-
-            logger.info(
-                f"[META_AD_COMMENT_SYNC] Fetching comments for post_id={pid} (page_id={page_id}, ad_count={len(ad_list)}) "
-                f"using {token_source_desc}"
-            )
-
-            posts_processed_count += 1
-
-            raw_comments_res = self.fetch_comments_for_facebook_post(
-                post_id=pid,
-                access_token=access_token,
-                page_id=page_id,
-                return_details=True
-            )
-
-            if isinstance(raw_comments_res, tuple) and len(raw_comments_res) == 2:
-                comments_data, err_details = raw_comments_res
-            elif isinstance(raw_comments_res, list):
-                comments_data = raw_comments_res
-                err_details = {"status_code": 200, "is_permission_error": False}
-            else:
-                comments_data = []
-                err_details = {"status_code": 200, "is_permission_error": False}
-
-            if err_details.get("is_permission_error"):
-                permission_errors_count += 1
-                last_permission_err_details = err_details
-                ads_failed += len(ad_list)
-                continue
-
-            if err_details.get("status_code", 200) != 200:
-                ads_failed += len(ad_list)
-                continue
-
-            total_comments_fetched += len(comments_data)
-
-            if not comments_data:
-                ads_no_comments += len(ad_list)
-                continue
-
-            for raw_comment in comments_data:
-                ext_c_id = raw_comment.get("id")
-                if not ext_c_id:
+                if not page_id:
+                    logger.warning(
+                        f"[META_AD_COMMENT_SYNC] Skipping post_id={pid}: INVALID_POST_ID. "
+                        f"Could not extract valid Facebook Page ID from post ID."
+                    )
+                    invalid_post_ids_count += len(ad_list)
                     continue
 
-                msg = raw_comment.get("message")
-                c_time_str = raw_comment.get("created_time")
-                event_ts = None
-                if c_time_str:
-                    try:
-                        event_ts = datetime.fromisoformat(c_time_str.replace("Z", "+00:00"))
-                    except Exception:
-                        event_ts = datetime.now(timezone.utc)
+                # Strict exact page match: NEVER fall back to another Facebook Page Access Token
+                matched_sa = page_token_map.get(str(page_id))
 
-                from_data = raw_comment.get("from") or {}
-                commenter_id = str(from_data.get("id")) if from_data.get("id") else None
-                commenter_name = from_data.get("name")
-
-                parent_id = None
-                parent_data = raw_comment.get("parent")
-                if isinstance(parent_data, dict):
-                    parent_id = str(parent_data.get("id")) if parent_data.get("id") else None
-
-                for ad in ad_list:
-                    meta_ctx = {
-                        "meta_ad_id": ad.meta_ad_id,
-                        "meta_ad_name": ad.name,
-                        "campaign_id": ad.campaign_id,
-                        "campaign_name": ad.campaign_name,
-                        "adset_id": ad.adset_id,
-                        "adset_name": ad.adset_name,
-                        "creative_id": ad.creative_id,
-                        "facebook_page_id": ad.facebook_page_id,
-                        "facebook_post_id": ad.facebook_post_id
-                    }
-
-                    comment_platform = "facebook"
-                    if "instagram" in (ad.name or "").lower() or "instagram" in (ad.adset_name or "").lower():
-                        comment_platform = "instagram"
-
-                    comment_rec = social_comment_repo.create_or_get_existing(
-                        db=db,
-                        user_id=user_id,
-                        social_account_id=matched_sa.id,
-                        platform=comment_platform,
-                        external_comment_id=ext_c_id,
-                        external_post_id=pid,
-                        parent_comment_id=parent_id,
-                        comment_text=msg,
-                        commenter_id=commenter_id,
-                        commenter_name=commenter_name,
-                        event_timestamp=event_ts,
-                        webhook_object="ad_comment",
-                        processing_status="RECEIVED",
-                        metadata_json=meta_ctx,
-                        meta_ad_id=ad.id
+                if not matched_sa:
+                    logger.info(
+                        f"[META_AD_COMMENT_SYNC] Skipping post_id={pid} (page_id={page_id}): "
+                        f"PAGE_NOT_CONNECTED. No exact connected Facebook Page Access Token exists for this Page ID."
                     )
+                    pages_not_connected_count += len(ad_list)
+                    continue
 
-                    c_created = comment_rec.created_at
-                    if c_created and c_created.tzinfo is None:
-                        c_created = c_created.replace(tzinfo=timezone.utc)
+                access_token = decrypt_token(matched_sa.access_token) if matched_sa.access_token else None
+                if not access_token:
+                    logger.warning(
+                        f"[META_AD_COMMENT_SYNC] Skipping post_id={pid} (page_id={page_id}): "
+                        f"INVALID_TOKEN. SocialAccount #{matched_sa.id} has no valid access token."
+                    )
+                    ads_failed += len(ad_list)
+                    continue
 
-                    if comment_rec and (datetime.now(timezone.utc) - c_created).total_seconds() < 2.0:
-                        new_comments_inserted += 1
-                    else:
-                        existing_comments_reused += 1
+                token_source_desc = (
+                    f"SocialAccount #{matched_sa.id} (platform=facebook, account_id={page_id}, "
+                    f"token_type={matched_sa.token_type or 'page_access_token'}, exact_page_match=True)"
+                )
+
+                logger.info(
+                    f"[META_AD_COMMENT_SYNC] post_id={pid} page_id={page_id} "
+                    f"social_account_id={matched_sa.id} exact_page_match=True ad_count={len(ad_list)}"
+                )
+
+                posts_processed_count += 1
+
+                raw_comments_res = self.fetch_comments_for_facebook_post(
+                    post_id=pid,
+                    access_token=access_token,
+                    page_id=page_id,
+                    return_details=True
+                )
+
+                if isinstance(raw_comments_res, tuple) and len(raw_comments_res) == 2:
+                    comments_data, err_details = raw_comments_res
+                elif isinstance(raw_comments_res, list):
+                    comments_data = raw_comments_res
+                    err_details = {"status_code": 200, "is_permission_error": False}
+                else:
+                    comments_data = []
+                    err_details = {"status_code": 200, "is_permission_error": False}
+
+                if err_details.get("is_permission_error"):
+                    permission_errors_count += 1
+                    last_permission_err_details = err_details
+                    ads_failed += len(ad_list)
+                    continue
+
+                if err_details.get("status_code", 200) != 200:
+                    ads_failed += len(ad_list)
+                    continue
+
+                graph_requests_successful_count += 1
+                total_comments_fetched += len(comments_data)
+
+                if not comments_data:
+                    posts_zero_comments_count += 1
+                    ads_no_comments += len(ad_list)
+                    continue
+
+                for raw_comment in comments_data:
+                    ext_c_id = raw_comment.get("id")
+                    if not ext_c_id:
+                        comments_skipped_count += 1
+                        logger.warning(f"[META_AD_COMMENT_SAVE_SKIPPED] post_id={pid} reason=Missing comment ID in Graph response")
+                        continue
+
+                    logger.info(f"[META_AD_COMMENT_SAVE_ATTEMPT] comment_id={ext_c_id} post_id={pid}")
+
+                    msg = raw_comment.get("message")
+                    c_time_str = raw_comment.get("created_time")
+                    event_ts = None
+                    if c_time_str:
+                        try:
+                            event_ts = datetime.fromisoformat(c_time_str.replace("Z", "+00:00"))
+                        except Exception:
+                            event_ts = datetime.now(timezone.utc)
+
+                    from_data = raw_comment.get("from") or {}
+                    commenter_id = str(from_data.get("id")) if from_data.get("id") else None
+                    commenter_name = from_data.get("name")
+
+                    parent_id = None
+                    parent_data = raw_comment.get("parent")
+                    if isinstance(parent_data, dict):
+                        parent_id = str(parent_data.get("id")) if parent_data.get("id") else None
+
+                    for ad in ad_list:
+                        meta_ctx = {
+                            "meta_ad_id": ad.meta_ad_id,
+                            "meta_ad_name": ad.name,
+                            "campaign_id": ad.campaign_id,
+                            "campaign_name": ad.campaign_name,
+                            "adset_id": ad.adset_id,
+                            "adset_name": ad.adset_name,
+                            "creative_id": ad.creative_id,
+                            "facebook_page_id": ad.facebook_page_id,
+                            "facebook_post_id": ad.facebook_post_id
+                        }
+
+                        logger.info(
+                            f"[META_COMMENT_RELATIONSHIP] comment_id={ext_c_id} graph_post_id={pid} "
+                            f"normalized_post_id={pid} matched_ad_count={len(ad_list)} "
+                            f"matched_external_post_context={page_id}"
+                        )
+
+                        try:
+                            from app.models.social_comment import SocialComment
+                            already_exists = db.query(SocialComment).filter(
+                                SocialComment.platform == "facebook",
+                                SocialComment.external_comment_id == ext_c_id
+                            ).first() is not None
+
+                            comment_rec = social_comment_repo.create_or_get_existing(
+                                db=db,
+                                user_id=user_id,
+                                social_account_id=matched_sa.id,
+                                platform="facebook",
+                                external_comment_id=ext_c_id,
+                                external_post_id=pid,
+                                parent_comment_id=parent_id,
+                                comment_text=msg,
+                                commenter_id=commenter_id,
+                                commenter_name=commenter_name,
+                                event_timestamp=event_ts,
+                                webhook_object="ad_comment",
+                                processing_status="RECEIVED",
+                                metadata_json=meta_ctx,
+                                meta_ad_id=ad.id
+                            )
+
+                            if comment_rec and hasattr(comment_rec, "id") and comment_rec.id:
+                                logger.info(f"[META_AD_COMMENT_SAVED] comment_id={ext_c_id} database_record_id={comment_rec.id}")
+                                if already_exists:
+                                    existing_comments_reused += 1
+                                else:
+                                    new_comments_inserted += 1
+                            else:
+                                comments_skipped_count += 1
+                                logger.warning(f"[META_AD_COMMENT_SAVE_SKIPPED] comment_id={ext_c_id} reason=Database save returned None")
+                        except Exception as save_err:
+                            comments_skipped_count += 1
+                            logger.error(f"[META_AD_COMMENT_SAVE_SKIPPED] comment_id={ext_c_id} reason={save_err}")
+
+            except Exception as post_loop_err:
+                logger.error(f"[META_AD_COMMENT_SYNC] Unexpected error processing post_id={pid}: {post_loop_err}")
+                ads_failed += len(ad_list)
 
         duration = round(time.time() - sync_start, 2)
         total_skipped = ads_skipped + pages_not_connected_count + invalid_post_ids_count
 
         logger.info(
-            f"[META_AD_COMMENT_SYNC] Sync Completed in {duration}s: "
-            f"ads_checked={total_ads_checked}, eligible_ads={len(ads_with_post_id)}, "
-            f"posts_processed={posts_processed_count}, comments_fetched={total_comments_fetched}, "
-            f"new_inserted={new_comments_inserted}, existing_reused={existing_comments_reused}, "
-            f"ads_no_comments={ads_no_comments}, ads_failed={ads_failed}, "
-            f"permission_errors={permission_errors_count}, pages_not_connected={pages_not_connected_count}, "
-            f"invalid_post_ids={invalid_post_ids_count}"
+            f"[META_AD_COMMENT_SYNC_SUMMARY] "
+            f"ads_total={total_ads_checked} ads_with_post_id={len(ads_with_post_id)} "
+            f"posts_processed={posts_processed_count} pages_not_connected={pages_not_connected_count} "
+            f"invalid_post_ids={invalid_post_ids_count} graph_requests_successful={graph_requests_successful_count} "
+            f"graph_requests_failed={ads_failed} posts_returning_zero_comments={posts_zero_comments_count} "
+            f"comments_fetched={total_comments_fetched} comments_saved={new_comments_inserted} "
+            f"comments_reused={existing_comments_reused} comments_skipped={comments_skipped_count} "
+            f"database_comments_created={new_comments_inserted} database_comments_existing={existing_comments_reused}"
         )
 
         if permission_errors_count > 0:
@@ -2953,12 +3003,22 @@ class MetaGraphService:
                 "message": err_msg_str,
                 "error_details": last_permission_err_details or {},
                 "ad_account_id": meta_ad_account_id,
+                "ads_total": total_ads_checked,
                 "ads_checked": total_ads_checked,
                 "posts_processed": posts_processed_count,
+                "ads_with_post_id": len(ads_with_post_id),
                 "ads_with_engagement_posts": len(ads_with_post_id),
                 "ads_skipped_without_post_id": ads_skipped,
+                "graph_requests_successful": graph_requests_successful_count,
+                "graph_requests_failed": ads_failed,
+                "posts_returning_zero_comments": posts_zero_comments_count,
                 "comments_fetched": total_comments_fetched,
                 "comments_synced": total_comments_fetched,
+                "comments_saved": new_comments_inserted,
+                "comments_reused": existing_comments_reused,
+                "comments_skipped": comments_skipped_count,
+                "database_comments_created": new_comments_inserted,
+                "database_comments_existing": existing_comments_reused,
                 "new_comments": new_comments_inserted,
                 "existing_comments": existing_comments_reused,
                 "ads_with_no_comments": ads_no_comments,
@@ -2974,12 +3034,22 @@ class MetaGraphService:
             "success": True,
             "reconnect_required": False,
             "ad_account_id": meta_ad_account_id,
+            "ads_total": total_ads_checked,
             "ads_checked": total_ads_checked,
             "posts_processed": posts_processed_count,
+            "ads_with_post_id": len(ads_with_post_id),
             "ads_with_engagement_posts": len(ads_with_post_id),
             "ads_skipped_without_post_id": ads_skipped,
+            "graph_requests_successful": graph_requests_successful_count,
+            "graph_requests_failed": ads_failed,
+            "posts_returning_zero_comments": posts_zero_comments_count,
             "comments_fetched": total_comments_fetched,
             "comments_synced": total_comments_fetched,
+            "comments_saved": new_comments_inserted,
+            "comments_reused": existing_comments_reused,
+            "comments_skipped": comments_skipped_count,
+            "database_comments_created": new_comments_inserted,
+            "database_comments_existing": existing_comments_reused,
             "new_comments": new_comments_inserted,
             "existing_comments": existing_comments_reused,
             "ads_with_no_comments": ads_no_comments,
@@ -2990,6 +3060,81 @@ class MetaGraphService:
             "skipped_posts": total_skipped,
             "ads_failed": ads_failed,
             "duration_seconds": duration
+        }
+
+    def sync_comments_for_single_post(
+        self,
+        db: Any,
+        user_id: int,
+        post_id: str
+    ) -> Dict[str, Any]:
+        """
+        Focused single-post diagnostic sync.
+        1. Extract Page ID.
+        2. Find matching connected Page SocialAccount.
+        3. Fetch comments from Meta Graph API.
+        4. Save comments to database.
+        5. Verify persistence and API query availability.
+        """
+        from app.models.social_account import SocialAccount
+        from app.repositories.social_comment_repository import social_comment_repo
+        page_id = extract_page_id_from_post_id(post_id)
+        if not page_id:
+            return {"success": False, "reason": "INVALID_POST_ID", "post_id": post_id}
+
+        matched_sa = db.query(SocialAccount).filter(
+            SocialAccount.user_id == user_id,
+            SocialAccount.platform == "facebook",
+            SocialAccount.status == "CONNECTED",
+            SocialAccount.account_id == page_id
+        ).first()
+
+        if not matched_sa:
+            return {"success": False, "reason": "PAGE_NOT_CONNECTED", "post_id": post_id, "page_id": page_id}
+
+        access_token = decrypt_token(matched_sa.access_token) if matched_sa.access_token else None
+        if not access_token:
+            return {"success": False, "reason": "INVALID_TOKEN", "post_id": post_id, "social_account_id": matched_sa.id}
+
+        raw_comments_res = self.fetch_comments_for_facebook_post(
+            post_id=post_id,
+            access_token=access_token,
+            page_id=page_id,
+            return_details=True
+        )
+
+        comments_data, err_details = raw_comments_res if isinstance(raw_comments_res, tuple) else (raw_comments_res, {})
+        saved_count = 0
+
+        for raw_c in (comments_data or []):
+            ext_c_id = raw_c.get("id")
+            if not ext_c_id:
+                continue
+            rec = social_comment_repo.create_or_get_existing(
+                db=db,
+                user_id=user_id,
+                social_account_id=matched_sa.id,
+                platform="facebook",
+                external_comment_id=ext_c_id,
+                external_post_id=post_id,
+                comment_text=raw_c.get("message"),
+                commenter_name=(raw_c.get("from") or {}).get("name")
+            )
+            if rec and getattr(rec, "id", None):
+                saved_count += 1
+
+        db_comments = social_comment_repo.get_by_user_id(db=db, user_id=user_id, platform="facebook")
+        api_queryable_count = len([c for c in db_comments if c.external_post_id == post_id])
+
+        return {
+            "success": True,
+            "post_id": post_id,
+            "page_id": page_id,
+            "social_account_id": matched_sa.id,
+            "http_status": err_details.get("status_code", 200),
+            "comments_fetched": len(comments_data or []),
+            "comments_saved": saved_count,
+            "api_queryable_comments": api_queryable_count
         }
 
 
