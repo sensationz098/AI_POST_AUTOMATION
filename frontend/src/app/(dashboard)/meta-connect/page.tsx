@@ -6,7 +6,7 @@ import {
   ChevronRight, ExternalLink, RefreshCw, AlertCircle,
   Loader2, Unlink, Link2, Edit3, Sparkles, Key, Lock, ArrowRight,
   Megaphone, Globe, DollarSign, ChevronDown, Layers, FileText, Check, HelpCircle,
-  Search, ChevronLeft, Filter, X
+  Search, ChevronLeft, Filter, X, MessageSquare
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { SocialAccount, MetaAdAccount, MetaAd } from '@/lib/types';
@@ -225,6 +225,32 @@ export default function MetaConnectPage() {
       setAdSyncError(prev => ({ ...prev, [adAccountId]: errMsg }));
     } finally {
       setIsSyncingAds(prev => ({ ...prev, [adAccountId]: false }));
+    }
+  };
+
+  // Sync comments for Meta Ads of a specific Ad Account
+  const [isSyncingAdComments, setIsSyncingAdComments] = useState<Record<string, boolean>>({});
+  const [adCommentSyncSuccess, setAdCommentSyncSuccess] = useState<Record<string, string | null>>({});
+  const [adCommentSyncError, setAdCommentSyncError] = useState<Record<string, string | null>>({});
+
+  const handleSyncCommentsForAccount = async (adAccountId: string) => {
+    setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: true }));
+    setAdCommentSyncError(prev => ({ ...prev, [adAccountId]: null }));
+    setAdCommentSyncSuccess(prev => ({ ...prev, [adAccountId]: null }));
+    try {
+      const res = await apiClient.post(`/meta/ad-accounts/${adAccountId}/comments/sync`);
+      if (res.data?.success) {
+        const fetched = res.data.comments_fetched ?? 0;
+        const newComments = res.data.new_comments ?? 0;
+        const msg = res.data.message || `Comments synced: ${fetched} fetched from Meta Graph API (${newComments} new saved).`;
+        setAdCommentSyncSuccess(prev => ({ ...prev, [adAccountId]: msg }));
+      }
+    } catch (e: any) {
+      console.error(`Failed to sync comments for account ${adAccountId}:`, e);
+      const errMsg = e?.response?.data?.detail || 'Failed to sync Meta Ad comments. Please try again.';
+      setAdCommentSyncError(prev => ({ ...prev, [adAccountId]: errMsg }));
+    } finally {
+      setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: false }));
     }
   };
 
@@ -714,6 +740,20 @@ export default function MetaConnectPage() {
 
                     <div className="flex items-center space-x-2 flex-shrink-0">
                       <button
+                        onClick={() => handleSyncCommentsForAccount(acctId)}
+                        disabled={isSyncingAdComments[acctId] || syncing || loading}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 hover:text-white border border-indigo-700/60 font-medium text-xs transition flex items-center space-x-1.5 disabled:opacity-50"
+                        title="Fetch user comments from Meta Graph API for all backing ad posts"
+                      >
+                        {isSyncingAdComments[acctId] ? (
+                          <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+                        ) : (
+                          <MessageSquare className="w-3 h-3 text-indigo-400" />
+                        )}
+                        <span>{isSyncingAdComments[acctId] ? 'Syncing Comments...' : 'Sync Comments'}</span>
+                      </button>
+
+                      <button
                         onClick={() => handleSyncAdsForAccount(acctId)}
                         disabled={syncing || loading}
                         className="px-3 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 text-white font-medium text-xs transition flex items-center space-x-1.5 disabled:opacity-50"
@@ -737,6 +777,20 @@ export default function MetaConnectPage() {
                   </div>
 
                   {/* Sync Feedback messages */}
+                  {adCommentSyncSuccess[acctId] && (
+                    <div className="mx-4 mt-3 bg-indigo-950/40 border border-indigo-800/60 rounded-lg p-2.5 text-xs text-indigo-300 flex items-center space-x-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                      <span>{adCommentSyncSuccess[acctId]}</span>
+                    </div>
+                  )}
+
+                  {adCommentSyncError[acctId] && (
+                    <div className="mx-4 mt-3 bg-rose-950/40 border border-rose-800/60 rounded-lg p-2.5 text-xs text-rose-300 flex items-center space-x-2">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                      <span>{adCommentSyncError[acctId]}</span>
+                    </div>
+                  )}
+
                   {sSuccess && (
                     <div className="mx-4 mt-3 bg-emerald-950/40 border border-emerald-800/60 rounded-lg p-2.5 text-xs text-emerald-300 flex items-center space-x-2">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />

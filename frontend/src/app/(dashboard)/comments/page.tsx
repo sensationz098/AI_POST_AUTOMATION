@@ -25,17 +25,19 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
-import { SocialComment, SocialCommentPostContext, SocialCommentAccountContext, SocialCommentReply, SocialAccount } from '@/lib/types';
+import { SocialComment, SocialCommentPostContext, SocialCommentAccountContext, SocialCommentReply, SocialAccount, MetaAdCommentContext } from '@/lib/types';
 
 // 1. Post Context Preview Component
 function PostContextCard({
   post,
   account,
+  metaAd,
   externalPostId,
   platform,
 }: {
   post?: SocialCommentPostContext | null;
   account?: SocialCommentAccountContext | null;
+  metaAd?: MetaAdCommentContext | null;
   externalPostId?: string;
   platform: 'facebook' | 'instagram';
 }) {
@@ -44,9 +46,9 @@ function PostContextCard({
 
   return (
     <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800/90 flex flex-col space-y-2 mb-3.5 shadow-sm">
-      {/* Receiving Social Account Header Badge */}
+      {/* Receiving Social Account & Meta Ad Header Badge */}
       <div className="flex items-center justify-between text-[11px] pb-2 border-b border-slate-900/80">
-        <div className="flex items-center space-x-2 min-w-0">
+        <div className="flex items-center space-x-2 min-w-0 flex-wrap gap-y-1">
           {isFb ? (
             <span className="px-2 py-0.5 rounded bg-blue-950/90 text-blue-300 border border-blue-800/70 font-bold text-[10px] flex items-center space-x-1 flex-shrink-0">
               <Facebook className="w-3 h-3 fill-current" />
@@ -61,6 +63,12 @@ function PostContextCard({
           <span className="font-semibold text-slate-200 truncate">
             {isFb ? accountDisplayName : `@${accountDisplayName.replace(/^@/, '')}`}
           </span>
+
+          {metaAd && (
+            <span className="px-2 py-0.5 rounded bg-purple-950/90 text-purple-300 border border-purple-800/70 font-bold text-[10px] flex items-center space-x-1 flex-shrink-0" title={`Campaign: ${metaAd.campaign_name || 'N/A'}`}>
+              <span>🎯 Meta Ad: {metaAd.name || metaAd.meta_ad_id}</span>
+            </span>
+          )}
         </div>
 
         {post?.permalink ? (
@@ -496,7 +504,7 @@ function CommentConversation({
   return (
     <div className="linear-panel p-4 sm:p-5 rounded-2xl border border-slate-800/80 hover:border-slate-700 transition space-y-3 bg-slate-900/40 shadow-lg">
       {/* POST CONTEXT HEADER */}
-      <PostContextCard post={comment.post} account={comment.account} externalPostId={comment.external_post_id} platform={comment.platform} />
+      <PostContextCard post={comment.post} account={comment.account} metaAd={comment.meta_ad} externalPostId={comment.external_post_id} platform={comment.platform} />
 
       {/* ORIGINAL CUSTOMER COMMENT */}
       <OriginalComment comment={comment} formatDate={formatDate} />

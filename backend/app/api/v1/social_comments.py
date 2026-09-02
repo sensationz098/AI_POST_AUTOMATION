@@ -28,13 +28,14 @@ def get_user_social_comments(
     limit: int = Query(50, ge=1, le=100),
     platform: Optional[str] = Query(None, description="Filter by platform ('facebook' or 'instagram')"),
     social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
+    meta_ad_id: Optional[int] = Query(None, description="Filter by Meta Ad DB ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Retrieve ingested social comments for the authenticated user only.
     Enforces user isolation and excludes any sensitive credentials.
-    Supports filtering by specific social_account_id owned by current_user.
+    Supports filtering by specific social_account_id owned by current_user and meta_ad_id.
     Filters out owner reply echoes at DB and API response layers.
     Includes persistent, chronologically sorted reply history for each comment.
     Includes associated post context (local DB or Meta Graph API fallback).
@@ -53,7 +54,8 @@ def get_user_social_comments(
         skip=skip,
         limit=limit,
         platform=platform,
-        social_account_id=social_account_id
+        social_account_id=social_account_id,
+        meta_ad_id=meta_ad_id
     )
     
     # Defensive Protection: Fetch external_reply_ids for current_user to exclude any webhook echoes
@@ -268,9 +270,22 @@ def get_user_social_comments(
             key=lambda r: r.created_at or datetime.min.replace(tzinfo=timezone.utc)
         )
 
+        meta_ad_obj = None
+        if c.meta_ad:
+            meta_ad_obj = {
+                "id": c.meta_ad.id,
+                "meta_ad_id": c.meta_ad.meta_ad_id,
+                "name": c.meta_ad.name,
+                "campaign_name": c.meta_ad.campaign_name,
+                "adset_name": c.meta_ad.adset_name,
+                "effective_status": c.meta_ad.effective_status
+            }
+
         res_list.append({
             "id": c.id,
             "social_account_id": c.social_account_id,
+            "meta_ad_id": c.meta_ad_id,
+            "meta_ad": meta_ad_obj,
             "account": acc_obj,
             "platform": c.platform,
             "external_comment_id": c.external_comment_id,

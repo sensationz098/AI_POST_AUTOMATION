@@ -513,3 +513,34 @@ def get_meta_ads_for_account(
     return ads
 
 
+@router.post("/ad-accounts/{ad_account_id}/comments/sync", response_model=Dict[str, Any])
+def sync_meta_ad_comments(
+    ad_account_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Synchronize user comments for Meta Ads in a specific Ad Account.
+    Validates tenant ownership of the Meta Ad Account.
+    Fetches comments from backing Facebook post IDs (effective_object_story_id) and persists them in DB.
+    Returns clear sync metrics.
+    """
+    from app.repositories.meta_ad_account_repository import meta_ad_account_repo
+
+    # 1. Verify user ownership of Ad Account
+    ad_acct = meta_ad_account_repo.get_by_user_and_ad_account_id(db, current_user.id, ad_account_id)
+    if not ad_acct:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meta Ad Account not found or access denied."
+        )
+
+    # 2. Execute Comment Sync via meta_service
+    res = meta_service.sync_comments_for_meta_ads(
+        db=db,
+        user_id=current_user.id,
+        meta_ad_account_id=ad_account_id
+    )
+    return res
+
+

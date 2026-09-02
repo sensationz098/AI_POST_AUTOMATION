@@ -34,8 +34,11 @@ class SocialComment(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    meta_ad_id = Column(Integer, ForeignKey("meta_ads.id", ondelete="SET NULL"), nullable=True, index=True)
+
     user = relationship("User", backref="social_comments")
     social_account = relationship("SocialAccount", back_populates="comments")
+    meta_ad = relationship("MetaAd", back_populates="comments")
     replies = relationship(
         "SocialCommentReply",
         back_populates="comment",

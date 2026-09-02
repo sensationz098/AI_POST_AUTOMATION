@@ -179,9 +179,20 @@ export interface SocialCommentPostContext {
   source?: 'local' | 'meta';
 }
 
+export interface MetaAdCommentContext {
+  id: number;
+  meta_ad_id: string;
+  name?: string | null;
+  campaign_name?: string | null;
+  adset_name?: string | null;
+  effective_status?: string | null;
+}
+
 export interface SocialComment {
   id: number;
   social_account_id: number;
+  meta_ad_id?: number | null;
+  meta_ad?: MetaAdCommentContext | null;
   account?: SocialCommentAccountContext | null;
   platform: 'facebook' | 'instagram';
   external_comment_id: string;
