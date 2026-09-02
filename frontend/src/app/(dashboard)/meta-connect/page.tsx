@@ -228,8 +228,9 @@ export default function MetaConnectPage() {
     }
   };
 
-  // Sync comments for Meta Ads of a specific Ad Account
+  // Sync comments for Meta Ads of a specific Ad Account with async background job polling
   const [isSyncingAdComments, setIsSyncingAdComments] = useState<Record<string, boolean>>({});
+  const [adCommentSyncProgress, setAdCommentSyncProgress] = useState<Record<string, string | null>>({});
   const [adCommentSyncSuccess, setAdCommentSyncSuccess] = useState<Record<string, string | null>>({});
   const [adCommentSyncError, setAdCommentSyncError] = useState<Record<string, string | null>>({});
 
@@ -237,19 +238,102 @@ export default function MetaConnectPage() {
     setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: true }));
     setAdCommentSyncError(prev => ({ ...prev, [adAccountId]: null }));
     setAdCommentSyncSuccess(prev => ({ ...prev, [adAccountId]: null }));
+    setAdCommentSyncProgress(prev => ({ ...prev, [adAccountId]: 'Initializing comment sync job...' }));
+
     try {
-      const res = await apiClient.post(`/meta/ad-accounts/${adAccountId}/comments/sync`);
-      if (res.data?.success) {
-        const fetched = res.data.comments_fetched ?? 0;
-        const newComments = res.data.new_comments ?? 0;
-        const msg = res.data.message || `Comments synced: ${fetched} fetched from Meta Graph API (${newComments} new saved).`;
+      const initRes = await apiClient.post(`/meta/ad-accounts/${adAccountId}/comments/sync`);
+      const initData = initRes.data;
+
+      console.log(`[FRONTEND_META_COMMENT_SYNC_INIT] ad_account_id=${adAccountId}`, initData);
+
+      // 1. Direct synchronous completion handler (if backend returned immediately completed result)
+      if (initData?.status === 'COMPLETED' || (!initData?.job_id && initData?.success)) {
+        const resObj = initData.result || initData;
+        const fetched = resObj.comments_fetched ?? 0;
+        const saved = resObj.comments_saved ?? resObj.new_comments ?? 0;
+        const reused = resObj.comments_reused ?? resObj.existing_comments ?? 0;
+        const msg = resObj.message || `Comments synced: ${fetched} fetched from Meta Graph API (${saved} new saved, ${reused} existing reused).`;
         setAdCommentSyncSuccess(prev => ({ ...prev, [adAccountId]: msg }));
+        setAdCommentSyncProgress(prev => ({ ...prev, [adAccountId]: null }));
+        setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: false }));
+        return;
       }
+
+      // 2. Direct error response from initial dispatch
+      if (initData?.success === false) {
+        const errMsg = initData.message || 'Failed to start Meta Ad comment sync. Please check permissions.';
+        setAdCommentSyncError(prev => ({ ...prev, [adAccountId]: errMsg }));
+        setAdCommentSyncProgress(prev => ({ ...prev, [adAccountId]: null }));
+        setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: false }));
+        return;
+      }
+
+      // 3. Background Job Polling Loop
+      const jobId = initData.job_id;
+      if (!jobId) {
+        throw new Error('No job_id returned by comment sync endpoint');
+      }
+
+      const pollInterval = 2000;
+      const maxPollAttempts = 300; // 10 minutes max polling window
+      let attempts = 0;
+
+      while (attempts < maxPollAttempts) {
+        attempts++;
+        await new Promise(r => setTimeout(r, pollInterval));
+
+        try {
+          const statusRes = await apiClient.get(`/meta/ad-accounts/${adAccountId}/comments/sync/status/${jobId}`);
+          const jobData = statusRes.data;
+
+          console.log(`[FRONTEND_META_COMMENT_SYNC_POLL] attempt=${attempts} job_id=${jobId} status=${jobData.status}`, jobData);
+
+          if (jobData.status === 'PROCESSING') {
+            const processed = jobData.ads_processed ?? 0;
+            const total = jobData.ads_total ?? 0;
+            const saved = jobData.comments_saved ?? 0;
+            setAdCommentSyncProgress(prev => ({
+              ...prev,
+              [adAccountId]: `Syncing comments... ${processed} / ${total} ads processed (${saved} new saved)`
+            }));
+            continue;
+          }
+
+          if (jobData.status === 'COMPLETED') {
+            const resObj = jobData.result || jobData;
+            const fetched = resObj.comments_fetched ?? jobData.comments_fetched ?? 0;
+            const saved = resObj.comments_saved ?? jobData.comments_saved ?? 0;
+            const reused = resObj.comments_reused ?? jobData.comments_reused ?? 0;
+            const msg = jobData.message || `Comments synced: ${fetched} fetched from Meta Graph API (${saved} new saved, ${reused} existing reused).`;
+            setAdCommentSyncSuccess(prev => ({ ...prev, [adAccountId]: msg }));
+            setAdCommentSyncProgress(prev => ({ ...prev, [adAccountId]: null }));
+            setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: false }));
+            return;
+          }
+
+          if (jobData.status === 'FAILED') {
+            const errMsg = jobData.message || jobData.error_details?.error_message || 'Comment sync failed.';
+            setAdCommentSyncError(prev => ({ ...prev, [adAccountId]: errMsg }));
+            setAdCommentSyncProgress(prev => ({ ...prev, [adAccountId]: null }));
+            setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: false }));
+            return;
+          }
+        } catch (pollErr: any) {
+          console.warn(`[FRONTEND_META_COMMENT_SYNC_POLL_WARN] attempt ${attempts} failed:`, pollErr);
+          // Continue polling on transient network hiccups during background job
+        }
+      }
+
+      // Timeout polling loop
+      setAdCommentSyncError(prev => ({ ...prev, [adAccountId]: 'Comment sync polling timed out. Background job is still running.' }));
+      setAdCommentSyncProgress(prev => ({ ...prev, [adAccountId]: null }));
+      setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: false }));
+
     } catch (e: any) {
       console.error(`Failed to sync comments for account ${adAccountId}:`, e);
-      const errMsg = e?.response?.data?.detail || 'Failed to sync Meta Ad comments. Please try again.';
+      const errMsg = e?.response?.data?.detail || e?.message || 'Failed to sync Meta Ad comments. Please try again.';
       setAdCommentSyncError(prev => ({ ...prev, [adAccountId]: errMsg }));
-    } finally {
+      setAdCommentSyncProgress(prev => ({ ...prev, [adAccountId]: null }));
       setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: false }));
     }
   };
@@ -777,6 +861,13 @@ export default function MetaConnectPage() {
                   </div>
 
                   {/* Sync Feedback messages */}
+                  {adCommentSyncProgress[acctId] && (
+                    <div className="mx-4 mt-3 bg-blue-950/40 border border-blue-800/60 rounded-lg p-2.5 text-xs text-blue-300 flex items-center space-x-2 animate-pulse">
+                      <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin flex-shrink-0" />
+                      <span>{adCommentSyncProgress[acctId]}</span>
+                    </div>
+                  )}
+
                   {adCommentSyncSuccess[acctId] && (
                     <div className="mx-4 mt-3 bg-indigo-950/40 border border-indigo-800/60 rounded-lg p-2.5 text-xs text-indigo-300 flex items-center space-x-2">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />

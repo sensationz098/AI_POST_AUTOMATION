@@ -2724,7 +2724,8 @@ class MetaGraphService:
         self,
         db: Any,
         user_id: int,
-        meta_ad_account_id: str
+        meta_ad_account_id: str,
+        job_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Synchronize Meta Ad comments for all ads belonging to user_id and meta_ad_account_id.
@@ -2970,6 +2971,22 @@ class MetaGraphService:
             except Exception as post_loop_err:
                 logger.error(f"[META_AD_COMMENT_SYNC] Unexpected error processing post_id={pid}: {post_loop_err}")
                 ads_failed += len(ad_list)
+            finally:
+                if job_id:
+                    try:
+                        from app.services.meta_comment_job_manager import job_manager
+                        processed_ads = (posts_processed_count * len(ad_list)) if len(ad_list) > 0 else posts_processed_count
+                        job_manager.update_progress(
+                            job_id=job_id,
+                            ads_processed=posts_processed_count,
+                            comments_fetched=total_comments_fetched,
+                            comments_saved=new_comments_inserted,
+                            comments_reused=existing_comments_reused,
+                            comments_skipped=comments_skipped_count,
+                            errors=ads_failed + permission_errors_count
+                        )
+                    except Exception:
+                        pass
 
         duration = round(time.time() - sync_start, 2)
         total_skipped = ads_skipped + pages_not_connected_count + invalid_post_ids_count

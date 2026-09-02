@@ -3,7 +3,7 @@ import secrets
 import logging
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote
-from fastapi import APIRouter, Depends, status, Query, HTTPException
+from fastapi import APIRouter, Depends, status, Query, HTTPException, BackgroundTasks, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
@@ -513,19 +513,51 @@ def get_meta_ads_for_account(
     return ads
 
 
-@router.post("/ad-accounts/{ad_account_id}/comments/sync", response_model=Dict[str, Any])
+def run_background_comment_sync(job_id: str, user_id: int, ad_account_id: str, db: Optional[Session] = None):
+    import app.core.database as db_mod
+    from app.services.meta_comment_job_manager import job_manager
+    should_close = False
+    if db is None:
+        db_bg = db_mod.SessionLocal()
+        should_close = True
+    else:
+        db_bg = db
+
+    try:
+        res = meta_service.sync_comments_for_meta_ads(
+            db=db_bg,
+            user_id=user_id,
+            meta_ad_account_id=ad_account_id,
+            job_id=job_id
+        )
+        job_manager.complete_job(job_id, res)
+        logger.info(f"[META_AD_COMMENT_SYNC_JOB_COMPLETE] job_id={job_id} status={res.get('success')}")
+    except Exception as e:
+        logger.error(f"[META_AD_COMMENT_SYNC_JOB_FAILED] job_id={job_id} error={e}")
+        job_manager.fail_job(job_id, str(e))
+    finally:
+        if should_close:
+            db_bg.close()
+
+
+@router.post("/ad-accounts/{ad_account_id}/comments/sync", response_model=Dict[str, Any], status_code=status.HTTP_202_ACCEPTED)
 def sync_meta_ad_comments(
     ad_account_id: str,
+    background_tasks: BackgroundTasks,
+    response: Response,
+    run_sync: bool = Query(False, description="Run synchronously if True, else run in background (HTTP 202)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     Synchronize user comments for Meta Ads in a specific Ad Account.
     Validates tenant ownership of the Meta Ad Account.
-    Fetches comments from backing Facebook post IDs (effective_object_story_id) and persists them in DB.
-    Returns clear sync metrics.
+    Runs asynchronously via background task (returning HTTP 202 with job_id) by default.
+    Pass run_sync=true for synchronous execution.
     """
     from app.repositories.meta_ad_account_repository import meta_ad_account_repo
+    from app.repositories.meta_ad_repository import meta_ad_repo
+    from app.services.meta_comment_job_manager import job_manager
 
     # 1. Verify user ownership of Ad Account
     ad_acct = meta_ad_account_repo.get_by_user_and_ad_account_id(db, current_user.id, ad_account_id)
@@ -535,12 +567,79 @@ def sync_meta_ad_comments(
             detail="Meta Ad Account not found or access denied."
         )
 
-    # 2. Execute Comment Sync via meta_service
-    res = meta_service.sync_comments_for_meta_ads(
-        db=db,
-        user_id=current_user.id,
-        meta_ad_account_id=ad_account_id
-    )
-    return res
+    # If run_sync=True requested, execute synchronously for legacy/direct callers
+    if run_sync:
+        response.status_code = status.HTTP_200_OK
+        res = meta_service.sync_comments_for_meta_ads(
+            db=db,
+            user_id=current_user.id,
+            meta_ad_account_id=ad_account_id
+        )
+        logger.info(f"[META_COMMENT_SYNC_RESPONSE] user_id={current_user.id} ad_account_id={ad_account_id} res_success={res.get('success')}")
+        return res
+
+    # Count ads for progress tracking
+    ads = meta_ad_repo.get_by_ad_account(db, current_user.id, ad_account_id)
+    ads_total = len(ads)
+
+    # Initialize background job
+    job = job_manager.create_job(user_id=current_user.id, ad_account_id=ad_account_id, ads_total=ads_total)
+    job_id = job["job_id"]
+
+    background_tasks.add_task(run_background_comment_sync, job_id, current_user.id, ad_account_id)
+
+    logger.info(f"[META_COMMENT_SYNC_DISPATCHED] user_id={current_user.id} ad_account_id={ad_account_id} job_id={job_id} ads_total={ads_total}")
+
+    return {
+        "success": True,
+        "job_id": job_id,
+        "status": "PROCESSING",
+        "ads_total": ads_total,
+        "ads_processed": 0,
+        "comments_fetched": 0,
+        "comments_saved": 0,
+        "comments_reused": 0,
+        "comments_skipped": 0,
+        "errors": 0,
+        "message": "Meta Ad comment synchronization job started."
+    }
+
+
+@router.get("/ad-accounts/{ad_account_id}/comments/sync/status/{job_id}", response_model=Dict[str, Any])
+def get_meta_ad_comments_sync_status(
+    ad_account_id: str,
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Poll status and progress of an asynchronous Meta Ad comment synchronization job.
+    Enforces user ownership validation.
+    """
+    from app.services.meta_comment_job_manager import job_manager
+
+    job = job_manager.get_job(job_id, current_user.id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sync job not found or access denied."
+        )
+
+    return {
+        "success": True,
+        "job_id": job["job_id"],
+        "status": job["status"],
+        "ads_total": job["ads_total"],
+        "ads_processed": job["ads_processed"],
+        "comments_fetched": job["comments_fetched"],
+        "comments_saved": job["comments_saved"],
+        "comments_reused": job["comments_reused"],
+        "comments_skipped": job["comments_skipped"],
+        "errors": job["errors"],
+        "message": job["message"],
+        "result": job.get("result"),
+        "error_details": job.get("error_details")
+    }
+
 
 
