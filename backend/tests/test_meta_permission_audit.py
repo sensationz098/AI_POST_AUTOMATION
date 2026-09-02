@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 from app.services.meta_service import meta_service
 from app.models.meta_ad import MetaAd
 from app.models.social_account import SocialAccount
+from app.repositories.social_account_repository import social_account_repo
 
 def test_meta_oauth_scopes_include_pages_read_user_content():
     """Verify that pages_read_user_content is included in REQUIRED_META_OAUTH_SCOPES."""
@@ -13,6 +14,14 @@ def test_meta_oauth_scopes_include_pages_read_user_content():
     assert "pages_manage_posts" in meta_service.REQUIRED_META_OAUTH_SCOPES
     assert "pages_manage_engagement" in meta_service.REQUIRED_META_OAUTH_SCOPES
     assert "ads_read" in meta_service.REQUIRED_META_OAUTH_SCOPES
+
+
+def test_get_authorization_url_includes_pages_read_user_content():
+    """Verify the generated Meta OAuth authorization URL explicitly contains pages_read_user_content in scope query param."""
+    auth_url = meta_service.get_authorization_url(state="test_state_123")
+    assert "pages_read_user_content" in auth_url
+    assert "response_type=code" in auth_url
+    assert "state=test_state_123" in auth_url
 
 
 def test_fetch_comments_handles_permission_error_code_10(caplog):
@@ -53,7 +62,7 @@ def test_fetch_comments_handles_permission_error_code_10(caplog):
 
 
 def test_sync_comments_for_meta_ads_returns_structured_permission_error(caplog):
-    """Verify sync_comments_for_meta_ads returns structured error payload when Meta permission fails."""
+    """Verify sync_comments_for_meta_ads returns structured error payload with reconnect_required when Meta permission fails."""
     mock_db = MagicMock()
 
     # Mock ad record
@@ -106,6 +115,8 @@ def test_sync_comments_for_meta_ads_returns_structured_permission_error(caplog):
             )
 
     assert result["success"] is False
+    assert result["reconnect_required"] is True
+    assert "pages_read_user_content" in result["reason"]
     assert result["error_type"] == "META_PERMISSION_ERROR"
     assert result["missing_permission"] == "pages_read_user_content"
     assert result["requires_app_review"] is True
@@ -114,3 +125,81 @@ def test_sync_comments_for_meta_ads_returns_structured_permission_error(caplog):
 
     # Verify no raw token logged
     assert RAW_PAGE_TOKEN not in caplog.text
+
+
+def test_evaluate_social_account_token_health_missing_permission():
+    """Verify evaluate_social_account_token_health flags reconnect_required when pages_read_user_content is missing."""
+    mock_acc = MagicMock(spec=SocialAccount)
+    mock_acc.id = 10
+    mock_acc.platform = "facebook"
+    mock_acc.account_id = "711139875422034"
+    mock_acc.account_name = "Test Brand Page"
+    mock_acc.token_type = "page_access_token"
+    mock_acc.status = "CONNECTED"
+    mock_acc.access_token = "mock_encrypted_tok"
+    mock_acc.created_at = None
+    mock_acc.updated_at = None
+    mock_acc.metadata_json = {
+        "granted_scopes": ["pages_show_list", "pages_read_engagement"]  # Missing pages_read_user_content
+    }
+
+    with patch("app.services.meta_service.decrypt_token", return_value="mock_decrypted"), \
+         patch.object(meta_service, "debug_token", return_value={"scopes": ["pages_show_list", "pages_read_engagement"]}):
+        health = meta_service.evaluate_social_account_token_health(mock_acc)
+
+    assert health["reconnect_required"] is True
+    assert health["scope_checks"]["pages_read_user_content"] is False
+    assert health["scope_checks"]["pages_read_engagement"] is True
+
+
+def test_evaluate_social_account_token_health_with_all_permissions():
+    """Verify evaluate_social_account_token_health returns reconnect_required=False when pages_read_user_content is present."""
+    mock_acc = MagicMock(spec=SocialAccount)
+    mock_acc.id = 11
+    mock_acc.platform = "facebook"
+    mock_acc.account_id = "711139875422034"
+    mock_acc.account_name = "Test Brand Page"
+    mock_acc.token_type = "page_access_token"
+    mock_acc.status = "CONNECTED"
+    mock_acc.access_token = "mock_encrypted_tok"
+    mock_acc.created_at = None
+    mock_acc.updated_at = None
+    mock_acc.metadata_json = {
+        "granted_scopes": ["pages_show_list", "pages_read_engagement", "pages_read_user_content", "pages_manage_engagement"]
+    }
+
+    with patch("app.services.meta_service.decrypt_token", return_value="mock_decrypted"), \
+         patch.object(meta_service, "debug_token", return_value={"scopes": ["pages_show_list", "pages_read_engagement", "pages_read_user_content", "pages_manage_engagement"]}):
+        health = meta_service.evaluate_social_account_token_health(mock_acc)
+
+    assert health["reconnect_required"] is False
+    assert health["scope_checks"]["pages_read_user_content"] is True
+
+
+def test_reconnect_updates_existing_social_account_token():
+    """Verify social_account_repo.create_or_update updates an existing SocialAccount row instead of duplicating it."""
+    mock_db = MagicMock()
+    existing_acc = MagicMock(spec=SocialAccount)
+    existing_acc.id = 101
+    existing_acc.account_id = "711139875422034"
+    existing_acc.platform = "facebook"
+    existing_acc.access_token = "old_encrypted_token"
+    existing_acc.metadata_json = {"granted_scopes": ["pages_show_list"]}
+
+    with patch.object(social_account_repo, "get_by_account_id", return_value=existing_acc), \
+         patch("app.repositories.social_account_repository.encrypt_token", return_value="new_encrypted_token"):
+        updated = social_account_repo.create_or_update(
+            db=mock_db,
+            user_id=1,
+            platform="facebook",
+            account_id="711139875422034",
+            account_name="Updated Page Name",
+            access_token="new_raw_token_abc",
+            metadata_json={"granted_scopes": ["pages_read_user_content"]}
+        )
+
+    assert updated.id == 101
+    assert updated.access_token == "new_encrypted_token"
+    assert updated.account_name == "Updated Page Name"
+    mock_db.add.assert_not_called()  # Proves existing record was updated, not newly added!
+    mock_db.commit.assert_called_once()

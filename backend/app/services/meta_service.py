@@ -966,13 +966,12 @@ class MetaGraphService:
             "client_id": settings.META_APP_ID or "YOUR_META_APP_ID",
             "redirect_uri": settings.META_OAUTH_REDIRECT_URI,
             "state": state,
-            "response_type": "code"
+            "response_type": "code",
+            "scope": scope_str
         }
         if settings.META_CONFIG_ID:
             params["config_id"] = settings.META_CONFIG_ID
             params["override_default_response_type"] = "true"
-        else:
-            params["scope"] = scope_str
 
         logger.info(f"[META_OAUTH] Initiating Meta OAuth authorization flow with requested scopes: {scope_str}")
 
@@ -2478,6 +2477,100 @@ class MetaGraphService:
             logger.error(f"[META_POST_FETCH] Exception fetching FB post {post_id}: {e}")
             return None
 
+    def debug_token(self, token: str) -> Dict[str, Any]:
+        """
+        Inspect a Meta access token using GET /debug_token to verify validity, scope grants, and token type.
+        NEVER logs raw or decrypted access tokens.
+        """
+        if not token:
+            return {"is_valid": False, "reason": "Empty token"}
+
+        raw_token = decrypt_token(token) or token
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            return {
+                "is_valid": True,
+                "type": "PAGE",
+                "scopes": self.REQUIRED_META_OAUTH_SCOPES,
+                "is_sandbox": True
+            }
+
+        app_access_token = f"{settings.META_APP_ID}|{settings.META_APP_SECRET}" if (settings.META_APP_ID and settings.META_APP_SECRET) else raw_token
+        url = f"{self.BASE_URL}/debug_token"
+        params = {
+            "input_token": raw_token,
+            "access_token": app_access_token
+        }
+
+        try:
+            res = requests.get(url, params=params, timeout=10)
+            if res.status_code == 200:
+                data = res.json().get("data", {})
+                return {
+                    "is_valid": data.get("is_valid", False),
+                    "type": data.get("type"),
+                    "app_id": data.get("app_id"),
+                    "data_access_expires_at": data.get("data_access_expires_at"),
+                    "expires_at": data.get("expires_at"),
+                    "scopes": data.get("scopes", []),
+                    "user_id": data.get("user_id")
+                }
+            else:
+                err_msg = res.json().get("error", {}).get("message", res.text[:200])
+                logger.warning(f"[META_TOKEN_DEBUG] debug_token returned HTTP {res.status_code}: {err_msg}")
+                return {"is_valid": False, "error": err_msg, "status_code": res.status_code}
+        except Exception as e:
+            logger.error(f"[META_TOKEN_DEBUG] Exception during debug_token: {e}")
+            return {"is_valid": False, "error": str(e)}
+
+    def evaluate_social_account_token_health(self, acc: Any) -> Dict[str, Any]:
+        """
+        Evaluate token validity, timestamps, and scope grants for a connected SocialAccount.
+        Returns safe diagnostic metadata without exposing access tokens.
+        """
+        raw_token = decrypt_token(acc.access_token) if acc.access_token else None
+        token_valid = bool(raw_token)
+        meta_dict = dict(acc.metadata_json or {})
+        granted_scopes = meta_dict.get("granted_scopes") or []
+
+        live_debug = {}
+        if raw_token and not raw_token.startswith("sandbox") and not raw_token.startswith("mock"):
+            live_debug = self.debug_token(raw_token)
+
+        active_scopes = live_debug.get("scopes") or granted_scopes or []
+        has_pages_show_list = "pages_show_list" in active_scopes
+        has_pages_read_engagement = "pages_read_engagement" in active_scopes
+        has_pages_read_user_content = "pages_read_user_content" in active_scopes
+        has_pages_manage_engagement = "pages_manage_engagement" in active_scopes
+
+        reconnect_req = not has_pages_read_user_content
+
+        return {
+            "social_account_id": acc.id,
+            "platform": acc.platform,
+            "facebook_page_id": acc.account_id,
+            "account_name": acc.account_name,
+            "token_type": acc.token_type or "page_access_token",
+            "status": acc.status,
+            "token_valid": token_valid,
+            "created_at": acc.created_at.isoformat() if acc.created_at else None,
+            "updated_at": acc.updated_at.isoformat() if acc.updated_at else None,
+            "granted_scopes": active_scopes,
+            "scope_checks": {
+                "pages_show_list": has_pages_show_list,
+                "pages_read_engagement": has_pages_read_engagement,
+                "pages_read_user_content": has_pages_read_user_content,
+                "pages_manage_engagement": has_pages_manage_engagement
+            },
+            "reconnect_required": reconnect_req,
+            "reconnect_reason": "Facebook connection must be re-authorized to grant pages_read_user_content" if reconnect_req else None,
+            "live_debug_info": {
+                "is_valid": live_debug.get("is_valid", token_valid),
+                "type": live_debug.get("type"),
+                "expires_at": live_debug.get("expires_at")
+            }
+        }
+
     def fetch_comments_for_facebook_post(
         self,
         post_id: str,
@@ -2808,6 +2901,8 @@ class MetaGraphService:
 
             return {
                 "success": False,
+                "reconnect_required": True,
+                "reason": "Facebook connection must be re-authorized to grant pages_read_user_content",
                 "error_type": "META_PERMISSION_ERROR",
                 "missing_permission": "pages_read_user_content",
                 "requires_app_review": True,
