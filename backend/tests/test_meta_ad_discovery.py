@@ -415,8 +415,8 @@ def test_no_sensitive_tokens_in_ad_sync_and_get_responses(
                 del app.dependency_overrides[get_current_user]
 
 
-# 14. Lightweight Ads fetch requests basic fields only (no nested creative expansions)
-def test_fetch_ads_lightweight_fields_only():
+# 14. Ads fetch requests nested creative fields inline
+def test_fetch_ads_nested_creative_fields():
     with patch("requests.get") as mock_get:
         mock_res = MagicMock()
         mock_res.status_code = 200
@@ -424,8 +424,12 @@ def test_fetch_ads_lightweight_fields_only():
             "data": [
                 {
                     "id": "12020582928371",
-                    "name": "Lightweight Ad",
-                    "creative": {"id": "cr_123", "name": "Creative 123"}
+                    "name": "Nested Creative Ad",
+                    "creative": {
+                        "id": "cr_123",
+                        "name": "Creative 123",
+                        "effective_object_story_id": "109823471029481_12020582928371"
+                    }
                 }
             ],
             "paging": {}
@@ -439,9 +443,10 @@ def test_fetch_ads_lightweight_fields_only():
         args, kwargs = mock_get.call_args
         requested_fields = kwargs["params"]["fields"]
 
-        assert "creative{id,name}" in requested_fields
-        assert "object_story_spec" not in requested_fields
-        assert "asset_feed_spec" not in requested_fields
+        assert "creative{" in requested_fields
+        assert "effective_object_story_id" in requested_fields
+        assert "object_story_spec" in requested_fields
+        assert "asset_feed_spec" in requested_fields
 
 
 # 15. Fetch Creative separately requests lightweight creative fields (no asset_feed_spec)
@@ -630,4 +635,130 @@ def test_bulk_db_persistence_idempotency(db_session: Session, ad_test_user: User
     # Check total records in DB for this account & user (must still be 5, no duplicates)
     all_db_ads = meta_ad_repo.get_by_ad_account(db_session, ad_test_user.id, "act_100200300")
     assert len(all_db_ads) == 5
+
+
+# 21. Inline creative data prevents fallback API calls
+def test_inline_creative_prevents_fallback_api_call():
+    inline_ads = [
+        {
+            "id": f"inline_ad_{i}",
+            "name": f"Inline Ad {i}",
+            "creative": {
+                "id": f"inline_cr_{i}",
+                "effective_object_story_id": f"109823471029481_{i}"
+            }
+        }
+        for i in range(5)
+    ]
+
+    with patch.object(meta_service, "fetch_creatives_batch") as mock_batch:
+        result = meta_service.process_creative_enrichment("token", inline_ads)
+        metrics = result["metrics"]
+
+        assert metrics["ads_fetched"] == 5
+        assert metrics["inline_creatives_resolved"] == 5
+        assert metrics["creatives_requiring_fallback"] == 0
+        assert metrics["creative_cache_hits"] == 0
+        mock_batch.assert_not_called()
+
+
+# 22. Hybrid inline resolution with fallback for missing creative data
+def test_mixed_inline_and_fallback_creatives():
+    mixed_ads = [
+        # 3 ads with inline creative data
+        {"id": "ad_in_1", "creative": {"id": "cr_in_1", "effective_object_story_id": "109823471029481_101"}},
+        {"id": "ad_in_2", "creative": {"id": "cr_in_2", "effective_object_story_id": "109823471029481_102"}},
+        {"id": "ad_in_3", "creative": {"id": "cr_in_3", "effective_object_story_id": "109823471029481_103"}},
+        # 2 ads missing inline data (only basic id)
+        {"id": "ad_missing_1", "creative": {"id": "cr_miss_1"}},
+        {"id": "ad_missing_2", "creative": {"id": "cr_miss_2"}}
+    ]
+
+    fallback_return = {
+        "cr_miss_1": {"id": "cr_miss_1", "effective_object_story_id": "109823471029481_201"},
+        "cr_miss_2": {"id": "cr_miss_2", "effective_object_story_id": "109823471029481_202"}
+    }
+
+    with patch.object(meta_service, "fetch_creatives_batch", return_value=fallback_return) as mock_batch:
+        result = meta_service.process_creative_enrichment("token", mixed_ads)
+        metrics = result["metrics"]
+
+        assert metrics["ads_fetched"] == 5
+        assert metrics["inline_creatives_resolved"] == 3
+        assert metrics["creatives_requiring_fallback"] == 2
+        assert metrics["fallback_creatives_enriched"] == 2
+
+        mock_batch.assert_called_once()
+        args, kwargs = mock_batch.call_args
+        requested_ids = args[1]
+        assert set(requested_ids) == {"cr_miss_1", "cr_miss_2"}
+
+
+# 23. DB Cache Hit prevents API fallback for existing mapped ads
+def test_db_creative_cache_hit_prevents_api_fallback(db_session: Session, ad_test_user: User):
+    # Create existing mapped DB record
+    ad_data = {"id": "ad_db_1", "name": "DB Cached Ad", "creative": {"id": "cr_db_1"}}
+    mapped_info = {
+        "creative_id": "cr_db_1",
+        "facebook_page_id": "109823471029481",
+        "facebook_post_id": "109823471029481_9999",
+        "engagement_object_type": "FACEBOOK_POST",
+        "engagement_object_id": "109823471029481_9999",
+        "mapping_status": "MAPPED"
+    }
+    meta_ad_repo.upsert(db_session, ad_test_user.id, "act_100200300", ad_data, mapped_info)
+
+    existing_ads = meta_ad_repo.get_by_ad_account(db_session, ad_test_user.id, "act_100200300")
+
+    # Incoming ad has missing inline data (only id)
+    new_incoming_ads = [{"id": "ad_db_1", "name": "DB Cached Ad", "creative": {"id": "cr_db_1"}}]
+
+    with patch.object(meta_service, "fetch_creatives_batch") as mock_batch:
+        result = meta_service.process_creative_enrichment("token", new_incoming_ads, existing_ads=existing_ads)
+        metrics = result["metrics"]
+
+        assert metrics["ads_fetched"] == 1
+        assert metrics["inline_creatives_resolved"] == 0
+        assert metrics["creative_cache_hits"] == 1
+        assert metrics["creatives_requiring_fallback"] == 0
+        mock_batch.assert_not_called()
+
+
+# 24. Observability metrics returned in sync API response
+def test_observability_metrics_in_sync_response(
+    client: TestClient,
+    db_session: Session,
+    ad_test_user: User,
+    user1_social_account: SocialAccount,
+    user1_ad_account: MetaAdAccount
+):
+    from app.main import app
+    app.dependency_overrides[get_current_user] = lambda: ad_test_user
+
+    mock_ads = [
+        {
+            "id": "ad_obs_1",
+            "name": "Obs Ad 1",
+            "creative": {
+                "id": "cr_obs_1",
+                "effective_object_story_id": "109823471029481_8888"
+            }
+        }
+    ]
+
+    with patch.object(meta_service, "fetch_ads_for_ad_account", return_value=mock_ads):
+        try:
+            res = client.post(f"/api/v1/meta/ad-accounts/{user1_ad_account.meta_ad_account_id}/ads/sync")
+            assert res.status_code == 200
+            data = res.json()
+
+            assert data["success"] is True
+            assert data["ads_fetched"] == 1
+            assert data["inline_creatives_resolved"] == 1
+            assert data["creatives_requiring_fallback"] == 0
+            assert data["creative_cache_hits"] == 0
+        finally:
+            if get_current_user in app.dependency_overrides:
+                del app.dependency_overrides[get_current_user]
+
 
