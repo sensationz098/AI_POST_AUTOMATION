@@ -105,10 +105,11 @@ class SocialAccountRepository:
             acc_db_id = acc.id
 
             try:
-                # 1. Clean up dependent SocialCommentReplies, SocialComments, and PublishingJobs in deterministic order
+                # 1. Clean up dependent SocialCommentReplies, SocialComments, PublishingJobs, and ExternalPostContexts in deterministic order
                 from app.models.social_comment import SocialComment
                 from app.models.social_comment_reply import SocialCommentReply
                 from app.models.publishing_batch import PublishingJob
+                from app.models.external_post_context import ExternalPostContext
 
                 comment_ids = [c[0] for c in db.query(SocialComment.id).filter(SocialComment.social_account_id == acc_db_id).all()]
                 if comment_ids:
@@ -116,6 +117,7 @@ class SocialAccountRepository:
                     db.query(SocialComment).filter(SocialComment.social_account_id == acc_db_id).delete(synchronize_session=False)
 
                 db.query(PublishingJob).filter(PublishingJob.social_account_id == acc_db_id).delete(synchronize_session=False)
+                db.query(ExternalPostContext).filter(ExternalPostContext.social_account_id == acc_db_id).delete(synchronize_session=False)
 
                 # 2. Delete social account record
                 db.delete(acc)
@@ -169,10 +171,11 @@ class SocialAccountRepository:
         acc_ids = [a.id for a in accounts]
 
         try:
-            # 1. Clean up dependent SocialCommentReplies, SocialComments, and PublishingJobs in deterministic order
+            # 1. Clean up dependent SocialCommentReplies, SocialComments, PublishingJobs, and ExternalPostContexts in deterministic order
             from app.models.social_comment import SocialComment
             from app.models.social_comment_reply import SocialCommentReply
             from app.models.publishing_batch import PublishingJob
+            from app.models.external_post_context import ExternalPostContext
 
             comment_ids = [c[0] for c in db.query(SocialComment.id).filter(SocialComment.social_account_id.in_(acc_ids)).all()]
             if comment_ids:
@@ -180,6 +183,7 @@ class SocialAccountRepository:
                 db.query(SocialComment).filter(SocialComment.social_account_id.in_(acc_ids)).delete(synchronize_session=False)
 
             db.query(PublishingJob).filter(PublishingJob.social_account_id.in_(acc_ids)).delete(synchronize_session=False)
+            db.query(ExternalPostContext).filter(ExternalPostContext.social_account_id.in_(acc_ids)).delete(synchronize_session=False)
 
             # 2. Delete all social accounts
             count = db.query(SocialAccount).filter(SocialAccount.user_id == user_id).delete(synchronize_session=False)
