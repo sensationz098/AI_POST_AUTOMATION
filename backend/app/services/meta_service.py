@@ -2482,20 +2482,33 @@ class MetaGraphService:
         self,
         post_id: str,
         access_token: str,
-        limit: int = 100
-    ) -> List[Dict[str, Any]]:
+        limit: int = 100,
+        page_id: Optional[str] = None,
+        return_details: bool = False
+    ) -> Union[List[Dict[str, Any]], Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
         """
         Fetch comments for a Facebook backing Page Post (or ad creative post) via GET /{post_id}/comments.
         Supports cursor-based pagination with a safety limit of up to 10 pages (max 1000 comments per post).
-        Gracefully catches API errors without raising exceptions.
+        Gracefully catches API errors without raising exceptions and returns structured error metadata if requested.
+        NEVER logs raw or decrypted access tokens.
         """
+        empty_err_details = {
+            "status_code": 200,
+            "error_code": None,
+            "error_subcode": None,
+            "error_message": None,
+            "error_type": None,
+            "is_permission_error": False,
+            "missing_permission": None
+        }
+
         if not post_id or not access_token:
-            return []
+            return ([], empty_err_details) if return_details else []
 
         raw_token = decrypt_token(access_token) or access_token
         is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
         if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
-            return [
+            mock_comments = [
                 {
                     "id": f"{post_id}_mock_c1",
                     "message": "Is this class available online?",
@@ -2503,6 +2516,7 @@ class MetaGraphService:
                     "from": {"id": "user_101", "name": "Jane Smith"}
                 }
             ]
+            return (mock_comments, empty_err_details) if return_details else mock_comments
 
         comments_acc = []
         next_url = f"{self.BASE_URL}/{post_id}/comments"
@@ -2513,6 +2527,7 @@ class MetaGraphService:
         }
         page_count = 0
         max_pages = 10
+        err_details = dict(empty_err_details)
 
         try:
             while next_url and page_count < max_pages:
@@ -2523,8 +2538,40 @@ class MetaGraphService:
 
                 page_count += 1
                 if res.status_code != 200:
-                    err_msg = res.json().get("error", {}).get("message", "Graph API Error") if res.headers.get("content-type", "").startswith("application/json") else res.text[:200]
-                    logger.warning(f"[META_AD_COMMENT_SYNC] Post {post_id} comment fetch returned status {res.status_code}: {err_msg}")
+                    err_details["status_code"] = res.status_code
+                    if res.headers.get("content-type", "").startswith("application/json"):
+                        err_json = res.json().get("error", {})
+                        err_details["error_code"] = err_json.get("code")
+                        err_details["error_subcode"] = err_json.get("error_subcode")
+                        err_details["error_message"] = err_json.get("message", "Graph API Error")
+                        err_details["error_type"] = err_json.get("type")
+                    else:
+                        err_details["error_message"] = res.text[:200]
+
+                    err_msg = err_details["error_message"] or ""
+                    err_code = err_details["error_code"]
+                    err_subcode = err_details["error_subcode"]
+
+                    # Check for missing pages_read_user_content or Page Public Content Access feature approval
+                    is_perm_err = (
+                        err_code == 10 or
+                        "pages_read_user_content" in err_msg or
+                        "Page Public Content Access" in err_msg or
+                        err_details.get("error_type") == "OAuthException" and err_code in [10, 200, 298]
+                    )
+                    if is_perm_err:
+                        err_details["is_permission_error"] = True
+                        err_details["missing_permission"] = "pages_read_user_content"
+                        logger.warning(
+                            f"[META_AD_COMMENT_SYNC] PERMISSION ERROR for post={post_id} (page_id={page_id}): "
+                            f"HTTP {res.status_code} | code={err_code} | subcode={err_subcode} | msg={err_msg}. "
+                            f"Meta Graph API requires 'pages_read_user_content' permission or 'Page Public Content Access' feature."
+                        )
+                    else:
+                        logger.warning(
+                            f"[META_AD_COMMENT_SYNC] Post {post_id} (page_id={page_id}) comment fetch returned "
+                            f"HTTP {res.status_code} | code={err_code} | subcode={err_subcode} | msg={err_msg}"
+                        )
                     break
 
                 res_data = res.json()
@@ -2535,9 +2582,11 @@ class MetaGraphService:
                 paging = res_data.get("paging", {})
                 next_url = paging.get("next")
         except Exception as e:
-            logger.error(f"[META_AD_COMMENT_SYNC] Error fetching comments for post {post_id}: {e}")
+            logger.error(f"[META_AD_COMMENT_SYNC] Exception fetching comments for post {post_id} (page_id={page_id}): {e}")
+            err_details["status_code"] = 500
+            err_details["error_message"] = str(e)
 
-        return comments_acc
+        return (comments_acc, err_details) if return_details else comments_acc
 
     def sync_comments_for_meta_ads(
         self,
@@ -2548,8 +2597,9 @@ class MetaGraphService:
         """
         Synchronize Meta Ad comments for all ads belonging to user_id and meta_ad_account_id.
         Deduplicates post requests by facebook_post_id across shared ad creatives.
-        Processes in bounded batches with clear logging and metrics.
-        Returns comprehensive sync metrics dictionary.
+        Uses Page Access Tokens associated with facebook_page_id where available.
+        Performs safe diagnostic logging without exposing tokens.
+        Returns structured results including error details if Meta permission error occurs.
         """
         import time
         from app.models.meta_ad import MetaAd
@@ -2610,6 +2660,8 @@ class MetaGraphService:
         existing_comments_reused = 0
         ads_no_comments = 0
         ads_failed = 0
+        permission_errors_count = 0
+        last_permission_err_details: Optional[Dict[str, Any]] = None
 
         for pid, ad_list in post_to_ads_map.items():
             primary_ad = ad_list[0]
@@ -2620,17 +2672,50 @@ class MetaGraphService:
                 matched_sa = user_social_accounts[0]
 
             if not matched_sa:
-                logger.warning(f"[META_AD_COMMENT_SYNC] No connected SocialAccount found for user {user_id} to sync post {pid}")
+                logger.warning(f"[META_AD_COMMENT_SYNC] No connected SocialAccount found for user_id={user_id} to sync post_id={pid} (page_id={page_id})")
                 ads_failed += len(ad_list)
                 continue
 
             access_token = decrypt_token(matched_sa.access_token) if matched_sa.access_token else None
             if not access_token:
-                logger.warning(f"[META_AD_COMMENT_SYNC] Invalid token for SocialAccount #{matched_sa.id}")
+                logger.warning(f"[META_AD_COMMENT_SYNC] Invalid/missing token for SocialAccount #{matched_sa.id} (platform={matched_sa.platform}, account_id={matched_sa.account_id})")
                 ads_failed += len(ad_list)
                 continue
 
-            comments_data = self.fetch_comments_for_facebook_post(post_id=pid, access_token=access_token)
+            is_exact_page_match = bool(page_id and matched_sa.account_id == page_id)
+            token_source_desc = f"SocialAccount #{matched_sa.id} (platform={matched_sa.platform}, account_id={matched_sa.account_id}, token_type={matched_sa.token_type or 'page_access_token'}, exact_page_match={is_exact_page_match})"
+
+            logger.info(
+                f"[META_AD_COMMENT_SYNC] Fetching comments for post_id={pid} (page_id={page_id}, ad_count={len(ad_list)}) "
+                f"using {token_source_desc}"
+            )
+
+            raw_comments_res = self.fetch_comments_for_facebook_post(
+                post_id=pid,
+                access_token=access_token,
+                page_id=page_id,
+                return_details=True
+            )
+
+            if isinstance(raw_comments_res, tuple) and len(raw_comments_res) == 2:
+                comments_data, err_details = raw_comments_res
+            elif isinstance(raw_comments_res, list):
+                comments_data = raw_comments_res
+                err_details = {"status_code": 200, "is_permission_error": False}
+            else:
+                comments_data = []
+                err_details = {"status_code": 200, "is_permission_error": False}
+
+            if err_details.get("is_permission_error"):
+                permission_errors_count += 1
+                last_permission_err_details = err_details
+                ads_failed += len(ad_list)
+                continue
+
+            if err_details.get("status_code", 200) != 200:
+                ads_failed += len(ad_list)
+                continue
+
             total_comments_fetched += len(comments_data)
 
             if not comments_data:
@@ -2710,8 +2795,35 @@ class MetaGraphService:
             f"ads_checked={total_ads_checked}, eligible_ads={len(ads_with_post_id)}, "
             f"comments_fetched={total_comments_fetched}, new_inserted={new_comments_inserted}, "
             f"existing_reused={existing_comments_reused}, ads_no_comments={ads_no_comments}, "
-            f"ads_failed={ads_failed}"
+            f"ads_failed={ads_failed}, permission_errors={permission_errors_count}"
         )
+
+        if permission_errors_count > 0:
+            err_msg_str = (
+                "Meta Graph API comment fetch failed due to missing 'pages_read_user_content' permission "
+                "or unapproved 'Page Public Content Access' Meta App feature."
+            )
+            if last_permission_err_details and last_permission_err_details.get("error_message"):
+                err_msg_str += f" Meta Error: {last_permission_err_details.get('error_message')}"
+
+            return {
+                "success": False,
+                "error_type": "META_PERMISSION_ERROR",
+                "missing_permission": "pages_read_user_content",
+                "requires_app_review": True,
+                "message": err_msg_str,
+                "ad_account_id": meta_ad_account_id,
+                "ads_checked": total_ads_checked,
+                "ads_with_engagement_posts": len(ads_with_post_id),
+                "ads_skipped_without_post_id": ads_skipped,
+                "comments_fetched": total_comments_fetched,
+                "new_comments": new_comments_inserted,
+                "existing_comments": existing_comments_reused,
+                "ads_with_no_comments": ads_no_comments,
+                "ads_failed": ads_failed,
+                "permission_errors": permission_errors_count,
+                "duration_seconds": duration
+            }
 
         return {
             "success": True,
