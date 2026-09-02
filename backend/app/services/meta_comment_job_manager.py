@@ -15,7 +15,14 @@ class MetaCommentSyncJobManager:
         self._jobs: Dict[str, Dict[str, Any]] = {}
         self._lock = Lock()
 
-    def create_job(self, user_id: int, ad_account_id: str, ads_total: int) -> Dict[str, Any]:
+    def create_job(
+        self,
+        user_id: int,
+        ad_account_id: str,
+        ads_total: int,
+        ads_matching_filter: int = 0,
+        status_filter: str = "ACTIVE"
+    ) -> Dict[str, Any]:
         job_id = f"job_sync_{uuid.uuid4().hex[:12]}"
         now_ts = time.time()
         job_data = {
@@ -23,7 +30,9 @@ class MetaCommentSyncJobManager:
             "user_id": user_id,
             "ad_account_id": ad_account_id,
             "status": "PROCESSING",
+            "status_filter": status_filter,
             "ads_total": ads_total,
+            "ads_matching_filter": ads_matching_filter,
             "ads_processed": 0,
             "comments_fetched": 0,
             "comments_saved": 0,
@@ -39,7 +48,7 @@ class MetaCommentSyncJobManager:
         }
         with self._lock:
             self._jobs[job_id] = job_data
-        logger.info(f"[JOB_MANAGER] Created sync job {job_id} for user_id={user_id}, ad_account_id={ad_account_id}, ads_total={ads_total}")
+        logger.info(f"[JOB_MANAGER] Created sync job {job_id} for user_id={user_id}, ad_account_id={ad_account_id}, ads_total={ads_total}, status_filter={status_filter}")
         return dict(job_data)
 
     def update_progress(
@@ -63,7 +72,7 @@ class MetaCommentSyncJobManager:
             job["comments_skipped"] = comments_skipped
             job["errors"] = errors
             job["updated_at"] = time.time()
-            job["message"] = f"Syncing comments... {ads_processed} / {job['ads_total']} ads processed ({comments_saved} new saved)."
+            job["message"] = f"Syncing comments... {ads_processed} / {job.get('ads_matching_filter', job['ads_total'])} ads processed ({comments_saved} new saved)."
 
     def complete_job(self, job_id: str, result: Dict[str, Any]) -> None:
         with self._lock:
@@ -73,7 +82,9 @@ class MetaCommentSyncJobManager:
             job["status"] = "COMPLETED" if result.get("success", True) else "FAILED"
             job["completed_at"] = time.time()
             job["updated_at"] = time.time()
-            job["ads_processed"] = result.get("ads_total", result.get("posts_processed", job["ads_processed"]))
+            job["status_filter"] = result.get("status_filter", job.get("status_filter", "ACTIVE"))
+            job["ads_matching_filter"] = result.get("ads_matching_filter", job.get("ads_matching_filter", 0))
+            job["ads_processed"] = result.get("ads_processed", result.get("posts_processed", job["ads_processed"]))
             job["comments_fetched"] = result.get("comments_fetched", job["comments_fetched"])
             job["comments_saved"] = result.get("comments_saved", job["comments_saved"])
             job["comments_reused"] = result.get("comments_reused", job["comments_reused"])

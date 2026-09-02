@@ -238,10 +238,10 @@ export default function MetaConnectPage() {
     setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: true }));
     setAdCommentSyncError(prev => ({ ...prev, [adAccountId]: null }));
     setAdCommentSyncSuccess(prev => ({ ...prev, [adAccountId]: null }));
-    setAdCommentSyncProgress(prev => ({ ...prev, [adAccountId]: 'Initializing comment sync job...' }));
+    setAdCommentSyncProgress(prev => ({ ...prev, [adAccountId]: 'Initializing active comment sync job...' }));
 
     try {
-      const initRes = await apiClient.post(`/meta/ad-accounts/${adAccountId}/comments/sync`);
+      const initRes = await apiClient.post(`/meta/ad-accounts/${adAccountId}/comments/sync?status=ACTIVE`);
       const initData = initRes.data;
 
       console.log(`[FRONTEND_META_COMMENT_SYNC_INIT] ad_account_id=${adAccountId}`, initData);
@@ -249,10 +249,11 @@ export default function MetaConnectPage() {
       // 1. Direct synchronous completion handler (if backend returned immediately completed result)
       if (initData?.status === 'COMPLETED' || (!initData?.job_id && initData?.success)) {
         const resObj = initData.result || initData;
+        const activeScanned = resObj.ads_matching_filter ?? resObj.ads_processed ?? 0;
+        const postsProc = resObj.posts_processed ?? 0;
         const fetched = resObj.comments_fetched ?? 0;
         const saved = resObj.comments_saved ?? resObj.new_comments ?? 0;
-        const reused = resObj.comments_reused ?? resObj.existing_comments ?? 0;
-        const msg = resObj.message || `Comments synced: ${fetched} fetched from Meta Graph API (${saved} new saved, ${reused} existing reused).`;
+        const msg = resObj.message || `Comment sync completed | Active ads scanned: ${activeScanned} | Posts processed: ${postsProc} | Comments fetched: ${fetched} (${saved} new saved)`;
         setAdCommentSyncSuccess(prev => ({ ...prev, [adAccountId]: msg }));
         setAdCommentSyncProgress(prev => ({ ...prev, [adAccountId]: null }));
         setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: false }));
@@ -290,21 +291,22 @@ export default function MetaConnectPage() {
 
           if (jobData.status === 'PROCESSING') {
             const processed = jobData.ads_processed ?? 0;
-            const total = jobData.ads_total ?? 0;
+            const total = jobData.ads_matching_filter ?? jobData.ads_total ?? 0;
             const saved = jobData.comments_saved ?? 0;
             setAdCommentSyncProgress(prev => ({
               ...prev,
-              [adAccountId]: `Syncing comments... ${processed} / ${total} ads processed (${saved} new saved)`
+              [adAccountId]: `Syncing active ad comments... ${processed} / ${total} active ads processed (${saved} new saved)`
             }));
             continue;
           }
 
           if (jobData.status === 'COMPLETED') {
             const resObj = jobData.result || jobData;
+            const activeScanned = resObj.ads_matching_filter ?? jobData.ads_matching_filter ?? resObj.ads_processed ?? 0;
+            const postsProc = resObj.posts_processed ?? 0;
             const fetched = resObj.comments_fetched ?? jobData.comments_fetched ?? 0;
             const saved = resObj.comments_saved ?? jobData.comments_saved ?? 0;
-            const reused = resObj.comments_reused ?? jobData.comments_reused ?? 0;
-            const msg = jobData.message || `Comments synced: ${fetched} fetched from Meta Graph API (${saved} new saved, ${reused} existing reused).`;
+            const msg = jobData.message || `Comment sync completed | Active ads scanned: ${activeScanned} | Posts processed: ${postsProc} | Comments fetched: ${fetched} (${saved} new saved)`;
             setAdCommentSyncSuccess(prev => ({ ...prev, [adAccountId]: msg }));
             setAdCommentSyncProgress(prev => ({ ...prev, [adAccountId]: null }));
             setIsSyncingAdComments(prev => ({ ...prev, [adAccountId]: false }));
@@ -827,14 +829,14 @@ export default function MetaConnectPage() {
                         onClick={() => handleSyncCommentsForAccount(acctId)}
                         disabled={isSyncingAdComments[acctId] || syncing || loading}
                         className="px-3 py-1.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 hover:text-white border border-indigo-700/60 font-medium text-xs transition flex items-center space-x-1.5 disabled:opacity-50"
-                        title="Fetch user comments from Meta Graph API for all backing ad posts"
+                        title="Fetch user comments from Meta Graph API for active backing ad posts"
                       >
                         {isSyncingAdComments[acctId] ? (
                           <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
                         ) : (
                           <MessageSquare className="w-3 h-3 text-indigo-400" />
                         )}
-                        <span>{isSyncingAdComments[acctId] ? 'Syncing Comments...' : 'Sync Comments'}</span>
+                        <span>{isSyncingAdComments[acctId] ? 'Syncing Active Comments...' : 'Sync Active Comments'}</span>
                       </button>
 
                       <button

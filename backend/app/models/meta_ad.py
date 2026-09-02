@@ -30,7 +30,7 @@ class MetaAd(Base):
     adset_id = Column(String(255), nullable=True)
     adset_name = Column(String(255), nullable=True)
 
-    effective_status = Column(String(50), nullable=True)  # e.g. "ACTIVE", "PAUSED", "ARCHIVED"
+    effective_status = Column(String(50), default="ACTIVE", nullable=True)  # e.g. "ACTIVE", "PAUSED", "ARCHIVED"
     configured_status = Column(String(50), nullable=True)
     creative_id = Column(String(255), nullable=True)
 

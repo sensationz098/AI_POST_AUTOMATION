@@ -68,7 +68,7 @@ def test_long_running_sync_background_job_polling(client, db_session):
     from app.api.v1 import meta as meta_api_mod
     orig_bg = meta_api_mod.run_background_comment_sync
 
-    with patch.object(meta_api_mod, "run_background_comment_sync", side_effect=lambda j, u_id, a_id, db=None: orig_bg(j, u_id, a_id, db=db_session)):
+    with patch.object(meta_api_mod, "run_background_comment_sync", side_effect=lambda *args, **kwargs: orig_bg(*args, **{**kwargs, "db": db_session})):
         with patch.object(meta_service, "fetch_comments_for_facebook_post", return_value=(mock_comments, {"status_code": 200})):
             init_res = client.post("/api/v1/meta/ad-accounts/act_async_102/comments/sync")
             assert init_res.status_code == 202

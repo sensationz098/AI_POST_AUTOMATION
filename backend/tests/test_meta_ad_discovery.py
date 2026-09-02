@@ -262,7 +262,7 @@ def test_ad_sync_is_idempotent(db_session: Session, ad_test_user: User, user1_ad
     assert rec2.effective_status == "PAUSED"
 
     # Verify no duplicates in database
-    ads_in_db = meta_ad_repo.get_by_ad_account(db_session, ad_test_user.id, user1_ad_account.meta_ad_account_id)
+    ads_in_db = meta_ad_repo.get_by_ad_account(db_session, ad_test_user.id, user1_ad_account.meta_ad_account_id, status_filter="ALL")
     assert len(ads_in_db) == 1
 
 
