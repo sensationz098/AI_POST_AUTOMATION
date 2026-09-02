@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Share2, CheckCircle2, Facebook, Instagram, ShieldCheck,
   ChevronRight, ExternalLink, RefreshCw, AlertCircle,
   Loader2, Unlink, Link2, Edit3, Sparkles, Key, Lock, ArrowRight,
-  Megaphone, Globe, DollarSign, ChevronDown, Layers, FileText, Check, HelpCircle
+  Megaphone, Globe, DollarSign, ChevronDown, Layers, FileText, Check, HelpCircle,
+  Search, ChevronLeft, Filter, X
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { SocialAccount, MetaAdAccount, MetaAd } from '@/lib/types';
@@ -30,6 +31,81 @@ export default function MetaConnectPage() {
   const [isLoadingAds, setIsLoadingAds] = useState<Record<string, boolean>>({});
   const [adSyncError, setAdSyncError] = useState<Record<string, string | null>>({});
   const [adSyncSuccess, setAdSyncSuccess] = useState<Record<string, string | null>>({});
+
+  // Meta Ads Search, Filter & Pagination State
+  const [adStatusFilter, setAdStatusFilter] = useState<string>('ALL');
+  const [adSearchQuery, setAdSearchQuery] = useState<string>('');
+  const [adCurrentPage, setAdCurrentPage] = useState<number>(1);
+  const AD_PAGE_SIZE = 25;
+
+  // Reset filter, search & pagination when expanded ad account changes
+  useEffect(() => {
+    setAdStatusFilter('ALL');
+    setAdSearchQuery('');
+    setAdCurrentPage(1);
+  }, [expandedAdAccountId]);
+
+  // Derived state for Meta Ads filtering & pagination
+  const currentExpandedAds = useMemo(() => {
+    if (!expandedAdAccountId) return [];
+    return adsByAccount[expandedAdAccountId] || [];
+  }, [expandedAdAccountId, adsByAccount]);
+
+  const uniqueStatuses = useMemo(() => {
+    const statusSet = new Set<string>();
+    currentExpandedAds.forEach(ad => {
+      if (ad.effective_status) {
+        statusSet.add(ad.effective_status);
+      }
+    });
+    return Array.from(statusSet).sort();
+  }, [currentExpandedAds]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: currentExpandedAds.length };
+    currentExpandedAds.forEach(ad => {
+      const st = ad.effective_status || 'UNKNOWN';
+      counts[st] = (counts[st] || 0) + 1;
+    });
+    return counts;
+  }, [currentExpandedAds]);
+
+  const filteredAds = useMemo(() => {
+    return currentExpandedAds.filter(ad => {
+      // 1. Status Filter
+      if (adStatusFilter !== 'ALL') {
+        const st = ad.effective_status || 'UNKNOWN';
+        if (st !== adStatusFilter) {
+          return false;
+        }
+      }
+
+      // 2. Search Filter
+      if (adSearchQuery.trim() !== '') {
+        const q = adSearchQuery.toLowerCase().trim();
+        const matchName = ad.name?.toLowerCase().includes(q);
+        const matchAdId = ad.meta_ad_id?.toLowerCase().includes(q);
+        const matchCampName = ad.campaign_name?.toLowerCase().includes(q);
+        const matchCampId = ad.campaign_id?.toLowerCase().includes(q);
+        const matchAdsetName = ad.adset_name?.toLowerCase().includes(q);
+        const matchAdsetId = ad.adset_id?.toLowerCase().includes(q);
+
+        if (!matchName && !matchAdId && !matchCampName && !matchCampId && !matchAdsetName && !matchAdsetId) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [currentExpandedAds, adStatusFilter, adSearchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAds.length / AD_PAGE_SIZE));
+  const validCurrentPage = Math.min(Math.max(1, adCurrentPage), totalPages);
+
+  const paginatedAds = useMemo(() => {
+    const start = (validCurrentPage - 1) * AD_PAGE_SIZE;
+    return filteredAds.slice(start, start + AD_PAGE_SIZE);
+  }, [filteredAds, validCurrentPage]);
 
   // OAuth State
   const [isOAuthStarting, setIsOAuthStarting] = useState(false);
@@ -687,7 +763,7 @@ export default function MetaConnectPage() {
 
                   {/* Expanded Ads & Engagement Mappings List */}
                   {isExpanded && (
-                    <div className="p-4 border-t border-slate-800/80 bg-slate-950/50 space-y-3">
+                    <div className="p-4 border-t border-slate-800/80 bg-slate-950/50 space-y-4">
                       {loading ? (
                         <div className="p-4 text-center space-y-2">
                           <Loader2 className="w-4 h-4 animate-spin text-indigo-400 mx-auto" />
@@ -700,100 +776,238 @@ export default function MetaConnectPage() {
                           <p className="text-[11px] text-slate-400">Click "Sync Ads" to fetch ads and extract engagement mappings from Meta.</p>
                         </div>
                       ) : (
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
-                            <span>Discovered Ads ({ads.length})</span>
-                            <span>Engagement Object Mappings</span>
-                          </div>
+                        <div className="space-y-4">
+                          {/* Search & Dynamic Status Filter Bar */}
+                          <div className="bg-slate-900/90 rounded-lg p-3 border border-slate-800/90 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              {/* Search Input */}
+                              <div className="relative flex-1 min-w-[220px]">
+                                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                <input
+                                  type="text"
+                                  value={adSearchQuery}
+                                  onChange={(e) => {
+                                    setAdSearchQuery(e.target.value);
+                                    setAdCurrentPage(1);
+                                  }}
+                                  placeholder="Search ads, campaigns or ad sets..."
+                                  className="w-full pl-9 pr-8 py-1.5 bg-slate-950/80 text-slate-200 placeholder-slate-500 rounded-md border border-slate-700/80 text-xs focus:outline-none focus:border-indigo-500 transition"
+                                />
+                                {adSearchQuery && (
+                                  <button
+                                    onClick={() => {
+                                      setAdSearchQuery('');
+                                      setAdCurrentPage(1);
+                                    }}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-0.5"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
 
-                          {ads.map((ad) => {
-                            const isMapped = ad.mapping_status === 'MAPPED';
-                            const isPartial = ad.mapping_status === 'PARTIALLY_MAPPED';
-
-                            return (
-                              <div key={ad.id} className="bg-slate-900/90 rounded-lg p-3 border border-slate-800/90 space-y-2">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                  <div className="space-y-0.5 min-w-0">
-                                    <div className="flex items-center space-x-2">
-                                      <h5 className="text-xs font-bold text-slate-100 truncate">{ad.name || 'Meta Ad'}</h5>
-                                      {ad.effective_status && (
-                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
-                                          {ad.effective_status}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] font-mono text-slate-400">
-                                      <span>Ad ID: {ad.meta_ad_id}</span>
-                                      {ad.campaign_name && <span>Campaign: {ad.campaign_name}</span>}
-                                      {ad.adset_name && <span>AdSet: {ad.adset_name}</span>}
-                                      {ad.creative_id && <span>Creative ID: {ad.creative_id}</span>}
-                                    </div>
-                                  </div>
-
-                                  {/* Mapping Status Badge */}
-                                  <span
-                                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold flex items-center space-x-1 border flex-shrink-0 self-start sm:self-center ${
-                                      isMapped
-                                        ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/70'
-                                        : isPartial
-                                        ? 'bg-amber-950/70 text-amber-300 border-amber-800/70'
-                                        : 'bg-slate-800/80 text-slate-400 border-slate-700/60'
+                              {/* Dynamic Status Filter Pills */}
+                              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                <button
+                                  onClick={() => {
+                                    setAdStatusFilter('ALL');
+                                    setAdCurrentPage(1);
+                                  }}
+                                  className={`px-2.5 py-1 rounded-md text-[11px] transition ${
+                                    adStatusFilter === 'ALL'
+                                      ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 border border-slate-700/60 font-medium'
+                                  }`}
+                                >
+                                  All ({statusCounts.ALL || 0})
+                                </button>
+                                {uniqueStatuses.map((st) => (
+                                  <button
+                                    key={st}
+                                    onClick={() => {
+                                      setAdStatusFilter(st);
+                                      setAdCurrentPage(1);
+                                    }}
+                                    className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition ${
+                                      adStatusFilter === st
+                                        ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 border border-slate-700/60 font-medium'
                                     }`}
                                   >
-                                    {isMapped ? (
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                    ) : isPartial ? (
-                                      <AlertCircle className="w-3 h-3 text-amber-400" />
-                                    ) : (
-                                      <HelpCircle className="w-3 h-3 text-slate-400" />
-                                    )}
-                                    <span>
-                                      {isMapped
-                                        ? 'Engagement Object Mapped'
-                                        : isPartial
-                                        ? 'Partially Mapped'
-                                        : 'No Engagement Object'}
-                                    </span>
-                                  </span>
-                                </div>
-
-                                {/* Engagement Object Details Box */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/60 text-[11px]">
-                                  {/* Facebook Engagement */}
-                                  <div className="bg-slate-950/60 p-2 rounded border border-slate-800/80 space-y-1">
-                                    <div className="flex items-center space-x-1.5 text-blue-400 font-semibold text-[10px]">
-                                      <Facebook className="w-3.5 h-3.5 text-blue-400" />
-                                      <span>Facebook Engagement Object</span>
-                                    </div>
-                                    {ad.facebook_post_id ? (
-                                      <div className="space-y-0.5 font-mono text-[10px] text-slate-300">
-                                        <div className="truncate"><span className="text-slate-500">Post ID:</span> {ad.facebook_post_id}</div>
-                                        {ad.facebook_page_id && <div className="truncate"><span className="text-slate-500">Page ID:</span> {ad.facebook_page_id}</div>}
-                                      </div>
-                                    ) : (
-                                      <p className="text-[10px] text-slate-500 italic">No Facebook Post linked</p>
-                                    )}
-                                  </div>
-
-                                  {/* Instagram Engagement */}
-                                  <div className="bg-slate-950/60 p-2 rounded border border-slate-800/80 space-y-1">
-                                    <div className="flex items-center space-x-1.5 text-pink-400 font-semibold text-[10px]">
-                                      <Instagram className="w-3.5 h-3.5 text-pink-400" />
-                                      <span>Instagram Engagement Object</span>
-                                    </div>
-                                    {ad.instagram_media_id ? (
-                                      <div className="space-y-0.5 font-mono text-[10px] text-slate-300">
-                                        <div className="truncate"><span className="text-slate-500">Media ID:</span> {ad.instagram_media_id}</div>
-                                        {ad.instagram_account_id && <div className="truncate"><span className="text-slate-500">IG Account ID:</span> {ad.instagram_account_id}</div>}
-                                      </div>
-                                    ) : (
-                                      <p className="text-[10px] text-slate-500 italic">No Instagram Media linked</p>
-                                    )}
-                                  </div>
-                                </div>
+                                    {st} ({statusCounts[st] || 0})
+                                  </button>
+                                ))}
                               </div>
-                            );
-                          })}
+                            </div>
+
+                            {/* Summary Bar */}
+                            <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/60 pt-2 px-0.5 gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold text-slate-300">
+                                  {filteredAds.length === 0
+                                    ? '0 ads found'
+                                    : `Showing ${
+                                        (validCurrentPage - 1) * AD_PAGE_SIZE + 1
+                                      }–${Math.min(
+                                        validCurrentPage * AD_PAGE_SIZE,
+                                        filteredAds.length
+                                      )} of ${filteredAds.length} ${
+                                        adStatusFilter !== 'ALL' ? `${adStatusFilter} ` : ''
+                                      }ads`}
+                                </span>
+                                {adSearchQuery.trim() !== '' && (
+                                  <span className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded text-[10px] italic">
+                                    matching "{adSearchQuery}"
+                                  </span>
+                                )}
+                              </div>
+
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                Total Synced: {currentExpandedAds.length}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Empty Filter Results State */}
+                          {filteredAds.length === 0 ? (
+                            <div className="p-6 text-center space-y-2 bg-slate-900/40 rounded-lg border border-slate-800/60">
+                              <Filter className="w-5 h-5 text-slate-500 mx-auto" />
+                              <p className="text-xs font-semibold text-slate-300">No Ads Match Filter Criteria</p>
+                              <p className="text-[11px] text-slate-400">
+                                Try adjusting your search query or status filter.
+                              </p>
+                              <button
+                                onClick={() => {
+                                  setAdStatusFilter('ALL');
+                                  setAdSearchQuery('');
+                                  setAdCurrentPage(1);
+                                }}
+                                className="mt-1 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 text-xs rounded-md border border-slate-700 transition"
+                              >
+                                Reset Filters
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {/* Render Paginated Cards */}
+                              {paginatedAds.map((ad) => {
+                                const isMapped = ad.mapping_status === 'MAPPED';
+                                const isPartial = ad.mapping_status === 'PARTIALLY_MAPPED';
+
+                                return (
+                                  <div key={ad.id} className="bg-slate-900/90 rounded-lg p-3 border border-slate-800/90 space-y-2">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                      <div className="space-y-0.5 min-w-0">
+                                        <div className="flex items-center space-x-2">
+                                          <h5 className="text-xs font-bold text-slate-100 truncate">{ad.name || 'Meta Ad'}</h5>
+                                          {ad.effective_status && (
+                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                                              {ad.effective_status}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] font-mono text-slate-400">
+                                          <span>Ad ID: {ad.meta_ad_id}</span>
+                                          {ad.campaign_name && <span>Campaign: {ad.campaign_name}</span>}
+                                          {ad.adset_name && <span>AdSet: {ad.adset_name}</span>}
+                                          {ad.creative_id && <span>Creative ID: {ad.creative_id}</span>}
+                                        </div>
+                                      </div>
+
+                                      {/* Mapping Status Badge */}
+                                      <span
+                                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold flex items-center space-x-1 border flex-shrink-0 self-start sm:self-center ${
+                                          isMapped
+                                            ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/70'
+                                            : isPartial
+                                            ? 'bg-amber-950/70 text-amber-300 border-amber-800/70'
+                                            : 'bg-slate-800/80 text-slate-400 border-slate-700/60'
+                                        }`}
+                                      >
+                                        {isMapped ? (
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                        ) : isPartial ? (
+                                          <AlertCircle className="w-3 h-3 text-amber-400" />
+                                        ) : (
+                                          <HelpCircle className="w-3 h-3 text-slate-400" />
+                                        )}
+                                        <span>
+                                          {isMapped
+                                            ? 'Engagement Object Mapped'
+                                            : isPartial
+                                            ? 'Partially Mapped'
+                                            : 'No Engagement Object'}
+                                        </span>
+                                      </span>
+                                    </div>
+
+                                    {/* Engagement Object Details Box */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/60 text-[11px]">
+                                      {/* Facebook Engagement */}
+                                      <div className="bg-slate-950/60 p-2 rounded border border-slate-800/80 space-y-1">
+                                        <div className="flex items-center space-x-1.5 text-blue-400 font-semibold text-[10px]">
+                                          <Facebook className="w-3.5 h-3.5 text-blue-400" />
+                                          <span>Facebook Engagement Object</span>
+                                        </div>
+                                        {ad.facebook_post_id ? (
+                                          <div className="space-y-0.5 font-mono text-[10px] text-slate-300">
+                                            <div className="truncate"><span className="text-slate-500">Post ID:</span> {ad.facebook_post_id}</div>
+                                            {ad.facebook_page_id && <div className="truncate"><span className="text-slate-500">Page ID:</span> {ad.facebook_page_id}</div>}
+                                          </div>
+                                        ) : (
+                                          <p className="text-[10px] text-slate-500 italic">No Facebook Post linked</p>
+                                        )}
+                                      </div>
+
+                                      {/* Instagram Engagement */}
+                                      <div className="bg-slate-950/60 p-2 rounded border border-slate-800/80 space-y-1">
+                                        <div className="flex items-center space-x-1.5 text-pink-400 font-semibold text-[10px]">
+                                          <Instagram className="w-3.5 h-3.5 text-pink-400" />
+                                          <span>Instagram Engagement Object</span>
+                                        </div>
+                                        {ad.instagram_media_id ? (
+                                          <div className="space-y-0.5 font-mono text-[10px] text-slate-300">
+                                            <div className="truncate"><span className="text-slate-500">Media ID:</span> {ad.instagram_media_id}</div>
+                                            {ad.instagram_account_id && <div className="truncate"><span className="text-slate-500">IG Account ID:</span> {ad.instagram_account_id}</div>}
+                                          </div>
+                                        ) : (
+                                          <p className="text-[10px] text-slate-500 italic">No Instagram Media linked</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+
+                              {/* Pagination Navigation Footer */}
+                              {totalPages > 1 && (
+                                <div className="flex items-center justify-between pt-3 border-t border-slate-800/80 text-xs">
+                                  <button
+                                    disabled={validCurrentPage <= 1}
+                                    onClick={() => setAdCurrentPage((prev) => Math.max(1, prev - 1))}
+                                    className="flex items-center space-x-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-slate-900 text-slate-300 rounded-md border border-slate-800 transition font-medium text-[11px]"
+                                  >
+                                    <ChevronLeft className="w-3.5 h-3.5" />
+                                    <span>Previous</span>
+                                  </button>
+
+                                  <span className="text-[11px] font-medium text-slate-400 font-mono">
+                                    Page <strong className="text-slate-200">{validCurrentPage}</strong> of{' '}
+                                    <strong className="text-slate-200">{totalPages}</strong>
+                                  </span>
+
+                                  <button
+                                    disabled={validCurrentPage >= totalPages}
+                                    onClick={() => setAdCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                                    className="flex items-center space-x-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-slate-900 text-slate-300 rounded-md border border-slate-800 transition font-medium text-[11px]"
+                                  >
+                                    <span>Next</span>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
