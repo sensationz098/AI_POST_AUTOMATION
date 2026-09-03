@@ -126,11 +126,13 @@ class SocialCommentRepository:
         social_account_id: Optional[int] = None,
         meta_ad_id: Optional[int] = None,
         external_post_id: Optional[str] = None,
-        is_ad: Optional[bool] = None
+        is_ad: Optional[bool] = None,
+        top_level_only: bool = True
     ) -> List[SocialComment]:
         """Fetch comments belonging to a specific user with pagination, excluding owner reply echoes."""
         from app.models.social_comment_reply import SocialCommentReply
         from sqlalchemy.orm import joinedload, selectinload
+        from sqlalchemy import or_
 
         reply_subquery = db.query(SocialCommentReply.external_reply_id).filter(
             SocialCommentReply.user_id == user_id,
@@ -148,6 +150,8 @@ class SocialCommentRepository:
             SocialComment.is_deleted.isnot(True),
             ~SocialComment.external_comment_id.in_(reply_subquery)
         )
+        if top_level_only:
+            query = query.filter(or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == ""))
         if platform:
             query = query.filter(SocialComment.platform == platform)
         if social_account_id:
@@ -171,10 +175,12 @@ class SocialCommentRepository:
         social_account_id: Optional[int] = None,
         meta_ad_id: Optional[int] = None,
         external_post_id: Optional[str] = None,
-        is_ad: Optional[bool] = None
+        is_ad: Optional[bool] = None,
+        top_level_only: bool = True
     ) -> int:
         """Count comments belonging to a specific user, excluding owner reply echoes."""
         from app.models.social_comment_reply import SocialCommentReply
+        from sqlalchemy import or_
 
         reply_subquery = db.query(SocialCommentReply.external_reply_id).filter(
             SocialCommentReply.user_id == user_id,
@@ -188,6 +194,8 @@ class SocialCommentRepository:
             SocialComment.is_deleted.isnot(True),
             ~SocialComment.external_comment_id.in_(reply_subquery)
         )
+        if top_level_only:
+            query = query.filter(or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == ""))
         if platform:
             query = query.filter(SocialComment.platform == platform)
         if social_account_id:
