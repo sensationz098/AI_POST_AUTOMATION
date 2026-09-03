@@ -487,3 +487,87 @@ def test_ad_comments_performance_303_items_and_edge_cases(client, db_session):
     r_unauth = client.get("/api/v1/social-comments/ads/41")
     assert r_unauth.status_code == 404
 
+
+def test_top_level_comments_and_nested_replies_separation(client, db_session):
+    """
+    Test enforcing strict hierarchy separation:
+    - Primary comment list contains ONLY top-level comments (parent_comment_id is None).
+    - Child comments (parent_comment_id = parent.external_comment_id) are nested in parent's replies list.
+    - Total comments count reflects only top-level parent comments.
+    """
+    user = User(email="hierarchy_user@example.com", full_name="Hierarchy User", hashed_password="pw", is_active=True)
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    sa = SocialAccount(user_id=user.id, platform="facebook", account_id="page_hier_1", account_name="Hier Page", access_token="tok")
+    db_session.add(sa)
+    db_session.commit()
+    db_session.refresh(sa)
+
+    ad = MetaAd(user_id=user.id, meta_ad_account_id="act_hier", meta_ad_id="ad_hier_99", name="Hierarchy Ad", facebook_post_id="post_hier_1")
+    db_session.add(ad)
+    db_session.commit()
+    db_session.refresh(ad)
+
+    # Top level parent comment 1
+    parent1 = SocialComment(
+        user_id=user.id, social_account_id=sa.id, platform="facebook",
+        external_comment_id="p1_ext_id", comment_text="Is this class online?",
+        webhook_object="ad_comment", meta_ad_id=ad.id, external_post_id="post_hier_1", parent_comment_id=None
+    )
+    # Top level parent comment 2
+    parent2 = SocialComment(
+        user_id=user.id, social_account_id=sa.id, platform="facebook",
+        external_comment_id="p2_ext_id", comment_text="What is the fee structure?",
+        webhook_object="ad_comment", meta_ad_id=ad.id, external_post_id="post_hier_1", parent_comment_id=None
+    )
+    db_session.add_all([parent1, parent2])
+    db_session.commit()
+
+    # Meta-ingested reply to parent 1
+    child1 = SocialComment(
+        user_id=user.id, social_account_id=sa.id, platform="facebook",
+        external_comment_id="c1_ext_id", comment_text="Yes, our classes are live online!",
+        webhook_object="ad_comment", meta_ad_id=ad.id, external_post_id="post_hier_1", parent_comment_id="p1_ext_id"
+    )
+    db_session.add(child1)
+
+    # Owner reply to parent 2 (SocialCommentReply)
+    from app.models.social_comment_reply import SocialCommentReply
+    owner_reply2 = SocialCommentReply(
+        comment_id=parent2.id, user_id=user.id, platform="facebook",
+        message="Please DM us for fee details.", status="SUCCESS", external_reply_id="owner_rep2_ext"
+    )
+    db_session.add(owner_reply2)
+    db_session.commit()
+
+    fastapi_app = client.app
+    from app.api.v1.deps import get_current_user
+    fastapi_app.dependency_overrides[get_current_user] = lambda: user
+
+    res = client.get(f"/api/v1/social-comments/ads/{ad.id}")
+    assert res.status_code == 200
+    data = res.json()
+
+    # Total comments must reflect 2 top-level parent comments
+    assert data["total_comments"] == 2
+    assert len(data["comments"]) == 2
+
+    # Verify primary list only contains parent comments
+    comment_texts = [c["comment_text"] for c in data["comments"]]
+    assert "Is this class online?" in comment_texts
+    assert "What is the fee structure?" in comment_texts
+    assert "Yes, our classes are live online!" not in comment_texts
+
+    # Find parent 1 in response and check nested reply
+    p1_res = next(c for c in data["comments"] if c["external_comment_id"] == "p1_ext_id")
+    assert len(p1_res["replies"]) == 1
+    assert p1_res["replies"][0]["message"] == "Yes, our classes are live online!"
+
+    # Find parent 2 in response and check nested owner reply
+    p2_res = next(c for c in data["comments"] if c["external_comment_id"] == "p2_ext_id")
+    assert len(p2_res["replies"]) == 1
+    assert p2_res["replies"][0]["message"] == "Please DM us for fee details."
+
+

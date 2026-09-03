@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.social_account import SocialAccount
+from app.models.social_comment import SocialComment
 from app.models.social_comment_reply import SocialCommentReply
 from app.repositories.social_comment_repository import social_comment_repo
 from app.core.security_encryption import decrypt_token
@@ -266,6 +267,26 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
                 db.rollback()
                 logger.error(f"[COMMENTS_API] Exception committing external post contexts: {commit_err}")
 
+    # Batch lookup child SocialComment records (Meta-ingested replies) for top-level comments
+    parent_ext_ids = {c.external_comment_id for c in comments if c.external_comment_id}
+    parent_int_ids = {str(c.id) for c in comments if c.id}
+    all_parent_ids = parent_ext_ids.union(parent_int_ids)
+
+    child_comments_map = {}
+    if all_parent_ids:
+        child_comments = db.query(SocialComment).filter(
+            SocialComment.user_id == current_user.id,
+            SocialComment.is_deleted.isnot(True),
+            SocialComment.parent_comment_id.in_(all_parent_ids)
+        ).all()
+        for child in child_comments:
+            if child.external_comment_id and child.external_comment_id in owner_reply_ids:
+                continue
+            p_id = child.parent_comment_id
+            if p_id not in child_comments_map:
+                child_comments_map[p_id] = []
+            child_comments_map[p_id].append(child)
+
     # Build final response list with account context & resolved post context
     res_list = []
     for c in comments:
@@ -332,10 +353,35 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
                         "source": "meta"
                     }
 
-        sorted_replies = sorted(
-            (c.replies or []),
-            key=lambda r: r.created_at or datetime.min.replace(tzinfo=timezone.utc)
-        )
+        # Combine SocialCommentReply records and child SocialComment records (Meta replies)
+        formatted_replies = []
+        for r in (c.replies or []):
+            formatted_replies.append({
+                "id": r.id,
+                "message": r.message,
+                "status": r.status,
+                "error_message": r.error_message,
+                "external_reply_id": r.external_reply_id,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "commenter_name": None,
+                "source": "owner"
+            })
+
+        meta_child_comments = child_comments_map.get(c.external_comment_id, []) + child_comments_map.get(str(c.id), [])
+        for child in meta_child_comments:
+            formatted_replies.append({
+                "id": child.id,
+                "message": child.comment_text,
+                "status": "SUCCESS",
+                "error_message": None,
+                "external_reply_id": child.external_comment_id,
+                "created_at": child.created_at.isoformat() if child.created_at else None,
+                "commenter_name": child.commenter_name,
+                "commenter_id": child.commenter_id,
+                "source": "meta"
+            })
+
+        formatted_replies.sort(key=lambda r: r.get("created_at") or "")
 
         meta_ad_obj = None
         if c.meta_ad:
@@ -368,17 +414,7 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
             "processing_status": c.processing_status,
             "created_at": c.created_at.isoformat() if c.created_at else None,
             "post": post_obj,
-            "replies": [
-                {
-                    "id": r.id,
-                    "message": r.message,
-                    "status": r.status,
-                    "error_message": r.error_message,
-                    "external_reply_id": r.external_reply_id,
-                    "created_at": r.created_at.isoformat() if r.created_at else None
-                }
-                for r in sorted_replies
-            ]
+            "replies": formatted_replies
         })
     return res_list
 

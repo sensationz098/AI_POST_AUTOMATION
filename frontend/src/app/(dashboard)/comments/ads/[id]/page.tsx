@@ -387,13 +387,20 @@ export default function AdCommentsPage() {
                     <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider">
                       Replies ({comment.replies.length})
                     </span>
-                    {comment.replies.map((reply: SocialCommentReply) => (
-                      <div key={reply.id} className="bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50 text-xs text-slate-300 flex items-start space-x-2">
+                    {comment.replies.map((reply: any) => (
+                      <div key={reply.id || reply.external_reply_id} className="bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50 text-xs text-slate-300 flex items-start space-x-2">
                         <CornerDownRight className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-slate-200">{reply.message}</p>
+                          <p className="text-slate-200">{reply.message || reply.comment_text}</p>
                           <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1">
-                            <span>{reply.created_at ? new Date(reply.created_at).toLocaleString() : 'Sent'}</span>
+                            <span>
+                              {reply.commenter_name && (
+                                <span className="text-indigo-300 font-semibold mr-2">
+                                  {reply.commenter_name}:
+                                </span>
+                              )}
+                              {reply.created_at ? new Date(reply.created_at).toLocaleString() : 'Sent'}
+                            </span>
                             <span className="text-emerald-400 font-semibold">● Sent to Meta</span>
                           </div>
                         </div>
