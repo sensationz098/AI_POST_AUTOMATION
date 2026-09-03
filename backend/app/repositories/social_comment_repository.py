@@ -34,8 +34,18 @@ class SocialCommentRepository:
         ).first()
 
         if existing:
+            is_updated = False
             if meta_ad_id is not None and existing.meta_ad_id is None:
                 existing.meta_ad_id = meta_ad_id
+                is_updated = True
+            if commenter_name and not existing.commenter_name:
+                existing.commenter_name = commenter_name
+                is_updated = True
+            if commenter_id and not existing.commenter_id:
+                existing.commenter_id = commenter_id
+                is_updated = True
+            if is_updated:
+                existing.updated_at = datetime.now(timezone.utc)
                 db.commit()
                 db.refresh(existing)
             return existing
@@ -71,10 +81,21 @@ class SocialCommentRepository:
                 SocialComment.platform == platform,
                 SocialComment.external_comment_id == external_comment_id
             ).first()
-            if ext and meta_ad_id is not None and ext.meta_ad_id is None:
-                ext.meta_ad_id = meta_ad_id
-                db.commit()
-                db.refresh(ext)
+            if ext:
+                is_updated = False
+                if meta_ad_id is not None and ext.meta_ad_id is None:
+                    ext.meta_ad_id = meta_ad_id
+                    is_updated = True
+                if commenter_name and not ext.commenter_name:
+                    ext.commenter_name = commenter_name
+                    is_updated = True
+                if commenter_id and not ext.commenter_id:
+                    ext.commenter_id = commenter_id
+                    is_updated = True
+                if is_updated:
+                    ext.updated_at = datetime.now(timezone.utc)
+                    db.commit()
+                    db.refresh(ext)
             return ext
 
     def get_by_user_id(

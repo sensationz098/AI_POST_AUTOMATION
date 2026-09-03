@@ -215,17 +215,23 @@ function OriginalComment({
   comment: SocialComment;
   formatDate: (iso?: string) => string;
 }) {
+  const rawName = comment.commenter_name?.trim();
+  const rawId = comment.commenter_id?.trim();
+  
+  const displayName = rawName || (rawId ? `User #${rawId}` : 'Anonymous User');
+  const avatarChar = rawName ? rawName.charAt(0).toUpperCase() : (rawId ? '#' : null);
+
   return (
     <div className="space-y-2">
       {/* Comment Header */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center space-x-2">
           <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs flex-shrink-0">
-            {comment.commenter_name ? comment.commenter_name.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
+            {avatarChar ? avatarChar : <User className="w-3.5 h-3.5" />}
           </div>
           <div>
             <span className="text-slate-100 font-bold text-xs">
-              {comment.commenter_name || comment.commenter_id || 'Anonymous User'}
+              {displayName}
             </span>
           </div>
         </div>
