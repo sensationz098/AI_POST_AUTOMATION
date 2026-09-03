@@ -22,10 +22,10 @@ class CommentReplyRequest(BaseModel):
 
 MAX_REPLY_LENGTH = 2000
 
-def _resolve_ad_permalink(ad: Optional[Any], db: Session) -> Optional[str]:
+def _resolve_ad_permalink(ad: Optional[Any], db: Session, ctx_map: Optional[dict] = None) -> Optional[str]:
     """
     Resolves the canonical external permalink for a Meta Ad using existing ExternalPostContext records,
-    creative metadata, or platform post IDs.
+    creative metadata, or platform post IDs. Uses ctx_map to avoid N+1 DB queries.
     """
     if not ad:
         return None
@@ -36,52 +36,82 @@ def _resolve_ad_permalink(ad: Optional[Any], db: Session) -> Optional[str]:
         if p_url and isinstance(p_url, str) and (p_url.startswith("http://") or p_url.startswith("https://")):
             return p_url
 
-    from app.models.external_post_context import ExternalPostContext
     if ad.facebook_post_id and ad.facebook_post_id.strip():
         fb_pid = ad.facebook_post_id.strip()
-        ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == fb_pid).first()
-        if ctx and ctx.permalink:
-            return ctx.permalink
+        if ctx_map is not None:
+            ctx = ctx_map.get(fb_pid)
+            if ctx and ctx.permalink:
+                return ctx.permalink
+        else:
+            from app.models.external_post_context import ExternalPostContext
+            ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == fb_pid).first()
+            if ctx and ctx.permalink:
+                return ctx.permalink
         return f"https://www.facebook.com/{fb_pid}"
 
     ig_mid = ad.instagram_media_id or (ad.engagement_object_id if ad.engagement_object_type == "INSTAGRAM_MEDIA" else None)
     if ig_mid and ig_mid.strip():
         ig_mid = ig_mid.strip()
-        ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == ig_mid).first()
-        if ctx and ctx.permalink:
-            return ctx.permalink
+        if ctx_map is not None:
+            ctx = ctx_map.get(ig_mid)
+            if ctx and ctx.permalink:
+                return ctx.permalink
+        else:
+            from app.models.external_post_context import ExternalPostContext
+            ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == ig_mid).first()
+            if ctx and ctx.permalink:
+                return ctx.permalink
         return f"https://www.instagram.com/p/{ig_mid}"
 
     return None
 
 
-def _resolve_post_permalink(ext_pid: Optional[str], platform: str, db: Session, local_post: Optional[Any] = None) -> Optional[str]:
+def _resolve_post_permalink(ext_pid: Optional[str], platform: str, db: Session, local_post: Optional[Any] = None, ctx_map: Optional[dict] = None) -> Optional[str]:
     """
     Resolves the canonical external permalink for an organic post using ExternalPostContext,
-    local post identifiers, or standard platform URL structures.
+    local post identifiers, or standard platform URL structures. Uses ctx_map to avoid N+1 DB queries.
     """
     c_platform = (platform or "").lower()
-    from app.models.external_post_context import ExternalPostContext
 
     if local_post:
         if local_post.fb_post_id and local_post.fb_post_id.strip():
-            ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == local_post.fb_post_id.strip()).first()
-            if ctx and ctx.permalink:
-                return ctx.permalink
-            return f"https://www.facebook.com/{local_post.fb_post_id.strip()}"
+            fb_pid = local_post.fb_post_id.strip()
+            if ctx_map is not None:
+                ctx = ctx_map.get(fb_pid)
+                if ctx and ctx.permalink:
+                    return ctx.permalink
+            else:
+                from app.models.external_post_context import ExternalPostContext
+                ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == fb_pid).first()
+                if ctx and ctx.permalink:
+                    return ctx.permalink
+            return f"https://www.facebook.com/{fb_pid}"
         elif local_post.ig_media_id and local_post.ig_media_id.strip():
-            ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == local_post.ig_media_id.strip()).first()
-            if ctx and ctx.permalink:
-                return ctx.permalink
-            return f"https://www.instagram.com/p/{local_post.ig_media_id.strip()}"
+            ig_mid = local_post.ig_media_id.strip()
+            if ctx_map is not None:
+                ctx = ctx_map.get(ig_mid)
+                if ctx and ctx.permalink:
+                    return ctx.permalink
+            else:
+                from app.models.external_post_context import ExternalPostContext
+                ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == ig_mid).first()
+                if ctx and ctx.permalink:
+                    return ctx.permalink
+            return f"https://www.instagram.com/p/{ig_mid}"
 
     if not ext_pid or not ext_pid.strip():
         return None
 
     clean_pid = ext_pid.strip()
-    ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == clean_pid).first()
-    if ctx and ctx.permalink:
-        return ctx.permalink
+    if ctx_map is not None:
+        ctx = ctx_map.get(clean_pid)
+        if ctx and ctx.permalink:
+            return ctx.permalink
+    else:
+        from app.models.external_post_context import ExternalPostContext
+        ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == clean_pid).first()
+        if ctx and ctx.permalink:
+            return ctx.permalink
 
     if "facebook" in c_platform:
         return f"https://www.facebook.com/{clean_pid}"
@@ -104,16 +134,28 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
         ).all() if r[0]
     }
 
-    # Tier 1: Batch lookup matching posts in local DB for current_user
-    ext_post_ids = list({c.external_post_id.strip() for c in comments if c.external_post_id and c.external_post_id.strip()})
+    # Collect all post/ad IDs for batch lookup in ExternalPostContext and Post
+    ext_post_ids = set()
+    for c in comments:
+        if c.external_post_id and c.external_post_id.strip():
+            ext_post_ids.add(c.external_post_id.strip())
+        if c.meta_ad:
+            if c.meta_ad.facebook_post_id and c.meta_ad.facebook_post_id.strip():
+                ext_post_ids.add(c.meta_ad.facebook_post_id.strip())
+            if c.meta_ad.instagram_media_id and c.meta_ad.instagram_media_id.strip():
+                ext_post_ids.add(c.meta_ad.instagram_media_id.strip())
+            if c.meta_ad.engagement_object_id and c.meta_ad.engagement_object_id.strip():
+                ext_post_ids.add(c.meta_ad.engagement_object_id.strip())
+
+    ext_post_ids_list = list(ext_post_ids)
     fb_posts = {}
     ig_posts = {}
 
-    if ext_post_ids:
+    if ext_post_ids_list:
         from app.models.post import Post
         matched_posts = db.query(Post).filter(
             Post.user_id == current_user.id,
-            (Post.fb_post_id.in_(ext_post_ids)) | (Post.ig_media_id.in_(ext_post_ids))
+            (Post.fb_post_id.in_(ext_post_ids_list)) | (Post.ig_media_id.in_(ext_post_ids_list))
         ).all()
 
         for p in matched_posts:
@@ -122,26 +164,17 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
             if p.ig_media_id:
                 ig_posts[p.ig_media_id.strip()] = p
 
-    # Tier 2: Batch lookup in ExternalPostContext database cache table
-    remaining_comments = [
-        c for c in comments
-        if c.external_post_id and c.external_post_id.strip() and
-        c.external_post_id.strip() not in fb_posts and
-        c.external_post_id.strip() not in ig_posts
-    ]
-
+    # Batch lookup ALL relevant ExternalPostContext records in 1 query
     cached_ext_posts = {}
-    if remaining_comments:
+    ctx_map_by_ext_id = {}
+    if ext_post_ids_list:
         from app.models.external_post_context import ExternalPostContext
-        req_acc_ids = {c.social_account_id for c in remaining_comments if c.social_account_id}
-        req_pids = {c.external_post_id.strip() for c in remaining_comments}
-
-        if req_acc_ids and req_pids:
-            ext_contexts = db.query(ExternalPostContext).filter(
-                ExternalPostContext.social_account_id.in_(req_acc_ids),
-                ExternalPostContext.external_post_id.in_(req_pids)
-            ).all()
-            for ctx in ext_contexts:
+        ext_contexts = db.query(ExternalPostContext).filter(
+            ExternalPostContext.external_post_id.in_(ext_post_ids_list)
+        ).all()
+        for ctx in ext_contexts:
+            ctx_map_by_ext_id[ctx.external_post_id.strip()] = ctx
+            if ctx.social_account_id:
                 key = (ctx.social_account_id, (ctx.platform or "").lower(), ctx.external_post_id.strip())
                 cached_ext_posts[key] = ctx
 
@@ -228,6 +261,7 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
                 for ctx in new_contexts_to_add:
                     key = (ctx.social_account_id, (ctx.platform or "").lower(), ctx.external_post_id.strip())
                     cached_ext_posts[key] = ctx
+                    ctx_map_by_ext_id[ctx.external_post_id.strip()] = ctx
             except Exception as commit_err:
                 db.rollback()
                 logger.error(f"[COMMENTS_API] Exception committing external post contexts: {commit_err}")
@@ -277,13 +311,13 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
                     "image_url": matched_local.image_url,
                     "media_type": matched_local.media_type,
                     "thumbnail_url": matched_local.thumbnail_url,
-                    "permalink": _resolve_post_permalink(ext_pid, c.platform, db, local_post=matched_local),
+                    "permalink": _resolve_post_permalink(ext_pid, c.platform, db, local_post=matched_local, ctx_map=ctx_map_by_ext_id),
                     "platform": c.platform,
                     "source": "local"
                 }
             else:
                 key = (c.social_account_id, c_platform, ext_pid)
-                ext_ctx = cached_ext_posts.get(key)
+                ext_ctx = cached_ext_posts.get(key) or ctx_map_by_ext_id.get(ext_pid)
                 if ext_ctx and ext_ctx.status == "ACTIVE":
                     title_txt = ext_ctx.caption.split("\n")[0][:60] if ext_ctx.caption else f"{c.platform.capitalize()} Post"
                     post_obj = {
@@ -293,7 +327,7 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
                         "image_url": ext_ctx.media_url,
                         "media_type": (ext_ctx.media_type or "IMAGE").lower(),
                         "thumbnail_url": ext_ctx.thumbnail_url or ext_ctx.media_url,
-                        "permalink": ext_ctx.permalink or _resolve_post_permalink(ext_pid, c.platform, db),
+                        "permalink": ext_ctx.permalink or _resolve_post_permalink(ext_pid, c.platform, db, ctx_map=ctx_map_by_ext_id),
                         "platform": c.platform,
                         "source": "meta"
                     }
@@ -312,7 +346,7 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
                 "campaign_name": c.meta_ad.campaign_name,
                 "adset_name": c.meta_ad.adset_name,
                 "effective_status": c.meta_ad.effective_status,
-                "permalink": _resolve_ad_permalink(c.meta_ad, db),
+                "permalink": _resolve_ad_permalink(c.meta_ad, db, ctx_map=ctx_map_by_ext_id),
                 "platform": "facebook" if (not c.meta_ad.engagement_object_type or c.meta_ad.engagement_object_type == "FACEBOOK_POST") else "instagram"
             }
 
@@ -612,19 +646,23 @@ def get_comments_for_specific_ad(
         logger.warning(f"[GET_AD_COMMENTS_API] Meta Ad not found for identifier={meta_ad_identifier} user_id={current_user.id}")
         raise HTTPException(status_code=404, detail="Meta Ad not found or access denied")
 
+    import time
+    t0 = time.time()
+
     total_comments = social_comment_repo.count_by_user_id(db, current_user.id, meta_ad_id=ad.id)
     raw_comments = social_comment_repo.get_by_user_id(db, current_user.id, skip=skip, limit=limit, meta_ad_id=ad.id)
 
     formatted_comments = _format_comments_response_list(raw_comments, current_user, db)
 
+    duration_ms = int((time.time() - t0) * 1000)
     has_next = (skip + len(formatted_comments)) < total_comments
     current_page_num = (skip // limit) + 1 if limit > 0 else 1
 
     logger.info(
-        f"[GET_AD_COMMENTS_API] ad_identifier={meta_ad_identifier} ad_id={ad.id} "
+        f"[AD_COMMENTS_PERF] ad_identifier={meta_ad_identifier} ad_id={ad.id} "
         f"meta_ad_id={ad.meta_ad_id} user_id={current_user.id} "
         f"total_comments={total_comments} returned_comments={len(formatted_comments)} "
-        f"skip={skip} limit={limit} page={current_page_num} has_next={has_next}"
+        f"skip={skip} limit={limit} page={current_page_num} has_next={has_next} duration_ms={duration_ms}"
     )
 
     return {

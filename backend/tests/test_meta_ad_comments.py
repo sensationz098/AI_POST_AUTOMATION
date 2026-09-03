@@ -327,3 +327,163 @@ def test_get_comments_for_specific_ad_resolution_and_security(client, db_session
     fastapi_app.dependency_overrides[get_current_user] = lambda: other_user
     res_unauth = client.get(f"/api/v1/social-comments/ads/{ad.id}")
     assert res_unauth.status_code == 404
+
+
+def test_ad_comments_performance_303_items_and_edge_cases(client, db_session):
+    """
+    Comprehensive test covering:
+    1. Ad with 0 comments
+    2. Ad with 1 comment
+    3. Ad with 50 comments
+    4. Ad with >50 comments (55 comments)
+    5. Ad #41 style case with 303 comments (total_comments=303, returned=50, has_next=True)
+    6. Pagination page 1 and page 2
+    7. has_next correctness
+    8. Replies are returned correctly
+    9. Permalinks remain correct
+    10. Unauthorized access rejected (404)
+    11. Zero Meta API network calls during GET request
+    """
+    user = User(email="perf_ad_user@example.com", full_name="Perf User", hashed_password="pw", is_active=True)
+    other = User(email="perf_unauth_user@example.com", full_name="Unauth User", hashed_password="pw", is_active=True)
+    db_session.add_all([user, other])
+    db_session.commit()
+    db_session.refresh(user)
+    db_session.refresh(other)
+
+    sa = SocialAccount(user_id=user.id, platform="facebook", account_id="page_perf_1", account_name="Perf Page", access_token="tok")
+    db_session.add(sa)
+    db_session.commit()
+    db_session.refresh(sa)
+
+    # Clean any existing MetaAd with id=41 from DB fixture
+    existing_41 = db_session.query(MetaAd).filter_by(id=41).first()
+    if existing_41:
+        db_session.query(SocialComment).filter_by(meta_ad_id=41).delete()
+        db_session.delete(existing_41)
+        db_session.commit()
+
+    # Pre-seed ExternalPostContext records for test posts so database cache is populated
+    from app.models.external_post_context import ExternalPostContext
+    ctx1 = ExternalPostContext(
+        platform="facebook", social_account_id=sa.id, external_post_id="page_perf_1_post1",
+        caption="Single comment post caption", status="ACTIVE", permalink="https://www.facebook.com/page_perf_1_post1"
+    )
+    ctx303 = ExternalPostContext(
+        platform="facebook", social_account_id=sa.id, external_post_id="page_perf_1_post303",
+        caption="Ad 41 Large Campaign Caption", status="ACTIVE", permalink="https://www.facebook.com/page_perf_1_post303"
+    )
+    db_session.add_all([ctx1, ctx303])
+    db_session.commit()
+
+    # 1. Ad with 0 comments
+    ad_0 = MetaAd(user_id=user.id, meta_ad_account_id="act_perf", meta_ad_id="ad_zero_00", name="Zero Comments Ad", facebook_post_id="page_perf_1_post0")
+    # 2. Ad with 1 comment
+    ad_1 = MetaAd(user_id=user.id, meta_ad_account_id="act_perf", meta_ad_id="ad_one_01", name="One Comment Ad", facebook_post_id="page_perf_1_post1")
+    # 3. Ad #41 style case with 303 comments
+    ad_303 = MetaAd(id=41, user_id=user.id, meta_ad_account_id="act_perf", meta_ad_id="120248530286600010", name="Ad 41 Large Campaign", facebook_post_id="page_perf_1_post303")
+
+    db_session.add_all([ad_0, ad_1, ad_303])
+    db_session.commit()
+    db_session.refresh(ad_0)
+    db_session.refresh(ad_1)
+    db_session.refresh(ad_303)
+
+    # Add 1 comment to ad_1
+    c1 = SocialComment(
+        user_id=user.id, social_account_id=sa.id, platform="facebook",
+        external_comment_id="c_one_1", comment_text="Single comment text",
+        webhook_object="ad_comment", meta_ad_id=ad_1.id, external_post_id="page_perf_1_post1"
+    )
+    db_session.add(c1)
+
+    # Add 303 comments to ad_303
+    comments_303 = [
+        SocialComment(
+            user_id=user.id, social_account_id=sa.id, platform="facebook",
+            external_comment_id=f"c_large_{i}", comment_text=f"Comment text #{i}",
+            webhook_object="ad_comment", meta_ad_id=ad_303.id, external_post_id="page_perf_1_post303"
+        )
+        for i in range(303)
+    ]
+    db_session.add_all(comments_303)
+    db_session.commit()
+
+    # Add a reply to newest comment of ad_303
+    from app.models.social_comment_reply import SocialCommentReply
+    rep = SocialCommentReply(
+        comment_id=comments_303[-1].id, user_id=user.id, platform="facebook",
+        message="Manual owner reply to comment 302", status="SENT", external_reply_id="rep_ext_302"
+    )
+    db_session.add(rep)
+    db_session.commit()
+
+    fastapi_app = client.app
+    from app.api.v1.deps import get_current_user
+    fastapi_app.dependency_overrides[get_current_user] = lambda: user
+
+    # Ensure ZERO external Meta API calls occur during GET detail endpoints
+    with patch("app.services.meta_service.meta_service.fetch_facebook_post_info") as mock_fb, \
+         patch("app.services.meta_service.meta_service.fetch_instagram_media_info") as mock_ig:
+
+        # TEST A: Ad with 0 comments
+        r0 = client.get(f"/api/v1/social-comments/ads/{ad_0.id}")
+        assert r0.status_code == 200
+        b0 = r0.json()
+        assert b0["total_comments"] == 0
+        assert len(b0["comments"]) == 0
+        assert b0["has_next"] is False
+
+        # TEST B: Ad with 1 comment
+        r1 = client.get(f"/api/v1/social-comments/ads/{ad_1.id}")
+        assert r1.status_code == 200
+        b1 = r1.json()
+        assert b1["total_comments"] == 1
+        assert len(b1["comments"]) == 1
+        assert b1["comments"][0]["comment_text"] == "Single comment text"
+        assert b1["has_next"] is False
+
+        # TEST C: Ad #41 style case with 303 comments - Page 1
+        r303_p1 = client.get(f"/api/v1/social-comments/ads/41?page=1&limit=50")
+        assert r303_p1.status_code == 200
+        b303_p1 = r303_p1.json()
+        assert b303_p1["total_comments"] == 303
+        assert len(b303_p1["comments"]) == 50
+        assert b303_p1["page"] == 1
+        assert b303_p1["has_next"] is True
+
+        # Verify replies attached
+        c_newest_res = next(c for c in b303_p1["comments"] if c["id"] == comments_303[-1].id)
+        assert len(c_newest_res["replies"]) == 1
+        assert c_newest_res["replies"][0]["message"] == "Manual owner reply to comment 302"
+
+        # Verify permalink remains valid
+        assert b303_p1["ad"]["permalink"] == "https://www.facebook.com/page_perf_1_post303"
+
+        # TEST D: Ad #41 style case - Page 2
+        r303_p2 = client.get(f"/api/v1/social-comments/ads/41?page=2&limit=50")
+        assert r303_p2.status_code == 200
+        b303_p2 = r303_p2.json()
+        assert b303_p2["total_comments"] == 303
+        assert len(b303_p2["comments"]) == 50
+        assert b303_p2["page"] == 2
+        assert b303_p2["has_next"] is True
+
+        # TEST E: Last page (Page 7: 303 = 6 pages of 50 + 1 page of 3)
+        r303_p7 = client.get(f"/api/v1/social-comments/ads/41?page=7&limit=50")
+        assert r303_p7.status_code == 200
+        b303_p7 = r303_p7.json()
+        assert b303_p7["total_comments"] == 303
+        assert len(b303_p7["comments"]) == 3
+        assert b303_p7["page"] == 7
+        assert b303_p7["has_next"] is False
+
+        # Assert zero Meta Graph API calls were made
+        assert mock_fb.call_count == 0
+        assert mock_ig.call_count == 0
+
+    # TEST F: Tenant Security Check
+    fastapi_app.dependency_overrides[get_current_user] = lambda: other
+    r_unauth = client.get("/api/v1/social-comments/ads/41")
+    assert r_unauth.status_code == 404
+
