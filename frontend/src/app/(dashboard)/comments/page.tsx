@@ -68,6 +68,8 @@ interface AdItem {
   facebook_post_id?: string;
   created_at?: string;
   comment_count: number;
+  permalink?: string;
+  platform?: string;
 }
 
 interface PostItem {
@@ -80,6 +82,7 @@ interface PostItem {
   platform: string;
   published_at?: string;
   comment_count: number;
+  permalink?: string;
 }
 
 // 1. Post Context Card Component
@@ -99,6 +102,10 @@ function PostContextCard({
   const isFb = platform === 'facebook';
   const isAdComment = Boolean(metaAd);
   const accountDisplayName = account?.account_name || account?.display_name || (isFb ? 'Facebook Page' : 'Instagram Account');
+
+  const adPermalink = metaAd?.permalink;
+  const postPermalink = post?.permalink;
+  const activePermalink = isAdComment ? adPermalink : postPermalink;
 
   return (
     <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800/90 flex flex-col space-y-2 mb-3.5 shadow-sm">
@@ -133,25 +140,28 @@ function PostContextCard({
           </span>
         </div>
 
-        {metaAd ? (
-          <Link
-            href={`/comments/ads/${metaAd.id}`}
-            className="px-2 py-0.5 rounded bg-purple-900/40 hover:bg-purple-900/80 border border-purple-700/60 text-purple-200 text-[10px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
-          >
-            <span>View Ad Context</span>
-            <ChevronRight className="w-3 h-3 text-purple-300" />
-          </Link>
-        ) : post?.permalink ? (
-          <a
-            href={post.permalink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-indigo-300 hover:text-white text-[10px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
-          >
-            <span>View Post</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        ) : null}
+        <div className="flex items-center space-x-2 flex-shrink-0">
+          {activePermalink && (activePermalink.startsWith('http://') || activePermalink.startsWith('https://')) && (
+            <a
+              href={activePermalink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 py-0.5 rounded bg-blue-950/80 hover:bg-blue-900 border border-blue-700/70 text-blue-200 text-[10px] font-semibold transition flex items-center space-x-1"
+            >
+              <span>View on {isFb ? 'Facebook' : 'Instagram'}</span>
+              <ExternalLink className="w-3 h-3 text-blue-300" />
+            </a>
+          )}
+          {metaAd && (
+            <Link
+              href={`/comments/ads/${metaAd.id}`}
+              className="px-2 py-0.5 rounded bg-purple-900/40 hover:bg-purple-900/80 border border-purple-700/60 text-purple-200 text-[10px] font-semibold transition flex items-center space-x-1"
+            >
+              <span>View Ad Context</span>
+              <ChevronRight className="w-3 h-3 text-purple-300" />
+            </Link>
+          )}
+        </div>
       </div>
 
       {isAdComment && metaAd ? (
@@ -722,13 +732,26 @@ export default function EngagementDashboardPage() {
                       <span>{ad.comment_count} Comments</span>
                     </div>
 
-                    <Link
-                      href={`/comments/ads/${ad.id}`}
-                      className="px-3 py-1.5 rounded-lg bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-800/80 font-semibold text-xs transition flex items-center space-x-1"
-                    >
-                      <span>Manage Comments</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </Link>
+                    <div className="flex items-center space-x-2">
+                      {ad.permalink && (ad.permalink.startsWith('http://') || ad.permalink.startsWith('https://')) && (
+                        <a
+                          href={ad.permalink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900/80 border border-blue-700/70 text-blue-200 text-xs font-semibold transition flex items-center space-x-1"
+                        >
+                          <span>View {ad.platform?.toLowerCase() === 'instagram' ? 'on IG' : 'on FB'}</span>
+                          <ExternalLink className="w-3 h-3 text-blue-300" />
+                        </a>
+                      )}
+                      <Link
+                        href={`/comments/ads/${ad.id}`}
+                        className="px-3 py-1.5 rounded-lg bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-800/80 font-semibold text-xs transition flex items-center space-x-1"
+                      >
+                        <span>Manage Comments</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -822,13 +845,26 @@ export default function EngagementDashboardPage() {
                       <span>{p.comment_count} Comments</span>
                     </div>
 
-                    <Link
-                      href={`/comments/posts/${p.external_post_id}`}
-                      className="px-3 py-1.5 rounded-lg bg-blue-950/80 hover:bg-blue-900 text-blue-200 border border-blue-800/80 font-semibold text-xs transition flex items-center space-x-1"
-                    >
-                      <span>Manage Comments</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </Link>
+                    <div className="flex items-center space-x-2">
+                      {p.permalink && (p.permalink.startsWith('http://') || p.permalink.startsWith('https://')) && (
+                        <a
+                          href={p.permalink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900/80 border border-blue-700/70 text-blue-200 text-xs font-semibold transition flex items-center space-x-1"
+                        >
+                          <span>View {p.platform === 'instagram' ? 'on IG' : 'on FB'}</span>
+                          <ExternalLink className="w-3 h-3 text-blue-300" />
+                        </a>
+                      )}
+                      <Link
+                        href={`/comments/posts/${p.external_post_id}`}
+                        className="px-3 py-1.5 rounded-lg bg-blue-950/80 hover:bg-blue-900 text-blue-200 border border-blue-800/80 font-semibold text-xs transition flex items-center space-x-1"
+                      >
+                        <span>Manage Comments</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ))}

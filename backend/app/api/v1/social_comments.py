@@ -22,6 +22,75 @@ class CommentReplyRequest(BaseModel):
 
 MAX_REPLY_LENGTH = 2000
 
+def _resolve_ad_permalink(ad: Optional[Any], db: Session) -> Optional[str]:
+    """
+    Resolves the canonical external permalink for a Meta Ad using existing ExternalPostContext records,
+    creative metadata, or platform post IDs.
+    """
+    if not ad:
+        return None
+
+    meta_json = ad.metadata_json or {}
+    if isinstance(meta_json, dict):
+        p_url = meta_json.get("permalink_url") or meta_json.get("permalink") or meta_json.get("instagram_permalink_url")
+        if p_url and isinstance(p_url, str) and (p_url.startswith("http://") or p_url.startswith("https://")):
+            return p_url
+
+    from app.models.external_post_context import ExternalPostContext
+    if ad.facebook_post_id and ad.facebook_post_id.strip():
+        fb_pid = ad.facebook_post_id.strip()
+        ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == fb_pid).first()
+        if ctx and ctx.permalink:
+            return ctx.permalink
+        return f"https://www.facebook.com/{fb_pid}"
+
+    ig_mid = ad.instagram_media_id or (ad.engagement_object_id if ad.engagement_object_type == "INSTAGRAM_MEDIA" else None)
+    if ig_mid and ig_mid.strip():
+        ig_mid = ig_mid.strip()
+        ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == ig_mid).first()
+        if ctx and ctx.permalink:
+            return ctx.permalink
+        return f"https://www.instagram.com/p/{ig_mid}"
+
+    return None
+
+
+def _resolve_post_permalink(ext_pid: Optional[str], platform: str, db: Session, local_post: Optional[Any] = None) -> Optional[str]:
+    """
+    Resolves the canonical external permalink for an organic post using ExternalPostContext,
+    local post identifiers, or standard platform URL structures.
+    """
+    c_platform = (platform or "").lower()
+    from app.models.external_post_context import ExternalPostContext
+
+    if local_post:
+        if local_post.fb_post_id and local_post.fb_post_id.strip():
+            ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == local_post.fb_post_id.strip()).first()
+            if ctx and ctx.permalink:
+                return ctx.permalink
+            return f"https://www.facebook.com/{local_post.fb_post_id.strip()}"
+        elif local_post.ig_media_id and local_post.ig_media_id.strip():
+            ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == local_post.ig_media_id.strip()).first()
+            if ctx and ctx.permalink:
+                return ctx.permalink
+            return f"https://www.instagram.com/p/{local_post.ig_media_id.strip()}"
+
+    if not ext_pid or not ext_pid.strip():
+        return None
+
+    clean_pid = ext_pid.strip()
+    ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == clean_pid).first()
+    if ctx and ctx.permalink:
+        return ctx.permalink
+
+    if "facebook" in c_platform:
+        return f"https://www.facebook.com/{clean_pid}"
+    elif "instagram" in c_platform:
+        return f"https://www.instagram.com/p/{clean_pid}"
+
+    return None
+
+
 def _format_comments_response_list(comments: List[SocialComment], current_user: User, db: Session) -> List[dict]:
     """Helper function to cleanly format a list of SocialComment DB models into API response objects with resolved post, account, and reply metadata."""
     if not comments:
@@ -208,7 +277,7 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
                     "image_url": matched_local.image_url,
                     "media_type": matched_local.media_type,
                     "thumbnail_url": matched_local.thumbnail_url,
-                    "permalink": None,
+                    "permalink": _resolve_post_permalink(ext_pid, c.platform, db, local_post=matched_local),
                     "platform": c.platform,
                     "source": "local"
                 }
@@ -224,7 +293,7 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
                         "image_url": ext_ctx.media_url,
                         "media_type": (ext_ctx.media_type or "IMAGE").lower(),
                         "thumbnail_url": ext_ctx.thumbnail_url or ext_ctx.media_url,
-                        "permalink": ext_ctx.permalink,
+                        "permalink": ext_ctx.permalink or _resolve_post_permalink(ext_pid, c.platform, db),
                         "platform": c.platform,
                         "source": "meta"
                     }
@@ -242,7 +311,9 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
                 "name": c.meta_ad.name,
                 "campaign_name": c.meta_ad.campaign_name,
                 "adset_name": c.meta_ad.adset_name,
-                "effective_status": c.meta_ad.effective_status
+                "effective_status": c.meta_ad.effective_status,
+                "permalink": _resolve_ad_permalink(c.meta_ad, db),
+                "platform": "facebook" if (not c.meta_ad.engagement_object_type or c.meta_ad.engagement_object_type == "FACEBOOK_POST") else "instagram"
             }
 
         res_list.append({
@@ -501,7 +572,9 @@ def get_meta_ads_with_comments(
             "facebook_post_id": ad.facebook_post_id,
             "meta_ad_account_id": ad.meta_ad_account_id,
             "created_at": ad.created_at.isoformat() if ad.created_at else None,
-            "comment_count": ad_count_map.get(ad.id, 0)
+            "comment_count": ad_count_map.get(ad.id, 0),
+            "permalink": _resolve_ad_permalink(ad, db),
+            "platform": "facebook" if (not ad.engagement_object_type or ad.engagement_object_type == "FACEBOOK_POST") else "instagram"
         }
         for ad in all_ads
     ]
@@ -545,7 +618,9 @@ def get_comments_for_specific_ad(
             "effective_status": ad.effective_status,
             "facebook_page_id": ad.facebook_page_id,
             "facebook_post_id": ad.facebook_post_id,
-            "meta_ad_account_id": ad.meta_ad_account_id
+            "meta_ad_account_id": ad.meta_ad_account_id,
+            "permalink": _resolve_ad_permalink(ad, db),
+            "platform": "facebook" if (not ad.engagement_object_type or ad.engagement_object_type == "FACEBOOK_POST") else "instagram"
         },
         "total_comments": total_comments,
         "skip": skip,
@@ -606,6 +681,7 @@ def get_posts_with_comments(
                 if not title_match and not cap_match:
                     continue
 
+            p_platform = "facebook" if p.fb_post_id else "instagram"
             res_posts.append({
                 "id": p.id,
                 "external_post_id": ext_id,
@@ -613,9 +689,10 @@ def get_posts_with_comments(
                 "caption": p.caption,
                 "image_url": p.image_url,
                 "media_type": p.media_type,
-                "platform": "facebook" if p.fb_post_id else "instagram",
+                "platform": p_platform,
                 "published_at": p.published_at.isoformat() if p.published_at else p.created_at.isoformat(),
-                "comment_count": c_cnt
+                "comment_count": c_cnt,
+                "permalink": _resolve_post_permalink(ext_id, p_platform, db, local_post=p)
             })
             if p.fb_post_id: added_pids.add(p.fb_post_id)
             if p.ig_media_id: added_pids.add(p.ig_media_id)
@@ -641,7 +718,8 @@ def get_posts_with_comments(
                     "media_type": ctx.media_type,
                     "platform": ctx.platform,
                     "published_at": ctx.created_at.isoformat() if ctx.created_at else None,
-                    "comment_count": post_count_map.get(ctx.external_post_id, 0)
+                    "comment_count": post_count_map.get(ctx.external_post_id, 0),
+                    "permalink": ctx.permalink or _resolve_post_permalink(ctx.external_post_id, ctx.platform, db)
                 })
 
         for pid in remaining:
@@ -655,7 +733,8 @@ def get_posts_with_comments(
                     "media_type": "IMAGE",
                     "platform": "facebook",
                     "published_at": None,
-                    "comment_count": post_count_map.get(pid, 0)
+                    "comment_count": post_count_map.get(pid, 0),
+                    "permalink": _resolve_post_permalink(pid, "facebook", db)
                 })
 
     return res_posts
@@ -677,10 +756,12 @@ def get_comments_for_specific_post(
 
     post_meta = None
     ext_pid = post_identifier
+    local_p_db = None
 
     if post_identifier.isdigit():
         p_db = db.query(Post).filter(Post.id == int(post_identifier), Post.user_id == current_user.id).first()
         if p_db:
+            local_p_db = p_db
             ext_pid = p_db.fb_post_id or p_db.ig_media_id or str(p_db.id)
             post_meta = {
                 "id": p_db.id,
@@ -690,7 +771,8 @@ def get_comments_for_specific_post(
                 "image_url": p_db.image_url,
                 "media_type": p_db.media_type,
                 "platform": "facebook" if p_db.fb_post_id else "instagram",
-                "published_at": p_db.published_at.isoformat() if p_db.published_at else p_db.created_at.isoformat()
+                "published_at": p_db.published_at.isoformat() if p_db.published_at else p_db.created_at.isoformat(),
+                "permalink": _resolve_post_permalink(ext_pid, "facebook" if p_db.fb_post_id else "instagram", db, local_post=p_db)
             }
 
     if not post_meta:
@@ -707,7 +789,8 @@ def get_comments_for_specific_post(
                 "image_url": ctx.media_url,
                 "media_type": ctx.media_type,
                 "platform": ctx.platform,
-                "published_at": ctx.created_at.isoformat() if ctx.created_at else None
+                "published_at": ctx.created_at.isoformat() if ctx.created_at else None,
+                "permalink": ctx.permalink or _resolve_post_permalink(ctx.external_post_id, ctx.platform, db)
             }
 
     if not post_meta:
@@ -719,7 +802,8 @@ def get_comments_for_specific_post(
             "image_url": None,
             "media_type": "IMAGE",
             "platform": "facebook",
-            "published_at": None
+            "published_at": None,
+            "permalink": _resolve_post_permalink(post_identifier, "facebook", db)
         }
 
     total_comments = social_comment_repo.count_by_user_id(db, current_user.id, external_post_id=ext_pid, is_ad=False)
