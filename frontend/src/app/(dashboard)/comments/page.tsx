@@ -23,13 +23,66 @@ import {
   Filter,
   Share2,
   Target,
-  Megaphone
+  Megaphone,
+  Search,
+  LayoutDashboard,
+  Layers,
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { SocialComment, SocialCommentPostContext, SocialCommentAccountContext, SocialCommentReply, SocialAccount, MetaAdCommentContext } from '@/lib/types';
 
-// 1. Post Context Preview Component
+// Types for Overview & Indices
+interface OverviewMetrics {
+  total_comments: number;
+  total_ad_comments: number;
+  total_post_comments: number;
+  recent_ads: Array<{
+    id: number;
+    meta_ad_id: string;
+    name: string;
+    campaign_name?: string;
+    effective_status?: string;
+    comment_count: number;
+  }>;
+  recent_posts: Array<{
+    id: number | string;
+    external_post_id: string;
+    title: string;
+    platform: string;
+    comment_count: number;
+  }>;
+}
+
+interface AdItem {
+  id: number;
+  meta_ad_id: string;
+  name: string;
+  campaign_name?: string;
+  adset_name?: string;
+  effective_status?: string;
+  facebook_page_id?: string;
+  facebook_post_id?: string;
+  created_at?: string;
+  comment_count: number;
+}
+
+interface PostItem {
+  id: number | string;
+  external_post_id: string;
+  title: string;
+  caption?: string;
+  image_url?: string;
+  media_type?: string;
+  platform: string;
+  published_at?: string;
+  comment_count: number;
+}
+
+// 1. Post Context Card Component
 function PostContextCard({
   post,
   account,
@@ -49,10 +102,8 @@ function PostContextCard({
 
   return (
     <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800/90 flex flex-col space-y-2 mb-3.5 shadow-sm">
-      {/* Receiving Social Account & Meta Ad Header Badge */}
       <div className="flex items-center justify-between text-[11px] pb-2 border-b border-slate-900/80">
         <div className="flex items-center space-x-2 min-w-0 flex-wrap gap-y-1">
-          {/* Platform Pill */}
           {isFb ? (
             <span className="px-2 py-0.5 rounded bg-blue-950/90 text-blue-300 border border-blue-800/70 font-bold text-[10px] flex items-center space-x-1 flex-shrink-0">
               <Facebook className="w-3 h-3 fill-current" />
@@ -65,7 +116,6 @@ function PostContextCard({
             </span>
           )}
 
-          {/* Comment Type Pill */}
           {isAdComment ? (
             <span className="px-2 py-0.5 rounded bg-purple-950/90 text-purple-300 border border-purple-800/70 font-bold text-[10px] flex items-center space-x-1 flex-shrink-0">
               <Target className="w-3 h-3 text-purple-400" />
@@ -83,1024 +133,882 @@ function PostContextCard({
           </span>
         </div>
 
-        {post?.permalink ? (
+        {metaAd ? (
+          <Link
+            href={`/comments/ads/${metaAd.id}`}
+            className="px-2 py-0.5 rounded bg-purple-900/40 hover:bg-purple-900/80 border border-purple-700/60 text-purple-200 text-[10px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
+          >
+            <span>View Ad Context</span>
+            <ChevronRight className="w-3 h-3 text-purple-300" />
+          </Link>
+        ) : post?.permalink ? (
           <a
             href={post.permalink}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-indigo-300 hover:text-white text-[10px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
+            className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-indigo-300 hover:text-white text-[10px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
           >
             <span>View Post</span>
             <ExternalLink className="w-3 h-3" />
           </a>
-        ) : post?.source === 'local' ? (
-          <Link
-            href="/posts"
-            className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700/70 text-indigo-300 hover:text-white text-[10px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
-          >
-            <span>View Post</span>
-            <ExternalLink className="w-3 h-3" />
-          </Link>
         ) : null}
       </div>
 
-      {/* Post/Ad Context Body */}
-      {isAdComment ? (
-        <div className="bg-purple-950/20 border border-purple-900/40 rounded-lg p-2.5 space-y-1.5 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center space-x-2 min-w-0">
-              <span className="font-bold text-slate-100 text-xs truncate">
-                Ad: {metaAd?.name || metaAd?.meta_ad_id || 'Meta Ad'}
-              </span>
-              {metaAd?.effective_status && (
-                <span className="px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[9px] font-mono font-bold uppercase">
-                  {metaAd.effective_status}
-                </span>
-              )}
-            </div>
-            {metaAd?.meta_ad_id && (
-              <span className="font-mono text-[10px] text-slate-500 truncate">
-                ID: {metaAd.meta_ad_id}
+      {isAdComment && metaAd ? (
+        <div className="space-y-1 pt-0.5">
+          <div className="flex items-center space-x-2 truncate">
+            <Megaphone className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+            <span className="font-bold text-xs text-purple-200 truncate">{metaAd.name}</span>
+          </div>
+          <div className="flex items-center space-x-3 text-[10px] text-slate-400 font-mono">
+            {metaAd.campaign_name && <span>Campaign: {metaAd.campaign_name}</span>}
+            {metaAd.effective_status && (
+              <span className={`px-1.5 py-0.2 rounded ${metaAd.effective_status === 'ACTIVE' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-amber-950 text-amber-300 border border-amber-800'}`}>
+                ● {metaAd.effective_status}
               </span>
             )}
           </div>
-
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400 font-sans">
-            {metaAd?.campaign_name && (
-              <div>
-                <span className="text-slate-500">Campaign: </span>
-                <span className="text-slate-300 font-medium">{metaAd.campaign_name}</span>
-              </div>
-            )}
-            {metaAd?.adset_name && (
-              <div>
-                <span className="text-slate-500">Ad Set: </span>
-                <span className="text-slate-300 font-medium">{metaAd.adset_name}</span>
-              </div>
-            )}
-          </div>
-
-          {post && (post.caption || post.title) && (
-            <div className="pt-1 border-t border-purple-900/30 flex items-center space-x-2">
-              {post.thumbnail_url || post.image_url ? (
-                <img
-                  src={post.thumbnail_url || post.image_url}
-                  alt="Ad creative preview"
-                  className="w-7 h-7 rounded object-cover border border-slate-800 bg-slate-900 flex-shrink-0"
-                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                />
-              ) : null}
-              <p className="text-[10px] text-slate-400 line-clamp-1 italic">
-                "{post.caption || post.title}"
-              </p>
-            </div>
-          )}
         </div>
       ) : post ? (
-        <div className="flex items-start space-x-3 min-w-0 pt-0.5">
+        <div className="flex items-start space-x-3 pt-0.5">
           {post.thumbnail_url || post.image_url ? (
             <img
-              src={post.thumbnail_url || post.image_url}
-              alt={post.title || 'Social post'}
-              className="w-11 h-11 rounded-lg object-cover border border-slate-800 flex-shrink-0 bg-slate-900"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
+              src={post.thumbnail_url || post.image_url || ''}
+              alt="Post thumbnail"
+              className="w-10 h-10 object-cover rounded-md border border-slate-800 flex-shrink-0 bg-slate-900"
             />
-          ) : post.media_type === 'video' ? (
-            <div className="w-11 h-11 rounded-lg bg-indigo-950/40 border border-indigo-800/50 flex items-center justify-center text-indigo-400 flex-shrink-0">
-              <Video className="w-5 h-5" />
-            </div>
           ) : (
-            <div className="w-11 h-11 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 flex-shrink-0">
-              <ImageIcon className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-md bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 flex-shrink-0">
+              <ImageIcon className="w-4 h-4" />
             </div>
           )}
 
-          <div className="min-w-0 space-y-0.5">
-            <span className="font-bold text-slate-100 text-xs line-clamp-1">
-              {post.title || 'Social Post'}
-            </span>
+          <div className="flex-1 min-w-0 space-y-0.5">
+            <h4 className="text-xs font-semibold text-slate-200 truncate">{post.title}</h4>
             {post.caption && (
-              <p className="text-[11px] text-slate-300 line-clamp-2 leading-snug font-sans">
-                {post.caption}
-              </p>
+              <p className="text-[11px] text-slate-400 truncate max-w-xl">{post.caption}</p>
             )}
           </div>
         </div>
-      ) : (
-        <div className="flex items-center space-x-2.5 min-w-0 py-1">
-          <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 flex-shrink-0">
-            <FileText className="w-4 h-4 text-slate-400" />
-          </div>
-          <div className="min-w-0">
-            <span className="font-semibold text-slate-300 text-xs">Post details could not be loaded</span>
-            {externalPostId && (
-              <p className="text-[10px] font-mono text-slate-500 truncate mt-0.5">
-                External Post ID: {externalPostId}
-              </p>
-            )}
-          </div>
+      ) : externalPostId ? (
+        <div className="text-[11px] text-slate-400 font-mono truncate pt-0.5">
+          Post ID: {externalPostId}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
-// 2. Original Customer Comment Component
-function OriginalComment({
-  comment,
-  formatDate,
-}: {
-  comment: SocialComment;
-  formatDate: (iso?: string) => string;
-}) {
-  const rawName = comment.commenter_name?.trim();
-  const rawId = comment.commenter_id?.trim();
-  
-  const displayName = rawName || (rawId ? `User #${rawId}` : 'Anonymous User');
-  const avatarChar = rawName ? rawName.charAt(0).toUpperCase() : (rawId ? '#' : null);
+export default function EngagementDashboardPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const activeTab = searchParams.get('tab') || 'overview';
 
-  return (
-    <div className="space-y-2">
-      {/* Comment Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center space-x-2">
-          <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs flex-shrink-0">
-            {avatarChar ? avatarChar : <User className="w-3.5 h-3.5" />}
-          </div>
-          <div>
-            <span className="text-slate-100 font-bold text-xs">
-              {displayName}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-2.5 text-[10px]">
-          <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80 font-mono font-bold flex items-center space-x-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>{comment.processing_status || 'RECEIVED'}</span>
-          </span>
-
-          <span className="text-slate-400 flex items-center space-x-1 font-mono">
-            <Clock className="w-3 h-3 text-slate-500" />
-            <span>{formatDate(comment.event_timestamp || comment.created_at)}</span>
-          </span>
-        </div>
-      </div>
-
-      {/* Comment Text */}
-      <div className="text-slate-200 text-xs leading-relaxed bg-slate-900/90 p-3 rounded-xl border border-slate-800/80 font-sans shadow-inner">
-        {comment.comment_text ? (
-          <p className="whitespace-pre-wrap">"{comment.comment_text}"</p>
-        ) : (
-          <p className="text-slate-500 italic text-[11px]">
-            (Comment payload received without text content)
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// 3. Nested Owner Reply Thread Component
-function ReplyThread({
-  replies,
-  formatDate,
-}: {
-  replies?: SocialCommentReply[];
-  formatDate: (iso?: string) => string;
-}) {
-  if (!replies || replies.length === 0) return null;
-
-  return (
-    <div className="pl-3 sm:pl-5 border-l-2 border-indigo-500/30 space-y-2 my-2.5">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 flex items-center space-x-1 mb-1.5">
-        <CornerDownRight className="w-3 h-3 text-indigo-400" />
-        <span>Owner Reply Thread ({replies.length})</span>
-      </div>
-
-      {replies.map((reply) => {
-        const isFailed = reply.status === 'FAILED';
-
-        return (
-          <div
-            key={reply.id}
-            className={`p-2.5 rounded-xl border text-xs space-y-1 shadow-sm transition ${
-              isFailed
-                ? 'bg-rose-950/30 border-rose-800/60 text-rose-200'
-                : 'bg-slate-950/90 border-slate-800/90 text-slate-200'
-            }`}
-          >
-            <div className="flex items-center justify-between text-[10px] text-slate-400">
-              <div className="flex items-center space-x-1.5">
-                <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold text-[9px] flex items-center space-x-1">
-                  {isFailed ? (
-                    <AlertCircle className="w-2.5 h-2.5 text-rose-400" />
-                  ) : (
-                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
-                  )}
-                  <span>You (Owner)</span>
-                </span>
-
-                {isFailed ? (
-                  <span className="px-1.5 py-0.5 rounded bg-rose-950 text-rose-400 border border-rose-800 font-mono text-[9px] font-bold">
-                    FAILED
-                  </span>
-                ) : (
-                  <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-mono text-[9px] font-bold">
-                    SUCCESS
-                  </span>
-                )}
-              </div>
-
-              <span className="font-mono text-slate-400">{formatDate(reply.created_at)}</span>
-            </div>
-
-            <p className="text-slate-100 font-sans pl-1 whitespace-pre-wrap">{reply.message}</p>
-
-            {isFailed && reply.error_message && (
-              <p className="text-[10px] text-rose-400 font-mono italic pt-0.5 pl-1">
-                Error details: {reply.error_message}
-              </p>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// 4. Reply Composer Form Component
-function ReplyComposer({
-  comment,
-  isReplying,
-  replyText,
-  isSubmitting,
-  feedback,
-  onOpen,
-  onClose,
-  onTextChange,
-  onSubmit,
-  onDelete,
-}: {
-  comment: SocialComment;
-  isReplying: boolean;
-  replyText: string;
-  isSubmitting: boolean;
-  feedback: { type: 'success' | 'error'; message: string } | null;
-  onOpen: () => void;
-  onClose: () => void;
-  onTextChange: (text: string) => void;
-  onSubmit: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div className="pt-1">
-      {!isReplying ? (
-        <div className="flex items-center justify-between">
-          <button
-            onClick={onOpen}
-            className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 hover:text-white border border-indigo-500/30 font-semibold text-xs transition flex items-center space-x-1.5 shadow-sm"
-          >
-            <CornerDownRight className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Reply</span>
-          </button>
-
-          <button
-            onClick={onDelete}
-            className="px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white border border-rose-800/50 font-semibold text-xs transition flex items-center space-x-1.5 shadow-sm"
-            title="Delete comment permanently from social media platform"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-            <span>Delete</span>
-          </button>
-        </div>
-      ) : (
-        <div className="bg-slate-950/90 p-3.5 rounded-xl border border-indigo-500/40 space-y-3 shadow-xl animate-in fade-in slide-in-from-top-1 duration-200">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-200 border-b border-slate-800 pb-2">
-            <span className="flex items-center space-x-1.5 text-indigo-400">
-              <CornerDownRight className="w-4 h-4 text-indigo-400" />
-              <span>Reply to {comment.commenter_name || 'commenter'} as Page Owner</span>
-            </span>
-            <button
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <textarea
-            value={replyText}
-            onChange={(e) => onTextChange(e.target.value)}
-            disabled={isSubmitting}
-            maxLength={2000}
-            rows={3}
-            placeholder={`Type your response to ${comment.commenter_name || 'this commenter'}...`}
-            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition resize-none disabled:opacity-50"
-          />
-
-          {feedback && (
-            <div
-              className={`p-2.5 rounded-lg border text-xs flex items-center space-x-2 ${
-                feedback.type === 'success'
-                  ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
-                  : 'bg-rose-950/40 border-rose-800 text-rose-300'
-              }`}
-            >
-              {feedback.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-              )}
-              <span>{feedback.message}</span>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-[10px] font-mono text-slate-500">
-              {replyText.length} / 2000 characters
-            </span>
-
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isSubmitting}
-                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold transition disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={onSubmit}
-                disabled={isSubmitting || !replyText.trim()}
-                className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white font-bold text-xs transition flex items-center space-x-1.5 shadow-md disabled:text-slate-500 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                    <span>Sending Reply...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Send Reply</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// 5. Delete Confirmation Modal Component
-function DeleteConfirmationModal({
-  comment,
-  isDeleting,
-  error,
-  onConfirm,
-  onCancel,
-}: {
-  comment: SocialComment | null;
-  isDeleting: boolean;
-  error: string | null;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  if (!comment) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 font-sans text-xs">
-        <div className="flex items-start space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-rose-950/80 border border-rose-800/80 flex items-center justify-center text-rose-400 flex-shrink-0">
-            <AlertCircle className="w-5 h-5" />
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-base font-bold text-slate-100">Delete this comment?</h3>
-            <p className="text-slate-300 leading-relaxed text-xs">
-              This will permanently remove the comment from <strong className="text-slate-100 capitalize">{comment.platform}</strong>. This action cannot be undone.
-            </p>
-          </div>
-        </div>
-
-        {/* Comment Preview Box */}
-        <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="font-bold text-slate-200">{comment.commenter_name || comment.commenter_id || 'Commenter'}</span>
-            <span className="text-slate-400 font-mono capitalize">{comment.platform}</span>
-          </div>
-          <p className="text-slate-300 text-xs italic line-clamp-3">"{comment.comment_text || 'No comment text'}"</p>
-        </div>
-
-        {error && (
-          <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <div className="flex items-center justify-end space-x-2.5 pt-2 border-t border-slate-800">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isDeleting}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isDeleting}
-            className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:bg-slate-800 text-white font-bold text-xs transition flex items-center space-x-2 shadow-lg disabled:text-slate-500 disabled:cursor-not-allowed"
-          >
-            {isDeleting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
-                <span>Deleting...</span>
-              </>
-            ) : (
-              <>
-                <Trash2 className="w-4 h-4" />
-                <span>Delete Comment</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// 6. Main Conversation Container Component
-function CommentConversation({
-  comment,
-  formatDate,
-  activeReplyCommentId,
-  replyTextMap,
-  isSubmittingMap,
-  feedbackMap,
-  handleOpenReplyForm,
-  handleCloseReplyForm,
-  handleReplyTextChange,
-  handleSendReply,
-  onRequestDelete,
-}: {
-  comment: SocialComment;
-  formatDate: (iso?: string) => string;
-  activeReplyCommentId: number | null;
-  replyTextMap: Record<number, string>;
-  isSubmittingMap: Record<number, boolean>;
-  feedbackMap: Record<number, { type: 'success' | 'error'; message: string } | null>;
-  handleOpenReplyForm: (id: number) => void;
-  handleCloseReplyForm: (id: number) => void;
-  handleReplyTextChange: (id: number, text: string) => void;
-  handleSendReply: (comment: SocialComment) => void;
-  onRequestDelete: (comment: SocialComment) => void;
-}) {
-  const isReplying = activeReplyCommentId === comment.id;
-  const replyText = replyTextMap[comment.id] || '';
-  const isSubmitting = isSubmittingMap[comment.id] || false;
-  const feedback = feedbackMap[comment.id] || null;
-
-  return (
-    <div className="linear-panel p-4 sm:p-5 rounded-2xl border border-slate-800/80 hover:border-slate-700 transition space-y-3 bg-slate-900/40 shadow-lg">
-      {/* POST CONTEXT HEADER */}
-      <PostContextCard post={comment.post} account={comment.account} metaAd={comment.meta_ad} externalPostId={comment.external_post_id} platform={comment.platform} />
-
-      {/* ORIGINAL CUSTOMER COMMENT */}
-      <OriginalComment comment={comment} formatDate={formatDate} />
-
-      {/* NESTED REPLIES THREAD */}
-      <ReplyThread replies={comment.replies} formatDate={formatDate} />
-
-      {/* REPLY COMPOSER & ACTIONS */}
-      <ReplyComposer
-        comment={comment}
-        isReplying={isReplying}
-        replyText={replyText}
-        isSubmitting={isSubmitting}
-        feedback={feedback}
-        onOpen={() => handleOpenReplyForm(comment.id)}
-        onClose={() => handleCloseReplyForm(comment.id)}
-        onTextChange={(text) => handleReplyTextChange(comment.id, text)}
-        onSubmit={() => handleSendReply(comment)}
-        onDelete={() => onRequestDelete(comment)}
-      />
-    </div>
-  );
-}
-
-export default function CommentsPage() {
-  const [comments, setComments] = useState<SocialComment[]>([]);
+  // Social account filter state
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('all');
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [platformFilter, setPlatformFilter] = useState<'all' | 'facebook' | 'instagram'>('all');
-  const [commentTypeFilter, setCommentTypeFilter] = useState<'all' | 'organic' | 'ad'>('all');
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('ALL');
 
-  // Reply Form States
-  const [activeReplyCommentId, setActiveReplyCommentId] = useState<number | null>(null);
-  const [replyTextMap, setReplyTextMap] = useState<Record<number, string>>({});
-  const [isSubmittingMap, setIsSubmittingMap] = useState<Record<number, boolean>>({});
-  const [feedbackMap, setFeedbackMap] = useState<Record<number, { type: 'success' | 'error'; message: string } | null>>({});
+  // Overview Data
+  const [overview, setOverview] = useState<OverviewMetrics | null>(null);
+  const [loadingOverview, setLoadingOverview] = useState(false);
 
-  // 1. Fetch multi-account destinations
+  // Ads Data & Filters
+  const [ads, setAds] = useState<AdItem[]>([]);
+  const [loadingAds, setLoadingAds] = useState(false);
+  const [adSearch, setAdSearch] = useState('');
+  const [adStatusFilter, setAdStatusFilter] = useState('ACTIVE');
+
+  // Posts Data & Filters
+  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
+  const [postSearch, setPostSearch] = useState('');
+  const [postPlatformFilter, setPostPlatformFilter] = useState('ALL');
+
+  // Comments Stream Data
+  const [comments, setComments] = useState<SocialComment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
+
+  // Reply composer & Deletion
+  const [replyingToId, setReplyingToId] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [replySuccess, setReplySuccess] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
   const fetchSocialAccounts = async () => {
     try {
       const res = await apiClient.get('/social-accounts/');
-      if (Array.isArray(res.data)) {
-        const fakeIds = new Set(['109823471029', '17841400928371', '17841400928372', '17841400928373', '109823471030', 'sandbox']);
-        const realAccs = res.data.filter((a: SocialAccount) => !fakeIds.has(a.account_id));
-        setSocialAccounts(realAccs);
-      }
+      setSocialAccounts(res.data || []);
     } catch (e) {
-      console.warn('Failed to load connected social accounts:', e);
+      console.error('Failed to fetch social accounts:', e);
     }
   };
 
-  // 2. Fetch comments with optional account filtering
-  const fetchComments = async (isManualRefresh = false, overrideAccountId?: string) => {
-    const targetAccountId = overrideAccountId !== undefined ? overrideAccountId : selectedAccountId;
-    if (isManualRefresh) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-    setError(null);
-
+  const fetchOverview = async () => {
+    setLoadingOverview(true);
     try {
-      const params: Record<string, any> = {};
-      if (targetAccountId !== 'all') {
-        params.social_account_id = Number(targetAccountId);
-      }
-      const res = await apiClient.get('/social-comments/', { params });
-      if (Array.isArray(res.data)) {
-        setComments(res.data);
-      } else {
-        setComments([]);
-      }
-    } catch (e: any) {
-      console.error('Failed to load social comments:', e);
-      setError('Unable to load comments. Please try again.');
+      const res = await apiClient.get('/social-comments/overview');
+      setOverview(res.data);
+    } catch (e) {
+      console.error('Failed to fetch overview metrics:', e);
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      setLoadingOverview(false);
+    }
+  };
+
+  const fetchAds = async () => {
+    setLoadingAds(true);
+    try {
+      const params = new URLSearchParams();
+      if (adSearch.trim()) params.append('q', adSearch.trim());
+      if (adStatusFilter && adStatusFilter !== 'ALL') params.append('status', adStatusFilter);
+
+      const res = await apiClient.get(`/social-comments/ads?${params.toString()}`);
+      setAds(res.data || []);
+    } catch (e) {
+      console.error('Failed to fetch ads index:', e);
+    } finally {
+      setLoadingAds(false);
+    }
+  };
+
+  const fetchPosts = async () => {
+    setLoadingPosts(true);
+    try {
+      const params = new URLSearchParams();
+      if (postSearch.trim()) params.append('q', postSearch.trim());
+      if (postPlatformFilter && postPlatformFilter !== 'ALL') params.append('platform', postPlatformFilter.toLowerCase());
+
+      const res = await apiClient.get(`/social-comments/posts?${params.toString()}`);
+      setPosts(res.data || []);
+    } catch (e) {
+      console.error('Failed to fetch posts index:', e);
+    } finally {
+      setLoadingPosts(false);
+    }
+  };
+
+  const fetchCommentsFeed = async () => {
+    setLoadingComments(true);
+    setCommentsError(null);
+    try {
+      let endpoint = '/social-comments/?skip=0&limit=50';
+      if (selectedAccountId !== 'ALL') {
+        endpoint += `&social_account_id=${selectedAccountId}`;
+      }
+      const res = await apiClient.get(endpoint);
+      setComments(res.data || []);
+    } catch (e: any) {
+      console.error('Failed to fetch comments feed:', e);
+      setCommentsError(e?.response?.data?.detail || 'Failed to load comments feed.');
+    } finally {
+      setLoadingComments(false);
     }
   };
 
   useEffect(() => {
     fetchSocialAccounts();
-    fetchComments();
   }, []);
 
-  const handleAccountChange = (newAccountId: string) => {
-    setSelectedAccountId(newAccountId);
+  useEffect(() => {
+    if (activeTab === 'overview') fetchOverview();
+    if (activeTab === 'ads') fetchAds();
+    if (activeTab === 'posts') fetchPosts();
+    if (activeTab === 'comments') fetchCommentsFeed();
+  }, [activeTab, selectedAccountId, adStatusFilter, postPlatformFilter]);
 
-    // Intelligently reset or adjust platform filter if selected account platform conflicts
-    if (newAccountId !== 'all') {
-      const acc = socialAccounts.find((a) => String(a.id) === newAccountId);
-      if (acc && platformFilter !== 'all' && acc.platform !== platformFilter) {
-        setPlatformFilter('all');
-      }
-    }
-
-    fetchComments(false, newAccountId);
+  const handleTabChange = (tab: string) => {
+    router.push(`/comments?tab=${tab}`);
   };
 
-  const handleRefresh = () => {
-    fetchComments(true);
-  };
-
-  const handleOpenReplyForm = (commentId: number) => {
-    setActiveReplyCommentId(commentId);
-    setFeedbackMap((prev) => ({ ...prev, [commentId]: null }));
-  };
-
-  const handleCloseReplyForm = (commentId: number) => {
-    setActiveReplyCommentId(null);
-    setReplyTextMap((prev) => ({ ...prev, [commentId]: '' }));
-    setFeedbackMap((prev) => ({ ...prev, [commentId]: null }));
-  };
-
-  const handleReplyTextChange = (commentId: number, text: string) => {
-    setReplyTextMap((prev) => ({ ...prev, [commentId]: text }));
-    if (feedbackMap[commentId]) {
-      setFeedbackMap((prev) => ({ ...prev, [commentId]: null }));
-    }
-  };
-
-  const handleSendReply = async (comment: SocialComment) => {
-    const message = (replyTextMap[comment.id] || '').trim();
-    if (!message) return;
-
-    setIsSubmittingMap((prev) => ({ ...prev, [comment.id]: true }));
-    setFeedbackMap((prev) => ({ ...prev, [comment.id]: null }));
-
+  const handleSendReply = async (commentId: number) => {
+    if (!replyText.trim()) return;
+    setIsSubmittingReply(true);
+    setReplyError(null);
+    setReplySuccess(null);
     try {
-      const res = await apiClient.post(`/social-comments/${comment.id}/reply`, {
-        message: message
+      const res = await apiClient.post(`/social-comments/${commentId}/reply`, {
+        message: replyText.trim(),
       });
 
-      if (res.data?.status === 'success') {
-        setFeedbackMap((prev) => ({
-          ...prev,
-          [comment.id]: { type: 'success', message: res.data.message || 'Reply published successfully!' }
-        }));
+      setComments((prev) =>
+        prev.map((c) => {
+          if (c.id === commentId) {
+            const updated = [...(c.replies || []), res.data.reply];
+            return { ...c, replies: updated };
+          }
+          return c;
+        })
+      );
 
-        setTimeout(() => {
-          setReplyTextMap((prev) => ({ ...prev, [comment.id]: '' }));
-          setActiveReplyCommentId(null);
-          fetchComments(true);
-        }, 1200);
-      } else {
-        setFeedbackMap((prev) => ({
-          ...prev,
-          [comment.id]: { type: 'error', message: res.data?.message || 'Unable to publish reply. Please try again.' }
-        }));
-      }
+      setReplySuccess('Reply sent successfully!');
+      setReplyText('');
+      setReplyingToId(null);
+      setTimeout(() => setReplySuccess(null), 4000);
     } catch (e: any) {
-      console.error('Failed to submit comment reply:', e);
-      const errDetail = e?.response?.data?.detail || 'Unable to publish reply. Please try again.';
-      setFeedbackMap((prev) => ({
-        ...prev,
-        [comment.id]: { type: 'error', message: errDetail }
-      }));
+      console.error('Failed to reply:', e);
+      setReplyError(e?.response?.data?.detail || 'Failed to send reply.');
     } finally {
-      setIsSubmittingMap((prev) => ({ ...prev, [comment.id]: false }));
+      setIsSubmittingReply(false);
     }
   };
 
-  // Delete Comment Modal States & Handlers
-  const [deletingComment, setDeletingComment] = useState<SocialComment | null>(null);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const handleRequestDelete = (comment: SocialComment) => {
-    setDeletingComment(comment);
-    setDeleteError(null);
-  };
-
-  const handleCancelDelete = () => {
-    if (isDeleting) return;
-    setDeletingComment(null);
-    setDeleteError(null);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deletingComment) return;
-    setIsDeleting(true);
-    setDeleteError(null);
-
+  const handleDeleteComment = async (commentId: number) => {
+    if (!confirm('Are you sure you want to delete this comment?')) return;
+    setDeletingId(commentId);
     try {
-      const res = await apiClient.delete(`/social-comments/${deletingComment.id}`);
-      if (res.data?.status === 'success') {
-        // Immediately remove comment from local state and update counts
-        setComments((prev) => prev.filter((c) => c.id !== deletingComment.id));
-        setDeletingComment(null);
-      } else {
-        setDeleteError(res.data?.message || 'Unable to delete comment.');
-      }
+      await apiClient.delete(`/social-comments/${commentId}`);
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
     } catch (e: any) {
-      console.error('Failed to delete social comment:', e);
-      const errDetail = e?.response?.data?.detail || 'Unable to delete this comment from the social media platform.';
-      setDeleteError(errDetail);
+      alert(e?.response?.data?.detail || 'Failed to delete comment.');
     } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const selectedAccount = selectedAccountId === 'all'
-    ? null
-    : socialAccounts.find((a) => String(a.id) === selectedAccountId);
-
-  const organicCount = comments.filter((c) => !c.meta_ad_id && !c.meta_ad).length;
-  const adCount = comments.filter((c) => Boolean(c.meta_ad_id || c.meta_ad)).length;
-
-  const filteredComments = comments.filter((comment) => {
-    // 1. Platform Filter
-    if (platformFilter !== 'all' && comment.platform !== platformFilter) {
-      return false;
-    }
-    // 2. Comment Type / Source Filter (Derive safely from meta_ad_id / meta_ad presence)
-    const isAd = Boolean(comment.meta_ad_id || comment.meta_ad);
-    if (commentTypeFilter === 'organic' && isAd) {
-      return false;
-    }
-    if (commentTypeFilter === 'ad' && !isAd) {
-      return false;
-    }
-    return true;
-  });
-
-  const formatDate = (isoString?: string) => {
-    if (!isoString) return 'Just now';
-    try {
-      const date = new Date(isoString);
-      return date.toLocaleString(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      });
-    } catch {
-      return isoString;
+      setDeletingId(null);
     }
   };
 
   return (
-    <div className="space-y-6 max-w-5xl select-none font-sans text-xs">
-      {/* Delete Confirmation Modal */}
-      <DeleteConfirmationModal
-        comment={deletingComment}
-        isDeleting={isDeleting}
-        error={deleteError}
-        onConfirm={handleConfirmDelete}
-        onCancel={handleCancelDelete}
-      />
+    <div className="p-6 max-w-7xl mx-auto space-y-6 text-slate-100 font-sans">
+      {/* Top Header & Page Navigation */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100 tracking-tight flex items-center space-x-2">
+            <MessageSquare className="w-6 h-6 text-indigo-400" />
+            <span>Social Engagement Hub</span>
+          </h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Content-centric social moderation for Meta Ads and organic posts.
+          </p>
+        </div>
 
-      {/* Page Header Banner */}
-      <div className="linear-panel p-6 rounded-2xl space-y-4 border border-slate-800 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3.5">
-            <div className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 shadow-sm flex-shrink-0">
-              <MessageSquare className="w-5 h-5 text-indigo-400" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-100 tracking-tight flex items-center space-x-2">
-                <span>Social Comments & Replies</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold">
-                  Organic & Ad Comments
-                </span>
-              </h1>
-              <p className="text-xs text-slate-400 mt-1">
-                View incoming Facebook & Instagram organic post comments and synced Meta Ad comments in one place.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2.5 flex-shrink-0 flex-wrap gap-y-2">
-            {/* Account Switcher Dropdown (Reusing Dashboard Styling & Icon Conventions) */}
-            <div className="flex items-center space-x-2 bg-slate-900/80 border border-slate-800 px-3 py-2 rounded-xl shadow-sm">
-              <Filter className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-              <select
-                value={selectedAccountId}
-                onChange={(e) => handleAccountChange(e.target.value)}
-                className="bg-transparent text-xs text-indigo-300 font-semibold focus:outline-none cursor-pointer pr-1"
-                title="Select Connected Social Account"
-              >
-                <option value="all" className="bg-slate-900 text-slate-100 font-medium">
-                  🌐 All Connected Accounts ({socialAccounts.length})
+        {/* Social Account Selector Dropdown */}
+        <div className="flex items-center space-x-3">
+          <div className="relative flex items-center">
+            <Filter className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
+            <select
+              value={selectedAccountId}
+              onChange={(e) => setSelectedAccountId(e.target.value)}
+              className="bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg pl-8 pr-8 py-2 font-medium outline-none focus:border-indigo-500 transition appearance-none cursor-pointer"
+            >
+              <option value="ALL">All Connected Accounts</option>
+              {socialAccounts.map((acc) => (
+                <option key={acc.id} value={acc.id}>
+                  {acc.platform.toUpperCase()}: {acc.account_name}
                 </option>
-                {socialAccounts.map((acc) => (
-                  <option key={acc.id} value={String(acc.id)} className="bg-slate-900 text-slate-100 font-medium">
-                    {acc.platform === 'facebook' ? `📘 Facebook: ${acc.account_name}` : `📸 Instagram: @${acc.account_name.replace(/^@/, '')}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Refresh Button */}
-            <button
-              onClick={handleRefresh}
-              disabled={isLoading || isRefreshing}
-              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-white font-semibold text-xs transition flex items-center space-x-2 shadow-md disabled:opacity-50"
-              title="Refetch Comments"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-indigo-400 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Security & Verification Banner */}
-        <div className="flex items-center space-x-2 text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/60">
-          <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-          <span>
-            Strict User Isolation: Page access tokens are decrypted server-side only. Unified inbox for webhooks and synced Meta Ad comments.
-          </span>
-        </div>
-      </div>
-
-      {/* Filter Tabs & Counter Bar */}
-      <div className="flex flex-col space-y-3 border-b border-slate-800 pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Comment Type Filter Tabs */}
-          <div className="flex items-center space-x-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
-            <button
-              onClick={() => setCommentTypeFilter('all')}
-              className={`px-3 py-1.5 rounded-lg font-medium text-xs transition ${
-                commentTypeFilter === 'all'
-                  ? 'bg-indigo-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              All Comments ({comments.length})
-            </button>
-
-            <button
-              onClick={() => setCommentTypeFilter('organic')}
-              className={`px-3 py-1.5 rounded-lg font-medium text-xs transition flex items-center space-x-1.5 ${
-                commentTypeFilter === 'organic'
-                  ? 'bg-slate-700 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5 text-slate-400" />
-              <span>Post Comments ({organicCount})</span>
-            </button>
-
-            <button
-              onClick={() => setCommentTypeFilter('ad')}
-              className={`px-3 py-1.5 rounded-lg font-medium text-xs transition flex items-center space-x-1.5 ${
-                commentTypeFilter === 'ad'
-                  ? 'bg-purple-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Target className="w-3.5 h-3.5 text-purple-300" />
-              <span>Ad Comments ({adCount})</span>
-            </button>
+              ))}
+            </select>
           </div>
 
-          {/* Platform Filter Buttons */}
-          <div className="flex items-center space-x-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800">
-            <button
-              onClick={() => setPlatformFilter('all')}
-              className={`px-2.5 py-1 rounded-lg font-medium text-xs transition ${
-                platformFilter === 'all'
-                  ? 'bg-slate-800 text-indigo-300 border border-slate-700'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              All Platforms
-            </button>
-
-            {(!selectedAccount || selectedAccount.platform === 'facebook') && (
-              <button
-                onClick={() => setPlatformFilter('facebook')}
-                className={`px-2.5 py-1 rounded-lg font-medium text-xs transition flex items-center space-x-1 ${
-                  platformFilter === 'facebook'
-                    ? 'bg-blue-900/80 text-blue-200 border border-blue-700'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Facebook className="w-3 h-3 fill-current" />
-                <span>Facebook ({comments.filter((c) => c.platform === 'facebook').length})</span>
-              </button>
-            )}
-
-            {(!selectedAccount || selectedAccount.platform === 'instagram') && (
-              <button
-                onClick={() => setPlatformFilter('instagram')}
-                className={`px-2.5 py-1 rounded-lg font-medium text-xs transition flex items-center space-x-1 ${
-                  platformFilter === 'instagram'
-                    ? 'bg-pink-900/80 text-pink-200 border border-pink-700'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Instagram className="w-3 h-3" />
-                <span>Instagram ({comments.filter((c) => c.platform === 'instagram').length})</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="text-[11px] text-slate-400 font-mono flex items-center justify-between flex-wrap gap-2">
-          <span>
-            Showing {filteredComments.length} comment{filteredComments.length !== 1 ? 's' : ''}
-            {commentTypeFilter !== 'all' ? ` (${commentTypeFilter === 'ad' ? 'Ad Comments' : 'Post Comments'})` : ''}
-            {selectedAccount ? ` for ${selectedAccount.account_name}` : ''}
-          </span>
-
-          {adCount > 0 && (
-            <span className="text-purple-400 text-[10px] font-sans flex items-center space-x-1">
-              <Target className="w-3 h-3" />
-              <span>{adCount} Meta Ad comment{adCount !== 1 ? 's' : ''} synced</span>
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Main Content Area: Loading / Error / Empty / Data Cards */}
-      {isLoading ? (
-        <div className="linear-panel p-12 rounded-2xl text-center space-y-3 border border-slate-800 shadow-lg">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-400 mx-auto" />
-          <p className="text-xs text-slate-300 font-medium">Loading incoming social comments...</p>
-        </div>
-      ) : error ? (
-        <div className="linear-panel p-8 rounded-2xl border border-rose-900/50 bg-rose-950/20 text-center space-y-4">
-          <div className="w-10 h-10 rounded-full bg-rose-950/80 border border-rose-800 flex items-center justify-center text-rose-400 mx-auto">
-            <AlertCircle className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-rose-200">{error}</h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Please check your network connection or try refreshing.
-            </p>
-          </div>
           <button
-            onClick={() => fetchComments()}
-            className="px-4 py-2 rounded-lg bg-rose-900/80 hover:bg-rose-800 text-rose-100 font-bold text-xs transition inline-flex items-center space-x-2"
+            onClick={() => {
+              if (activeTab === 'overview') fetchOverview();
+              if (activeTab === 'ads') fetchAds();
+              if (activeTab === 'posts') fetchPosts();
+              if (activeTab === 'comments') fetchCommentsFeed();
+            }}
+            className="px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-medium transition flex items-center space-x-1.5"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Retry Loading</span>
+            <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Refresh</span>
           </button>
         </div>
-      ) : socialAccounts.length === 0 ? (
-        /* Empty State: No connected social accounts */
-        <div className="linear-panel p-12 rounded-2xl text-center space-y-4 border border-slate-800 shadow-xl">
-          <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 mx-auto shadow-inner">
-            <Share2 className="w-7 h-7 text-indigo-400/80" />
+      </div>
+
+      {/* Primary Navigation Tabs */}
+      <div className="flex items-center space-x-1 border-b border-slate-800/80 pb-px">
+        <button
+          onClick={() => handleTabChange('overview')}
+          className={`px-4 py-2.5 rounded-t-lg font-semibold text-xs transition-colors flex items-center space-x-2 ${
+            activeTab === 'overview'
+              ? 'bg-slate-900 text-indigo-400 border-t-2 border-indigo-500 border-x border-slate-800/80'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+          }`}
+        >
+          <LayoutDashboard className="w-3.5 h-3.5" />
+          <span>Overview</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('ads')}
+          className={`px-4 py-2.5 rounded-t-lg font-semibold text-xs transition-colors flex items-center space-x-2 ${
+            activeTab === 'ads'
+              ? 'bg-slate-900 text-purple-400 border-t-2 border-purple-500 border-x border-slate-800/80'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+          }`}
+        >
+          <Target className="w-3.5 h-3.5 text-purple-400" />
+          <span>Meta Ads</span>
+          {overview?.total_ad_comments ? (
+            <span className="px-1.5 py-0.2 rounded-full bg-purple-950 text-purple-300 border border-purple-800/80 text-[10px]">
+              {overview.total_ad_comments}
+            </span>
+          ) : null}
+        </button>
+
+        <button
+          onClick={() => handleTabChange('posts')}
+          className={`px-4 py-2.5 rounded-t-lg font-semibold text-xs transition-colors flex items-center space-x-2 ${
+            activeTab === 'posts'
+              ? 'bg-slate-900 text-blue-400 border-t-2 border-blue-500 border-x border-slate-800/80'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+          }`}
+        >
+          <FileText className="w-3.5 h-3.5 text-blue-400" />
+          <span>Organic Posts</span>
+          {overview?.total_post_comments ? (
+            <span className="px-1.5 py-0.2 rounded-full bg-blue-950 text-blue-300 border border-blue-800/80 text-[10px]">
+              {overview.total_post_comments}
+            </span>
+          ) : null}
+        </button>
+
+        <button
+          onClick={() => handleTabChange('comments')}
+          className={`px-4 py-2.5 rounded-t-lg font-semibold text-xs transition-colors flex items-center space-x-2 ${
+            activeTab === 'comments'
+              ? 'bg-slate-900 text-emerald-400 border-t-2 border-emerald-500 border-x border-slate-800/80'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+          }`}
+        >
+          <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+          <span>All Comments Stream</span>
+        </button>
+      </div>
+
+      {/* TAB 1: OVERVIEW METRICS DASHBOARD */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          {/* Top KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-slate-900/60 border border-slate-800/90 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Engagement</p>
+                <h3 className="text-3xl font-extrabold text-slate-100 mt-1">
+                  {overview ? overview.total_comments : 0}
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">Ingested social discussions</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-indigo-950/80 border border-indigo-800/80 flex items-center justify-center text-indigo-400">
+                <MessageSquare className="w-6 h-6" />
+              </div>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-800/90 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-purple-400 uppercase tracking-wider">Meta Ad Comments</p>
+                <h3 className="text-3xl font-extrabold text-purple-300 mt-1">
+                  {overview ? overview.total_ad_comments : 0}
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">Active paid ads engagement</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-purple-950/80 border border-purple-800/80 flex items-center justify-center text-purple-400">
+                <Target className="w-6 h-6" />
+              </div>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-800/90 rounded-2xl p-5 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Organic Post Comments</p>
+                <h3 className="text-3xl font-extrabold text-blue-300 mt-1">
+                  {overview ? overview.total_post_comments : 0}
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">Facebook & Instagram page posts</p>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-blue-950/80 border border-blue-800/80 flex items-center justify-center text-blue-400">
+                <FileText className="w-6 h-6" />
+              </div>
+            </div>
           </div>
-          <div className="space-y-1 max-w-sm mx-auto">
-            <h3 className="text-sm font-bold text-slate-200">No social accounts connected yet</h3>
-            <p className="text-xs text-slate-400">
-              Connect your Facebook Pages and Instagram Professional accounts to start viewing and replying to incoming comments.
-            </p>
+
+          {/* Active Discussions Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Top Meta Ads Card */}
+            <div className="bg-slate-900/60 border border-slate-800/90 rounded-2xl p-5 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-200 flex items-center space-x-2">
+                  <Target className="w-4 h-4 text-purple-400" />
+                  <span>Recent Active Meta Ads</span>
+                </h3>
+                <button
+                  onClick={() => handleTabChange('ads')}
+                  className="text-xs text-purple-400 hover:text-purple-300 font-semibold flex items-center space-x-1"
+                >
+                  <span>View All Ads</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {loadingOverview ? (
+                <div className="py-8 text-center"><Loader2 className="w-6 h-6 animate-spin text-purple-400 mx-auto" /></div>
+              ) : !overview?.recent_ads || overview.recent_ads.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400 bg-slate-950/40 rounded-xl border border-slate-800/60">
+                  No active Meta Ad comments found. Sync active comments in Meta Accounts to get started.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {overview.recent_ads.map((ad) => (
+                    <div
+                      key={ad.id}
+                      className="p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl flex items-center justify-between hover:border-purple-800/60 transition group"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <h4 className="text-xs font-bold text-slate-200 truncate group-hover:text-purple-300 transition">
+                          {ad.name}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                          {ad.campaign_name || 'Meta Ad Campaign'}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-3 flex-shrink-0">
+                        <span className="px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-800 text-[10px] font-bold">
+                          {ad.comment_count} comments
+                        </span>
+                        <Link
+                          href={`/comments/ads/${ad.id}`}
+                          className="p-1.5 rounded-lg bg-slate-900 hover:bg-purple-900/60 text-purple-300 transition"
+                          title="View Ad Comments"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Top Organic Posts Card */}
+            <div className="bg-slate-900/60 border border-slate-800/90 rounded-2xl p-5 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-200 flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-blue-400" />
+                  <span>Recent Organic Discussions</span>
+                </h3>
+                <button
+                  onClick={() => handleTabChange('posts')}
+                  className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center space-x-1"
+                >
+                  <span>View All Posts</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {loadingOverview ? (
+                <div className="py-8 text-center"><Loader2 className="w-6 h-6 animate-spin text-blue-400 mx-auto" /></div>
+              ) : !overview?.recent_posts || overview.recent_posts.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400 bg-slate-950/40 rounded-xl border border-slate-800/60">
+                  No organic post comments recorded yet.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {overview.recent_posts.map((p) => (
+                    <div
+                      key={p.id}
+                      className="p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl flex items-center justify-between hover:border-blue-800/60 transition group"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <h4 className="text-xs font-bold text-slate-200 truncate group-hover:text-blue-300 transition">
+                          {p.title}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 capitalize mt-0.5">
+                          Platform: {p.platform}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-3 flex-shrink-0">
+                        <span className="px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-800 text-[10px] font-bold">
+                          {p.comment_count} comments
+                        </span>
+                        <Link
+                          href={`/comments/posts/${p.external_post_id}`}
+                          className="p-1.5 rounded-lg bg-slate-900 hover:bg-blue-900/60 text-blue-300 transition"
+                          title="View Post Comments"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-          <Link
-            href="/meta-connect"
-            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition inline-flex items-center space-x-2 shadow"
-          >
-            <span>Connect Social Accounts</span>
-          </Link>
         </div>
-      ) : filteredComments.length === 0 ? (
-        /* Empty State: No comments matching current filters */
-        <div className="linear-panel p-12 rounded-2xl text-center space-y-4 border border-slate-800 shadow-xl">
-          <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 mx-auto shadow-inner">
-            {commentTypeFilter === 'ad' ? (
-              <Target className="w-7 h-7 text-purple-400/80" />
-            ) : (
-              <MessageSquare className="w-7 h-7 text-indigo-400/80" />
-            )}
-          </div>
-          <div className="space-y-1 max-w-sm mx-auto">
-            <h3 className="text-sm font-bold text-slate-200">
-              {commentTypeFilter === 'ad'
-                ? 'No Meta Ad comments found'
-                : commentTypeFilter === 'organic'
-                ? 'No organic post comments found'
-                : platformFilter !== 'all'
-                ? `No ${platformFilter === 'facebook' ? 'Facebook' : 'Instagram'} comments`
-                : selectedAccount
-                ? `No comments for ${selectedAccount.account_name} yet`
-                : 'No comments received yet'}
-            </h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              {commentTypeFilter === 'ad'
-                ? 'Sync active ad comments from your Meta Ad Accounts to view and reply to ad engagement.'
-                : selectedAccount
-                ? `Comments received for ${selectedAccount.account_name} will appear here.`
-                : 'Comments from your connected Facebook Pages, Instagram Professional accounts, and synced Meta Ads will appear here.'}
-            </p>
-          </div>
-          <div className="flex items-center justify-center space-x-3 pt-1">
-            {commentTypeFilter === 'ad' && (
-              <Link
-                href="/meta-connect"
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition inline-flex items-center space-x-1.5 shadow-md"
-              >
-                <Target className="w-3.5 h-3.5" />
-                <span>Go to Sync Active Comments</span>
-              </Link>
-            )}
-            <button
-              onClick={handleRefresh}
-              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-semibold text-xs transition inline-flex items-center space-x-2"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Check for New Comments</span>
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* Comments List rendered via CommentConversation */
+      )}
+
+      {/* TAB 2: META ADS INDEX VIEW */}
+      {activeTab === 'ads' && (
         <div className="space-y-4">
-          {filteredComments.map((comment) => (
-            <CommentConversation
-              key={comment.id}
-              comment={comment}
-              formatDate={formatDate}
-              activeReplyCommentId={activeReplyCommentId}
-              replyTextMap={replyTextMap}
-              isSubmittingMap={isSubmittingMap}
-              feedbackMap={feedbackMap}
-              handleOpenReplyForm={handleOpenReplyForm}
-              handleCloseReplyForm={handleCloseReplyForm}
-              handleReplyTextChange={handleReplyTextChange}
-              handleSendReply={handleSendReply}
-              onRequestDelete={handleRequestDelete}
-            />
-          ))}
+          {/* Controls & Search */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800/90">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                value={adSearch}
+                onChange={(e) => setAdSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchAds()}
+                placeholder="Search ad name, campaign, or ad set..."
+                className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 text-xs rounded-lg pl-9 pr-3 py-2.5 text-slate-100 placeholder-slate-500 outline-none transition"
+              />
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <select
+                value={adStatusFilter}
+                onChange={(e) => setAdStatusFilter(e.target.value)}
+                className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-3 py-2.5 font-medium outline-none focus:border-purple-500 transition cursor-pointer"
+              >
+                <option value="ACTIVE">Active Ads Only</option>
+                <option value="PAUSED">Paused Ads Only</option>
+                <option value="ALL">All Meta Ads</option>
+              </select>
+
+              <button
+                onClick={fetchAds}
+                className="px-3.5 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs transition flex items-center space-x-1.5"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Filter</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Ads Grid / Table */}
+          {loadingAds ? (
+            <div className="py-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800/80">
+              <Loader2 className="w-8 h-8 text-purple-400 animate-spin mx-auto" />
+              <p className="text-xs text-slate-400 mt-2">Loading Meta Ads...</p>
+            </div>
+          ) : ads.length === 0 ? (
+            <div className="p-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800/80 space-y-2">
+              <Target className="w-8 h-8 text-slate-500 mx-auto" />
+              <h4 className="text-sm font-bold text-slate-200">No Meta Ads Found</h4>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                No synced ads match your current status or search filter.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {ads.map((ad) => (
+                <div
+                  key={ad.id}
+                  className="bg-slate-900/60 border border-slate-800/90 hover:border-purple-700/60 rounded-xl p-4 transition-all shadow-sm space-y-3 flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-bold text-sm text-slate-100 line-clamp-1">{ad.name}</h3>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold flex-shrink-0 border ${
+                          ad.effective_status === 'ACTIVE'
+                            ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                            : 'bg-amber-950 text-amber-300 border-amber-800'
+                        }`}
+                      >
+                        ● {ad.effective_status || 'UNKNOWN'}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-400 space-y-1">
+                      <p><span className="text-slate-500 font-semibold">Campaign:</span> {ad.campaign_name || 'N/A'}</p>
+                      <p><span className="text-slate-500 font-semibold">Ad Set:</span> {ad.adset_name || 'N/A'}</p>
+                      <p className="font-mono text-[10px] text-slate-500">ID: {ad.meta_ad_id}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                    <div className="flex items-center space-x-1 text-xs text-purple-300 font-semibold">
+                      <MessageSquare className="w-3.5 h-3.5 text-purple-400" />
+                      <span>{ad.comment_count} Comments</span>
+                    </div>
+
+                    <Link
+                      href={`/comments/ads/${ad.id}`}
+                      className="px-3 py-1.5 rounded-lg bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-800/80 font-semibold text-xs transition flex items-center space-x-1"
+                    >
+                      <span>Manage Comments</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: ORGANIC POSTS INDEX VIEW */}
+      {activeTab === 'posts' && (
+        <div className="space-y-4">
+          {/* Controls & Search */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800/90">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                value={postSearch}
+                onChange={(e) => setPostSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchPosts()}
+                placeholder="Search organic post title or caption..."
+                className="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 text-xs rounded-lg pl-9 pr-3 py-2.5 text-slate-100 placeholder-slate-500 outline-none transition"
+              />
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <select
+                value={postPlatformFilter}
+                onChange={(e) => setPostPlatformFilter(e.target.value)}
+                className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-3 py-2.5 font-medium outline-none focus:border-blue-500 transition cursor-pointer"
+              >
+                <option value="ALL">All Platforms</option>
+                <option value="FACEBOOK">Facebook Only</option>
+                <option value="INSTAGRAM">Instagram Only</option>
+              </select>
+
+              <button
+                onClick={fetchPosts}
+                className="px-3.5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs transition flex items-center space-x-1.5"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Filter</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Posts Grid / Table */}
+          {loadingPosts ? (
+            <div className="py-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800/80">
+              <Loader2 className="w-8 h-8 text-blue-400 animate-spin mx-auto" />
+              <p className="text-xs text-slate-400 mt-2">Loading Organic Posts...</p>
+            </div>
+          ) : posts.length === 0 ? (
+            <div className="p-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800/80 space-y-2">
+              <FileText className="w-8 h-8 text-slate-500 mx-auto" />
+              <h4 className="text-sm font-bold text-slate-200">No Organic Posts Found</h4>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                No organic posts match your platform or search criteria.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {posts.map((p) => (
+                <div
+                  key={p.id}
+                  className="bg-slate-900/60 border border-slate-800/90 hover:border-blue-700/60 rounded-xl p-4 transition-all shadow-sm space-y-3 flex flex-col justify-between"
+                >
+                  <div className="flex items-start space-x-3">
+                    {p.image_url ? (
+                      <img src={p.image_url} alt="Post" className="w-12 h-12 object-cover rounded-lg border border-slate-800 flex-shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500 flex-shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase flex items-center space-x-1 ${p.platform === 'facebook' ? 'bg-blue-950 text-blue-300 border border-blue-800' : 'bg-pink-950 text-pink-300 border border-pink-800'}`}>
+                          {p.platform === 'facebook' ? <Facebook className="w-2.5 h-2.5 fill-current" /> : <Instagram className="w-2.5 h-2.5" />}
+                          <span>{p.platform}</span>
+                        </span>
+                      </div>
+                      <h3 className="font-bold text-xs text-slate-100 truncate">{p.title}</h3>
+                      {p.caption && <p className="text-[11px] text-slate-400 line-clamp-1">{p.caption}</p>}
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                    <div className="flex items-center space-x-1 text-xs text-blue-300 font-semibold">
+                      <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{p.comment_count} Comments</span>
+                    </div>
+
+                    <Link
+                      href={`/comments/posts/${p.external_post_id}`}
+                      className="px-3 py-1.5 rounded-lg bg-blue-950/80 hover:bg-blue-900 text-blue-200 border border-blue-800/80 font-semibold text-xs transition flex items-center space-x-1"
+                    >
+                      <span>Manage Comments</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 4: UNIFIED COMMENTS STREAM */}
+      {activeTab === 'comments' && (
+        <div className="space-y-4">
+          {replySuccess && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/50 border border-emerald-800/80 text-emerald-300 text-xs flex items-center space-x-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <span>{replySuccess}</span>
+            </div>
+          )}
+
+          {commentsError && (
+            <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/80 text-rose-300 text-sm flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+              <span>{commentsError}</span>
+            </div>
+          )}
+
+          {loadingComments ? (
+            <div className="py-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800/80">
+              <Loader2 className="w-8 h-8 text-emerald-400 animate-spin mx-auto" />
+              <p className="text-xs text-slate-400 mt-2">Loading all social comments...</p>
+            </div>
+          ) : comments.length === 0 ? (
+            <div className="p-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800/80 space-y-2">
+              <MessageSquare className="w-8 h-8 text-slate-500 mx-auto" />
+              <h4 className="text-sm font-bold text-slate-200">No Social Comments Found</h4>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                No comments exist for the selected account filter.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {comments.map((comment) => {
+                const commenterName = comment.commenter_name || comment.commenter_id || 'Anonymous User';
+                const initial = commenterName.charAt(0).toUpperCase();
+
+                return (
+                  <div
+                    key={comment.id}
+                    className="bg-slate-900/60 border border-slate-800/90 rounded-xl p-4 transition-colors hover:border-slate-700/80 space-y-3 shadow-sm"
+                  >
+                    {/* Post Context Preview Header */}
+                    <PostContextCard
+                      post={comment.post}
+                      account={comment.account}
+                      metaAd={comment.meta_ad}
+                      externalPostId={comment.external_post_id}
+                      platform={comment.platform}
+                    />
+
+                    {/* Header: Commenter Identity & Timestamp */}
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm">
+                          {initial}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-bold text-sm text-slate-100 truncate">
+                              {commenterName}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5">
+                            <Clock className="w-3 h-3 text-slate-500" />
+                            <span>
+                              {comment.created_at ? new Date(comment.created_at).toLocaleString() : 'Recent'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleDeleteComment(comment.id)}
+                        disabled={deletingId === comment.id}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 border border-transparent hover:border-rose-800/50 transition"
+                        title="Delete Comment"
+                      >
+                        {deletingId === comment.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Comment Message Body */}
+                    <div className="bg-slate-950/70 p-3 rounded-lg border border-slate-800/60 text-sm text-slate-200 leading-relaxed font-sans whitespace-pre-wrap">
+                      {comment.comment_text}
+                    </div>
+
+                    {/* Reply History */}
+                    {comment.replies && comment.replies.length > 0 && (
+                      <div className="pl-4 border-l-2 border-indigo-500/40 space-y-2 mt-2">
+                        <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider">
+                          Replies ({comment.replies.length})
+                        </span>
+                        {comment.replies.map((reply: SocialCommentReply) => (
+                          <div key={reply.id} className="bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50 text-xs text-slate-300 flex items-start space-x-2">
+                            <CornerDownRight className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-slate-200">{reply.message}</p>
+                              <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1">
+                                <span>{reply.created_at ? new Date(reply.created_at).toLocaleString() : 'Sent'}</span>
+                                <span className="text-emerald-400 font-semibold">● Sent</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Reply Composer */}
+                    {replyingToId === comment.id ? (
+                      <div className="space-y-2 pt-2 border-t border-slate-800/60">
+                        {replyError && (
+                          <div className="text-xs text-rose-400 flex items-center space-x-1">
+                            <AlertCircle className="w-3 h-3" />
+                            <span>{replyError}</span>
+                          </div>
+                        )}
+                        <textarea
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          placeholder="Write an official reply..."
+                          rows={2}
+                          className="w-full bg-slate-950 border border-indigo-800/80 focus:border-indigo-500 rounded-lg p-2.5 text-xs text-slate-100 placeholder-slate-500 outline-none transition"
+                        />
+                        <div className="flex items-center justify-end space-x-2">
+                          <button
+                            onClick={() => {
+                              setReplyingToId(null);
+                              setReplyText('');
+                              setReplyError(null);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleSendReply(comment.id)}
+                            disabled={isSubmittingReply || !replyText.trim()}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition flex items-center space-x-1.5 disabled:opacity-50"
+                          >
+                            {isSubmittingReply ? (
+                              <Loader2 className="w-3 h-3 animate-spin text-white" />
+                            ) : (
+                              <Send className="w-3 h-3" />
+                            )}
+                            <span>{isSubmittingReply ? 'Sending...' : 'Post Reply'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end pt-1">
+                        <button
+                          onClick={() => {
+                            setReplyingToId(comment.id);
+                            setReplyText('');
+                            setReplyError(null);
+                          }}
+                          className="px-3 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-700/60 text-xs font-medium transition flex items-center space-x-1.5"
+                        >
+                          <CornerDownRight className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Reply</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

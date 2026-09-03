@@ -531,3 +531,80 @@ def test_17_meta_no_identity_fallback_persists_successfully(db_session):
     assert saved.commenter_name is None
     assert saved.commenter_id is None
 
+
+def test_18_engagement_overview_and_content_endpoints(client, db_session):
+    user, fb_acc, ig_acc, ad_acct, ad = setup_test_environment(db_session)
+
+    fastapi_app = client.app
+    from app.api.v1.deps import get_current_user
+    fastapi_app.dependency_overrides[get_current_user] = lambda: user
+
+    # 1. Create an organic comment and an ad comment
+    c_organic = SocialComment(
+        user_id=user.id,
+        social_account_id=fb_acc.id,
+        platform="facebook",
+        external_comment_id="org_c_1",
+        external_post_id="org_post_100",
+        comment_text="Organic post comment",
+        commenter_name="Organic User",
+        webhook_object="page",
+        meta_ad_id=None
+    )
+    c_ad = SocialComment(
+        user_id=user.id,
+        social_account_id=fb_acc.id,
+        platform="facebook",
+        external_comment_id="ad_c_1",
+        external_post_id="ad_post_200",
+        comment_text="Ad comment text",
+        commenter_name="Ad User",
+        webhook_object="page",
+        meta_ad_id=ad.id
+    )
+    db_session.add_all([c_organic, c_ad])
+    db_session.commit()
+
+    # Test /overview
+    res_ov = client.get("/api/v1/social-comments/overview")
+    assert res_ov.status_code == 200
+    ov_data = res_ov.json()
+    assert ov_data["total_comments"] == 2
+    assert ov_data["total_ad_comments"] == 1
+    assert ov_data["total_post_comments"] == 1
+    assert len(ov_data["recent_ads"]) >= 1
+    assert ov_data["recent_ads"][0]["comment_count"] == 1
+
+    # Test /ads
+    res_ads = client.get("/api/v1/social-comments/ads")
+    assert res_ads.status_code == 200
+    ads_data = res_ads.json()
+    assert len(ads_data) >= 1
+    matched_ad = next(a for a in ads_data if a["id"] == ad.id)
+    assert matched_ad["comment_count"] == 1
+
+    # Test /ads/{id}
+    res_ad_detail = client.get(f"/api/v1/social-comments/ads/{ad.id}")
+    assert res_ad_detail.status_code == 200
+    ad_detail_data = res_ad_detail.json()
+    assert ad_detail_data["ad"]["id"] == ad.id
+    assert ad_detail_data["total_comments"] == 1
+    assert len(ad_detail_data["comments"]) == 1
+    assert ad_detail_data["comments"][0]["external_comment_id"] == "ad_c_1"
+
+    # Test /posts
+    res_posts = client.get("/api/v1/social-comments/posts")
+    assert res_posts.status_code == 200
+    posts_data = res_posts.json()
+    assert len(posts_data) >= 1
+    assert posts_data[0]["comment_count"] == 1
+
+    # Test /posts/{id}
+    res_post_detail = client.get("/api/v1/social-comments/posts/org_post_100")
+    assert res_post_detail.status_code == 200
+    post_detail_data = res_post_detail.json()
+    assert post_detail_data["total_comments"] == 1
+    assert len(post_detail_data["comments"]) == 1
+    assert post_detail_data["comments"][0]["external_comment_id"] == "org_c_1"
+
+

@@ -106,7 +106,9 @@ class SocialCommentRepository:
         limit: int = 50,
         platform: Optional[str] = None,
         social_account_id: Optional[int] = None,
-        meta_ad_id: Optional[int] = None
+        meta_ad_id: Optional[int] = None,
+        external_post_id: Optional[str] = None,
+        is_ad: Optional[bool] = None
     ) -> List[SocialComment]:
         """Fetch comments belonging to a specific user with pagination, excluding owner reply echoes."""
         from app.models.social_comment_reply import SocialCommentReply
@@ -131,10 +133,56 @@ class SocialCommentRepository:
             query = query.filter(SocialComment.platform == platform)
         if social_account_id:
             query = query.filter(SocialComment.social_account_id == social_account_id)
-        if meta_ad_id:
+        if meta_ad_id is not None:
             query = query.filter(SocialComment.meta_ad_id == meta_ad_id)
+        if external_post_id:
+            query = query.filter(SocialComment.external_post_id == external_post_id)
+        if is_ad is True:
+            query = query.filter(SocialComment.meta_ad_id.isnot(None))
+        elif is_ad is False:
+            query = query.filter(SocialComment.meta_ad_id.is_(None))
 
         return query.order_by(SocialComment.created_at.desc()).offset(skip).limit(limit).all()
+
+    def count_by_user_id(
+        self,
+        db: Session,
+        user_id: int,
+        platform: Optional[str] = None,
+        social_account_id: Optional[int] = None,
+        meta_ad_id: Optional[int] = None,
+        external_post_id: Optional[str] = None,
+        is_ad: Optional[bool] = None
+    ) -> int:
+        """Count comments belonging to a specific user, excluding owner reply echoes."""
+        from app.models.social_comment_reply import SocialCommentReply
+
+        reply_subquery = db.query(SocialCommentReply.external_reply_id).filter(
+            SocialCommentReply.user_id == user_id,
+            SocialCommentReply.external_reply_id.isnot(None)
+        )
+        if platform:
+            reply_subquery = reply_subquery.filter(SocialCommentReply.platform == platform)
+
+        query = db.query(SocialComment).filter(
+            SocialComment.user_id == user_id,
+            SocialComment.is_deleted.isnot(True),
+            ~SocialComment.external_comment_id.in_(reply_subquery)
+        )
+        if platform:
+            query = query.filter(SocialComment.platform == platform)
+        if social_account_id:
+            query = query.filter(SocialComment.social_account_id == social_account_id)
+        if meta_ad_id is not None:
+            query = query.filter(SocialComment.meta_ad_id == meta_ad_id)
+        if external_post_id:
+            query = query.filter(SocialComment.external_post_id == external_post_id)
+        if is_ad is True:
+            query = query.filter(SocialComment.meta_ad_id.isnot(None))
+        elif is_ad is False:
+            query = query.filter(SocialComment.meta_ad_id.is_(None))
+
+        return query.count()
 
     def get_by_id_and_user_id(
         self,

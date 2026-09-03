@@ -22,49 +22,11 @@ class CommentReplyRequest(BaseModel):
 
 MAX_REPLY_LENGTH = 2000
 
-@router.get("/", response_model=List[dict])
-def get_user_social_comments(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
-    platform: Optional[str] = Query(None, description="Filter by platform ('facebook' or 'instagram')"),
-    social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
-    meta_ad_id: Optional[int] = Query(None, description="Filter by Meta Ad DB ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Retrieve ingested social comments for the authenticated user only.
-    Enforces user isolation and excludes any sensitive credentials.
-    Supports filtering by specific social_account_id owned by current_user and meta_ad_id.
-    Filters out owner reply echoes at DB and API response layers.
-    Includes persistent, chronologically sorted reply history for each comment.
-    Includes associated post context (local DB or Meta Graph API fallback).
-    """
-    if social_account_id is not None:
-        account = db.query(SocialAccount).filter(
-            SocialAccount.id == social_account_id,
-            SocialAccount.user_id == current_user.id
-        ).first()
-        if not account:
-            raise HTTPException(status_code=404, detail="Social account not found")
+def _format_comments_response_list(comments: List[SocialComment], current_user: User, db: Session) -> List[dict]:
+    """Helper function to cleanly format a list of SocialComment DB models into API response objects with resolved post, account, and reply metadata."""
+    if not comments:
+        return []
 
-    comments = social_comment_repo.get_by_user_id(
-        db=db,
-        user_id=current_user.id,
-        skip=skip,
-        limit=limit,
-        platform=platform,
-        social_account_id=social_account_id,
-        meta_ad_id=meta_ad_id
-    )
-
-    ad_count = sum(1 for c in comments if c.meta_ad_id is not None)
-    organic_count = len(comments) - ad_count
-    logger.info(
-        f"[COMMENTS_API] user_id={current_user.id} total_retrieved={len(comments)} "
-        f"organic_count={organic_count} ad_comment_count={ad_count}"
-    )
-    
     # Defensive Protection: Fetch external_reply_ids for current_user to exclude any webhook echoes
     owner_reply_ids = {
         r[0] for r in db.query(SocialCommentReply.external_reply_id).filter(
@@ -182,7 +144,6 @@ def get_user_social_comments(
                         metadata_json=meta_data
                     )
                 else:
-                    # Save placeholder status='UNAVAILABLE' so subsequent loads hit Tier 2 cache directly
                     ctx = ExternalPostContext(
                         platform=c_platform,
                         social_account_id=acc_id,
@@ -205,11 +166,9 @@ def get_user_social_comments(
     # Build final response list with account context & resolved post context
     res_list = []
     for c in comments:
-        # Defensive Check: Skip if this comment is an owner reply echo
         if c.external_comment_id in owner_reply_ids:
             continue
 
-        # Account Context Resolution
         acc_obj = None
         sa = c.social_account
         if sa:
@@ -234,7 +193,6 @@ def get_user_social_comments(
                 "logo_url": None
             }
 
-        # Post Context Resolution
         post_obj = None
         if c.external_post_id and c.external_post_id.strip():
             ext_pid = c.external_post_id.strip()
@@ -271,7 +229,6 @@ def get_user_social_comments(
                         "source": "meta"
                     }
 
-        # Sort replies chronologically (oldest first: Oldest reply -> Newest reply)
         sorted_replies = sorted(
             (c.replies or []),
             key=lambda r: r.created_at or datetime.min.replace(tzinfo=timezone.utc)
@@ -287,11 +244,6 @@ def get_user_social_comments(
                 "adset_name": c.meta_ad.adset_name,
                 "effective_status": c.meta_ad.effective_status
             }
-
-        logger.debug(
-            f"[META_COMMENT_API_IDENTITY] comment_id={c.external_comment_id} "
-            f"commenter_name={c.commenter_name or 'NONE'} commenter_id_present={bool(c.commenter_id)}"
-        )
 
         res_list.append({
             "id": c.id,
@@ -324,6 +276,464 @@ def get_user_social_comments(
             ]
         })
     return res_list
+
+
+@router.get("/", response_model=List[dict])
+def get_user_social_comments(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    platform: Optional[str] = Query(None, description="Filter by platform ('facebook' or 'instagram')"),
+    social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
+    meta_ad_id: Optional[int] = Query(None, description="Filter by Meta Ad DB ID"),
+    external_post_id: Optional[str] = Query(None, description="Filter by external post ID"),
+    is_ad: Optional[bool] = Query(None, description="Filter ad vs organic comments"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve ingested social comments for the authenticated user only.
+    Enforces user isolation and excludes any sensitive credentials.
+    """
+    if social_account_id is not None:
+        account = db.query(SocialAccount).filter(
+            SocialAccount.id == social_account_id,
+            SocialAccount.user_id == current_user.id
+        ).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Social account not found")
+
+    comments = social_comment_repo.get_by_user_id(
+        db=db,
+        user_id=current_user.id,
+        skip=skip,
+        limit=limit,
+        platform=platform,
+        social_account_id=social_account_id,
+        meta_ad_id=meta_ad_id,
+        external_post_id=external_post_id,
+        is_ad=is_ad
+    )
+
+    return _format_comments_response_list(comments, current_user, db)
+
+
+@router.get("/overview", response_model=dict)
+def get_engagement_overview(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve high-level Engagement metrics and recent top Ads & Posts with comment counts.
+    """
+    total_comments = social_comment_repo.count_by_user_id(db, current_user.id)
+    total_ad_comments = social_comment_repo.count_by_user_id(db, current_user.id, is_ad=True)
+    total_post_comments = social_comment_repo.count_by_user_id(db, current_user.id, is_ad=False)
+
+    from app.models.social_comment import SocialComment
+    from app.models.meta_ad import MetaAd
+    from sqlalchemy import func
+
+    # Grouped comment counts per MetaAd
+    ad_counts_raw = db.query(
+        SocialComment.meta_ad_id,
+        func.count(SocialComment.id)
+    ).filter(
+        SocialComment.user_id == current_user.id,
+        SocialComment.is_deleted.isnot(True),
+        SocialComment.meta_ad_id.isnot(None)
+    ).group_by(SocialComment.meta_ad_id).all()
+
+    ad_count_map = {row[0]: row[1] for row in ad_counts_raw if row[0]}
+
+    # Top recent Ads with comments
+    recent_ads_db = db.query(MetaAd).filter(
+        MetaAd.user_id == current_user.id,
+        MetaAd.id.in_(list(ad_count_map.keys()))
+    ).order_by(MetaAd.updated_at.desc()).limit(6).all() if ad_count_map else []
+
+    recent_ads = [
+        {
+            "id": ad.id,
+            "meta_ad_id": ad.meta_ad_id,
+            "name": ad.name,
+            "campaign_name": ad.campaign_name,
+            "adset_name": ad.adset_name,
+            "effective_status": ad.effective_status,
+            "facebook_page_id": ad.facebook_page_id,
+            "meta_ad_account_id": ad.meta_ad_account_id,
+            "comment_count": ad_count_map.get(ad.id, 0)
+        }
+        for ad in recent_ads_db
+    ]
+
+    # Grouped comment counts per organic external_post_id
+    post_counts_raw = db.query(
+        SocialComment.external_post_id,
+        func.count(SocialComment.id)
+    ).filter(
+        SocialComment.user_id == current_user.id,
+        SocialComment.is_deleted.isnot(True),
+        SocialComment.meta_ad_id.is_(None),
+        SocialComment.external_post_id.isnot(None)
+    ).group_by(SocialComment.external_post_id).all()
+
+    post_count_map = {row[0]: row[1] for row in post_counts_raw if row[0]}
+
+    from app.models.post import Post
+    from app.models.external_post_context import ExternalPostContext
+
+    recent_posts = []
+    if post_count_map:
+        matched_local_posts = db.query(Post).filter(
+            Post.user_id == current_user.id,
+            (Post.fb_post_id.in_(list(post_count_map.keys()))) | (Post.ig_media_id.in_(list(post_count_map.keys())))
+        ).limit(6).all()
+
+        added_pids = set()
+        for p in matched_local_posts:
+            ext_id = p.fb_post_id or p.ig_media_id or str(p.id)
+            c_cnt = post_count_map.get(p.fb_post_id, 0) or post_count_map.get(p.ig_media_id, 0) or 0
+            recent_posts.append({
+                "id": p.id,
+                "external_post_id": ext_id,
+                "title": p.title or (p.caption[:60] if p.caption else "Organic Post"),
+                "caption": p.caption,
+                "image_url": p.image_url,
+                "media_type": p.media_type,
+                "platform": "facebook" if p.fb_post_id else "instagram",
+                "published_at": p.published_at.isoformat() if p.published_at else p.created_at.isoformat(),
+                "comment_count": c_cnt
+            })
+            if p.fb_post_id: added_pids.add(p.fb_post_id)
+            if p.ig_media_id: added_pids.add(p.ig_media_id)
+
+        # External cached posts fallback
+        remaining_pids = [pid for pid in post_count_map.keys() if pid not in added_pids]
+        if remaining_pids and len(recent_posts) < 6:
+            ext_ctxs = db.query(ExternalPostContext).filter(
+                ExternalPostContext.external_post_id.in_(remaining_pids)
+            ).limit(6 - len(recent_posts)).all()
+            for ctx in ext_ctxs:
+                recent_posts.append({
+                    "id": ctx.external_post_id,
+                    "external_post_id": ctx.external_post_id,
+                    "title": ctx.caption.split("\n")[0][:60] if ctx.caption else f"{ctx.platform.capitalize()} Post",
+                    "caption": ctx.caption,
+                    "image_url": ctx.media_url,
+                    "media_type": ctx.media_type,
+                    "platform": ctx.platform,
+                    "published_at": ctx.created_at.isoformat() if ctx.created_at else None,
+                    "comment_count": post_count_map.get(ctx.external_post_id, 0)
+                })
+
+    return {
+        "total_comments": total_comments,
+        "total_ad_comments": total_ad_comments,
+        "total_post_comments": total_post_comments,
+        "recent_ads": recent_ads,
+        "recent_posts": recent_posts
+    }
+
+
+@router.get("/ads", response_model=List[dict])
+def get_meta_ads_with_comments(
+    status: Optional[str] = Query(None, description="Filter by ad status ('ACTIVE', 'PAUSED', 'ALL')"),
+    ad_account_id: Optional[str] = Query(None, description="Filter by Meta Ad Account ID"),
+    q: Optional[str] = Query(None, description="Search ad name, campaign, or adset"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve all Meta Ads for authenticated user with exact non-deleted comment counts.
+    """
+    from app.models.meta_ad import MetaAd
+    from app.models.social_comment import SocialComment
+    from sqlalchemy import func, or_
+
+    ad_counts_raw = db.query(
+        SocialComment.meta_ad_id,
+        func.count(SocialComment.id)
+    ).filter(
+        SocialComment.user_id == current_user.id,
+        SocialComment.is_deleted.isnot(True),
+        SocialComment.meta_ad_id.isnot(None)
+    ).group_by(SocialComment.meta_ad_id).all()
+
+    ad_count_map = {row[0]: row[1] for row in ad_counts_raw if row[0]}
+
+    query = db.query(MetaAd).filter(MetaAd.user_id == current_user.id)
+
+    if ad_account_id:
+        raw_id = str(ad_account_id).strip()
+        prefixed = raw_id if raw_id.startswith("act_") else f"act_{raw_id}"
+        unprefixed = raw_id.replace("act_", "")
+        query = query.filter(MetaAd.meta_ad_account_id.in_([prefixed, unprefixed]))
+
+    if status and status.upper() != "ALL":
+        target_st = status.upper()
+        if target_st == "ACTIVE":
+            query = query.filter(or_(MetaAd.effective_status == "ACTIVE", MetaAd.effective_status.is_(None)))
+        else:
+            query = query.filter(MetaAd.effective_status == target_st)
+
+    if q and q.strip():
+        search_term = f"%{q.strip().lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(MetaAd.name).like(search_term),
+                func.lower(MetaAd.campaign_name).like(search_term),
+                func.lower(MetaAd.adset_name).like(search_term),
+                func.lower(MetaAd.meta_ad_id).like(search_term)
+            )
+        )
+
+    all_ads = query.order_by(MetaAd.updated_at.desc()).all()
+
+    return [
+        {
+            "id": ad.id,
+            "meta_ad_id": ad.meta_ad_id,
+            "name": ad.name,
+            "campaign_name": ad.campaign_name,
+            "adset_name": ad.adset_name,
+            "effective_status": ad.effective_status,
+            "facebook_page_id": ad.facebook_page_id,
+            "facebook_post_id": ad.facebook_post_id,
+            "meta_ad_account_id": ad.meta_ad_account_id,
+            "created_at": ad.created_at.isoformat() if ad.created_at else None,
+            "comment_count": ad_count_map.get(ad.id, 0)
+        }
+        for ad in all_ads
+    ]
+
+
+@router.get("/ads/{meta_ad_identifier}", response_model=dict)
+def get_comments_for_specific_ad(
+    meta_ad_identifier: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve single Meta Ad details + paginated comments for THAT specific Ad only.
+    Supports looking up meta_ad by numeric database ID or string meta_ad_id.
+    """
+    from app.models.meta_ad import MetaAd
+
+    ad = None
+    if meta_ad_identifier.isdigit():
+        ad = db.query(MetaAd).filter(MetaAd.id == int(meta_ad_identifier), MetaAd.user_id == current_user.id).first()
+    if not ad:
+        ad = db.query(MetaAd).filter(MetaAd.meta_ad_id == str(meta_ad_identifier), MetaAd.user_id == current_user.id).first()
+
+    if not ad:
+        raise HTTPException(status_code=404, detail="Meta Ad not found or access denied")
+
+    total_comments = social_comment_repo.count_by_user_id(db, current_user.id, meta_ad_id=ad.id)
+    raw_comments = social_comment_repo.get_by_user_id(db, current_user.id, skip=skip, limit=limit, meta_ad_id=ad.id)
+
+    formatted_comments = _format_comments_response_list(raw_comments, current_user, db)
+
+    return {
+        "ad": {
+            "id": ad.id,
+            "meta_ad_id": ad.meta_ad_id,
+            "name": ad.name,
+            "campaign_name": ad.campaign_name,
+            "adset_name": ad.adset_name,
+            "effective_status": ad.effective_status,
+            "facebook_page_id": ad.facebook_page_id,
+            "facebook_post_id": ad.facebook_post_id,
+            "meta_ad_account_id": ad.meta_ad_account_id
+        },
+        "total_comments": total_comments,
+        "skip": skip,
+        "limit": limit,
+        "comments": formatted_comments
+    }
+
+
+@router.get("/posts", response_model=List[dict])
+def get_posts_with_comments(
+    q: Optional[str] = Query(None, description="Search post caption or title"),
+    platform: Optional[str] = Query(None, description="Filter by platform ('facebook' or 'instagram')"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve all organic posts with exact non-deleted comment counts for current user.
+    """
+    from app.models.social_comment import SocialComment
+    from app.models.post import Post
+    from app.models.external_post_context import ExternalPostContext
+    from sqlalchemy import func, or_
+
+    query_counts = db.query(
+        SocialComment.external_post_id,
+        SocialComment.platform,
+        func.count(SocialComment.id)
+    ).filter(
+        SocialComment.user_id == current_user.id,
+        SocialComment.is_deleted.isnot(True),
+        SocialComment.meta_ad_id.is_(None),
+        SocialComment.external_post_id.isnot(None)
+    )
+    if platform:
+        query_counts = query_counts.filter(SocialComment.platform == platform)
+
+    post_counts_raw = query_counts.group_by(SocialComment.external_post_id, SocialComment.platform).all()
+    post_count_map = {row[0]: row[2] for row in post_counts_raw if row[0]}
+
+    res_posts = []
+    added_pids = set()
+
+    if post_count_map:
+        pids = list(post_count_map.keys())
+        local_posts = db.query(Post).filter(
+            Post.user_id == current_user.id,
+            (Post.fb_post_id.in_(pids)) | (Post.ig_media_id.in_(pids))
+        ).all()
+
+        for p in local_posts:
+            ext_id = p.fb_post_id or p.ig_media_id or str(p.id)
+            c_cnt = post_count_map.get(p.fb_post_id, 0) or post_count_map.get(p.ig_media_id, 0) or 0
+
+            if q and q.strip():
+                term = q.strip().lower()
+                title_match = p.title and term in p.title.lower()
+                cap_match = p.caption and term in p.caption.lower()
+                if not title_match and not cap_match:
+                    continue
+
+            res_posts.append({
+                "id": p.id,
+                "external_post_id": ext_id,
+                "title": p.title or (p.caption[:60] if p.caption else "Organic Post"),
+                "caption": p.caption,
+                "image_url": p.image_url,
+                "media_type": p.media_type,
+                "platform": "facebook" if p.fb_post_id else "instagram",
+                "published_at": p.published_at.isoformat() if p.published_at else p.created_at.isoformat(),
+                "comment_count": c_cnt
+            })
+            if p.fb_post_id: added_pids.add(p.fb_post_id)
+            if p.ig_media_id: added_pids.add(p.ig_media_id)
+
+        remaining = [pid for pid in post_count_map.keys() if pid not in added_pids]
+        ext_found_pids = set()
+        if remaining:
+            ext_ctxs = db.query(ExternalPostContext).filter(
+                ExternalPostContext.external_post_id.in_(remaining)
+            ).all()
+            for ctx in ext_ctxs:
+                ext_found_pids.add(ctx.external_post_id)
+                if q and q.strip():
+                    term = q.strip().lower()
+                    if ctx.caption and term not in ctx.caption.lower():
+                        continue
+                res_posts.append({
+                    "id": ctx.external_post_id,
+                    "external_post_id": ctx.external_post_id,
+                    "title": ctx.caption.split("\n")[0][:60] if ctx.caption else f"{ctx.platform.capitalize()} Post",
+                    "caption": ctx.caption,
+                    "image_url": ctx.media_url,
+                    "media_type": ctx.media_type,
+                    "platform": ctx.platform,
+                    "published_at": ctx.created_at.isoformat() if ctx.created_at else None,
+                    "comment_count": post_count_map.get(ctx.external_post_id, 0)
+                })
+
+        for pid in remaining:
+            if pid not in ext_found_pids:
+                res_posts.append({
+                    "id": pid,
+                    "external_post_id": pid,
+                    "title": f"Post {pid}",
+                    "caption": None,
+                    "image_url": None,
+                    "media_type": "IMAGE",
+                    "platform": "facebook",
+                    "published_at": None,
+                    "comment_count": post_count_map.get(pid, 0)
+                })
+
+    return res_posts
+
+
+@router.get("/posts/{post_identifier}", response_model=dict)
+def get_comments_for_specific_post(
+    post_identifier: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve single Organic Post details + paginated comments for THAT specific Post only.
+    """
+    from app.models.post import Post
+    from app.models.external_post_context import ExternalPostContext
+
+    post_meta = None
+    ext_pid = post_identifier
+
+    if post_identifier.isdigit():
+        p_db = db.query(Post).filter(Post.id == int(post_identifier), Post.user_id == current_user.id).first()
+        if p_db:
+            ext_pid = p_db.fb_post_id or p_db.ig_media_id or str(p_db.id)
+            post_meta = {
+                "id": p_db.id,
+                "external_post_id": ext_pid,
+                "title": p_db.title or (p_db.caption[:60] if p_db.caption else "Organic Post"),
+                "caption": p_db.caption,
+                "image_url": p_db.image_url,
+                "media_type": p_db.media_type,
+                "platform": "facebook" if p_db.fb_post_id else "instagram",
+                "published_at": p_db.published_at.isoformat() if p_db.published_at else p_db.created_at.isoformat()
+            }
+
+    if not post_meta:
+        ctx = db.query(ExternalPostContext).filter(
+            ExternalPostContext.external_post_id == str(post_identifier)
+        ).first()
+        if ctx:
+            ext_pid = ctx.external_post_id
+            post_meta = {
+                "id": ctx.external_post_id,
+                "external_post_id": ctx.external_post_id,
+                "title": ctx.caption.split("\n")[0][:60] if ctx.caption else f"{ctx.platform.capitalize()} Post",
+                "caption": ctx.caption,
+                "image_url": ctx.media_url,
+                "media_type": ctx.media_type,
+                "platform": ctx.platform,
+                "published_at": ctx.created_at.isoformat() if ctx.created_at else None
+            }
+
+    if not post_meta:
+        post_meta = {
+            "id": post_identifier,
+            "external_post_id": post_identifier,
+            "title": f"Post {post_identifier}",
+            "caption": None,
+            "image_url": None,
+            "media_type": "IMAGE",
+            "platform": "facebook",
+            "published_at": None
+        }
+
+    total_comments = social_comment_repo.count_by_user_id(db, current_user.id, external_post_id=ext_pid, is_ad=False)
+    raw_comments = social_comment_repo.get_by_user_id(db, current_user.id, skip=skip, limit=limit, external_post_id=ext_pid, is_ad=False)
+
+    formatted_comments = _format_comments_response_list(raw_comments, current_user, db)
+
+    return {
+        "post": post_meta,
+        "total_comments": total_comments,
+        "skip": skip,
+        "limit": limit,
+        "comments": formatted_comments
+    }
 
 @router.post("/{comment_id}/reply", response_model=dict)
 def reply_to_social_comment(
