@@ -2832,6 +2832,8 @@ class MetaGraphService:
         pages_not_connected_count = 0
         invalid_post_ids_count = 0
         last_permission_err_details: Optional[Dict[str, Any]] = None
+        logged_raw_shape_this_job = False
+        probed_identity_this_job = False
 
         for pid, ad_list in post_to_ads_map.items():
             try:
@@ -2962,6 +2964,57 @@ class MetaGraphService:
                         f"has_from_username={has_from_username} has_username={has_top_username} "
                         f"resolved_name={'YES' if commenter_name else 'NO'}"
                     )
+
+                    # Diagnostic 1: Log raw response keys for a maximum of 1 comment with missing identity per sync run
+                    if not logged_raw_shape_this_job and not commenter_name:
+                        logged_raw_shape_this_job = True
+                        avail_keys = list(raw_comment.keys()) if isinstance(raw_comment, dict) else []
+                        logger.info(
+                            f"[META_COMMENT_RAW_SHAPE] comment_id={ext_c_id} "
+                            f"available_keys={avail_keys} has_from={has_from} "
+                            f"has_username={has_top_username} has_from_name={has_from_name}"
+                        )
+
+                    # Diagnostic 2: Controlled probe to GET /{comment_id} for MAX 1 comment with missing identity per sync job
+                    if not probed_identity_this_job and not commenter_name and access_token:
+                        probed_identity_this_job = True
+                        try:
+                            probe_url = f"{self.BASE_URL}/{ext_c_id}"
+                            probe_params = {
+                                "fields": "id,message,created_time,from{id,name,username},username,parent",
+                                "access_token": access_token
+                            }
+                            probe_res = requests.get(probe_url, params=probe_params, timeout=10)
+                            p_status = probe_res.status_code
+                            p_err_code = None
+                            p_err_msg = None
+                            p_keys = []
+                            p_has_from = False
+                            p_has_from_name = False
+                            p_has_from_id = False
+
+                            if p_status == 200:
+                                p_json = probe_res.json()
+                                p_keys = list(p_json.keys()) if isinstance(p_json, dict) else []
+                                p_from = p_json.get("from") if isinstance(p_json.get("from"), dict) else {}
+                                p_has_from = isinstance(p_json.get("from"), dict)
+                                p_has_from_id = bool(p_from.get("id"))
+                                p_has_from_name = bool(p_from.get("name") or p_from.get("username") or p_json.get("username"))
+                            else:
+                                if probe_res.headers.get("content-type", "").startswith("application/json"):
+                                    err_b = probe_res.json().get("error", {})
+                                    p_err_code = err_b.get("code")
+                                    p_err_msg = err_b.get("message", "Probe Error")
+                                else:
+                                    p_err_msg = probe_res.text[:200]
+
+                            logger.info(
+                                f"[META_COMMENT_IDENTITY_PROBE] comment_id={ext_c_id} http_status={p_status} "
+                                f"available_keys={p_keys} has_from={p_has_from} has_from_name={p_has_from_name} "
+                                f"has_from_id={p_has_from_id} error_code={p_err_code} error_message={p_err_msg}"
+                            )
+                        except Exception as probe_err:
+                            logger.warning(f"[META_COMMENT_IDENTITY_PROBE] Probe exception for comment {ext_c_id}: {probe_err}")
 
                     parent_id = None
                     parent_data = raw_comment.get("parent")
