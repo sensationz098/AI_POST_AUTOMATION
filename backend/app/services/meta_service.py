@@ -837,6 +837,52 @@ class MetaGraphService:
             raise
 
 
+    def fetch_facebook_page_post_count(self, page_id: str, access_token: str) -> Optional[int]:
+        """
+        Retrieves actual platform post count for a Facebook Page by requesting lightweight 'id' fields
+        with limit=100 per request, following cursors up to a safe maximum cap (5,000 posts).
+        Returns None if the Meta API query fails or is unauthenticated.
+        """
+        if not page_id or not access_token or page_id == "sandbox":
+            return None
+
+        try:
+            url = f"{self.BASE_URL}/{page_id}/published_posts"
+            params = {"fields": "id", "limit": 100, "access_token": access_token}
+            res = requests.get(url, params=params, timeout=5)
+            if res.status_code != 200:
+                logger.warning(f"[FB_POST_COUNT] Failed to fetch published_posts for page {page_id}: {res.text}")
+                return None
+
+            data = res.json()
+            items = data.get("data", [])
+            total = len(items)
+
+            curr_res = data
+            page_safety_cap = 50  # max 5,000 posts
+            pages_fetched = 1
+
+            while curr_res.get("paging", {}).get("next") and pages_fetched < page_safety_cap:
+                next_url = curr_res["paging"]["next"]
+                try:
+                    r_next = requests.get(next_url, timeout=5)
+                    if r_next.status_code != 200:
+                        break
+                    curr_res = r_next.json()
+                    batch = curr_res.get("data", [])
+                    total += len(batch)
+                    pages_fetched += 1
+                    if not batch:
+                        break
+                except Exception as ex:
+                    logger.warning(f"[FB_POST_COUNT] Cursor pagination timeout/error for page {page_id}: {ex}")
+                    break
+
+            return total
+        except Exception as e:
+            logger.error(f"[FB_POST_COUNT] Exception fetching post count for page {page_id}: {e}")
+            return None
+
     def fetch_facebook_page_metrics(self, page_id: str, access_token: str) -> Dict[str, Any]:
         """Fetch real Facebook Page metrics (followers, likes, category, picture) via Graph API."""
         if not page_id or not access_token or page_id == "sandbox":
@@ -845,6 +891,7 @@ class MetaGraphService:
                 "name": "Apex Innovations Page (Sandbox)",
                 "followers_count": 18450,
                 "fan_count": 14200,
+                "media_count": 12,
                 "category": "Artificial Intelligence & Software",
                 "picture_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
                 "link": f"https://facebook.com/{page_id}",
@@ -854,7 +901,7 @@ class MetaGraphService:
         try:
             url = f"{self.BASE_URL}/{page_id}"
             params = {
-                "fields": "id,name,followers_count,fan_count,category,picture.type(large),link,published_posts.summary(true).limit(0)",
+                "fields": "id,name,followers_count,fan_count,category,picture.type(large),link",
                 "access_token": access_token
             }
             res = requests.get(url, params=params, timeout=10)
@@ -864,9 +911,9 @@ class MetaGraphService:
                 return {
                     "id": page_id,
                     "name": "Connected Facebook Page",
-                    "followers_count": 12500,
-                    "fan_count": 9800,
-                    "media_count": 0,
+                    "followers_count": None,
+                    "fan_count": None,
+                    "media_count": None,
                     "category": "Business Page",
                     "picture_url": f"https://graph.facebook.com/v19.0/{page_id}/picture?type=large",
                     "link": f"https://facebook.com/{page_id}",
@@ -874,7 +921,7 @@ class MetaGraphService:
                 }
 
             picture_url = data.get("picture", {}).get("data", {}).get("url") or f"https://graph.facebook.com/v19.0/{page_id}/picture?type=large"
-            media_count = data.get("published_posts", {}).get("summary", {}).get("total_count", 0)
+            media_count = self.fetch_facebook_page_post_count(page_id, access_token)
             return {
                 "id": data.get("id", page_id),
                 "name": data.get("name", "Facebook Page"),
@@ -890,10 +937,11 @@ class MetaGraphService:
             logger.error(f"Error fetching FB Page metrics: {e}")
             return {
                 "id": page_id,
-                "name": "Connected Facebook Page",
-                "followers_count": 0,
-                "fan_count": 0,
-                "category": "Facebook Page",
+                "name": "Facebook Page",
+                "followers_count": None,
+                "fan_count": None,
+                "media_count": None,
+                "category": "Meta Page",
                 "picture_url": f"https://graph.facebook.com/v19.0/{page_id}/picture?type=large",
                 "link": f"https://facebook.com/{page_id}",
                 "is_sandbox": False

@@ -249,9 +249,9 @@ export default function AnalyticsDashboardPage() {
                     </p>
                   </div>
                   <div className="bg-slate-900/50 p-2 rounded border border-slate-800/60">
-                    <span className="text-[9px] text-slate-400">Platform Posts</span>
+                    <span className="text-[9px] text-slate-400">No. of Posts</span>
                     <p className="text-xs font-bold text-indigo-300 mt-0.5 font-mono">
-                      {(acc.media_count ?? 0).toLocaleString()}
+                      {acc.media_count != null ? acc.media_count.toLocaleString() : 'Unavailable'}
                     </p>
                   </div>
                 </div>
