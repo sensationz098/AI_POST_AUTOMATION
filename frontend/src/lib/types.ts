@@ -279,3 +279,25 @@ export interface MetaAdSyncResponse {
   };
   ads: MetaAd[];
 }
+
+export interface MetaAdCommentsResponse {
+  ad: {
+    id: number;
+    meta_ad_id: string;
+    name: string;
+    campaign_name?: string;
+    adset_name?: string;
+    effective_status?: string;
+    facebook_page_id?: string;
+    facebook_post_id?: string;
+    meta_ad_account_id?: string;
+    permalink?: string;
+    platform?: string;
+  };
+  total_comments: number;
+  skip: number;
+  limit: number;
+  page: number;
+  has_next: boolean;
+  comments: SocialComment[];
+}
