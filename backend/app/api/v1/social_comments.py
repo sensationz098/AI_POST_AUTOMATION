@@ -584,6 +584,7 @@ def get_meta_ads_with_comments(
 def get_comments_for_specific_ad(
     meta_ad_identifier: str,
     skip: int = Query(0, ge=0),
+    page: Optional[int] = Query(None, ge=1),
     limit: int = Query(50, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -594,19 +595,37 @@ def get_comments_for_specific_ad(
     """
     from app.models.meta_ad import MetaAd
 
+    if page is not None and page > 0 and skip == 0:
+        skip = (page - 1) * limit
+
     ad = None
-    if meta_ad_identifier.isdigit():
-        ad = db.query(MetaAd).filter(MetaAd.id == int(meta_ad_identifier), MetaAd.user_id == current_user.id).first()
+    if meta_ad_identifier.isdigit() and len(meta_ad_identifier) <= 9:
+        try:
+            ad = db.query(MetaAd).filter(MetaAd.id == int(meta_ad_identifier), MetaAd.user_id == current_user.id).first()
+        except Exception:
+            ad = None
+
     if not ad:
         ad = db.query(MetaAd).filter(MetaAd.meta_ad_id == str(meta_ad_identifier), MetaAd.user_id == current_user.id).first()
 
     if not ad:
+        logger.warning(f"[GET_AD_COMMENTS_API] Meta Ad not found for identifier={meta_ad_identifier} user_id={current_user.id}")
         raise HTTPException(status_code=404, detail="Meta Ad not found or access denied")
 
     total_comments = social_comment_repo.count_by_user_id(db, current_user.id, meta_ad_id=ad.id)
     raw_comments = social_comment_repo.get_by_user_id(db, current_user.id, skip=skip, limit=limit, meta_ad_id=ad.id)
 
     formatted_comments = _format_comments_response_list(raw_comments, current_user, db)
+
+    has_next = (skip + len(formatted_comments)) < total_comments
+    current_page_num = (skip // limit) + 1 if limit > 0 else 1
+
+    logger.info(
+        f"[GET_AD_COMMENTS_API] ad_identifier={meta_ad_identifier} ad_id={ad.id} "
+        f"meta_ad_id={ad.meta_ad_id} user_id={current_user.id} "
+        f"total_comments={total_comments} returned_comments={len(formatted_comments)} "
+        f"skip={skip} limit={limit} page={current_page_num} has_next={has_next}"
+    )
 
     return {
         "ad": {
@@ -625,6 +644,8 @@ def get_comments_for_specific_ad(
         "total_comments": total_comments,
         "skip": skip,
         "limit": limit,
+        "page": current_page_num,
+        "has_next": has_next,
         "comments": formatted_comments
     }
 

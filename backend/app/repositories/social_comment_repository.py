@@ -35,14 +35,23 @@ class SocialCommentRepository:
 
         if existing:
             is_updated = False
-            if meta_ad_id is not None and existing.meta_ad_id is None:
+            if meta_ad_id is not None and existing.meta_ad_id != meta_ad_id:
                 existing.meta_ad_id = meta_ad_id
+                is_updated = True
+            if parent_comment_id and not existing.parent_comment_id:
+                existing.parent_comment_id = parent_comment_id
+                is_updated = True
+            if external_post_id and not existing.external_post_id:
+                existing.external_post_id = external_post_id
                 is_updated = True
             if commenter_name and not existing.commenter_name:
                 existing.commenter_name = commenter_name
                 is_updated = True
             if commenter_id and not existing.commenter_id:
                 existing.commenter_id = commenter_id
+                is_updated = True
+            if comment_text and not existing.comment_text:
+                existing.comment_text = comment_text
                 is_updated = True
             if is_updated:
                 existing.updated_at = datetime.now(timezone.utc)
@@ -64,7 +73,7 @@ class SocialCommentRepository:
             event_timestamp=event_timestamp or now,
             webhook_object=webhook_object,
             processing_status=processing_status,
-            metadata_json=metadata_json or {},
+            metadata_json=metadata_json,
             meta_ad_id=meta_ad_id,
             created_at=now,
             updated_at=now
@@ -83,14 +92,23 @@ class SocialCommentRepository:
             ).first()
             if ext:
                 is_updated = False
-                if meta_ad_id is not None and ext.meta_ad_id is None:
+                if meta_ad_id is not None and ext.meta_ad_id != meta_ad_id:
                     ext.meta_ad_id = meta_ad_id
+                    is_updated = True
+                if parent_comment_id and not ext.parent_comment_id:
+                    ext.parent_comment_id = parent_comment_id
+                    is_updated = True
+                if external_post_id and not ext.external_post_id:
+                    ext.external_post_id = external_post_id
                     is_updated = True
                 if commenter_name and not ext.commenter_name:
                     ext.commenter_name = commenter_name
                     is_updated = True
                 if commenter_id and not ext.commenter_id:
                     ext.commenter_id = commenter_id
+                    is_updated = True
+                if comment_text and not ext.comment_text:
+                    ext.comment_text = comment_text
                     is_updated = True
                 if is_updated:
                     ext.updated_at = datetime.now(timezone.utc)
