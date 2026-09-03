@@ -249,9 +249,9 @@ export default function AnalyticsDashboardPage() {
                     </p>
                   </div>
                   <div className="bg-slate-900/50 p-2 rounded border border-slate-800/60">
-                    <span className="text-[9px] text-slate-400">No. of Posts</span>
+                    <span className="text-[9px] text-slate-400">Platform Posts</span>
                     <p className="text-xs font-bold text-indigo-300 mt-0.5 font-mono">
-                      {(acc.media_count || overview?.published_posts || 0).toLocaleString()}
+                      {(acc.media_count ?? 0).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -277,10 +277,10 @@ export default function AnalyticsDashboardPage() {
           <p className="text-[10px] text-slate-400">FB Page Fans + IG Followers</p>
         </div>
 
-        {/* KPI 2: Total Published Posts */}
+        {/* KPI 2: Posts Published via SocialAI */}
         <div className="linear-card p-4 rounded-xl space-y-2 border border-blue-500/30">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold text-slate-200">Total Published Posts</span>
+            <span className="text-[11px] font-bold text-slate-200">Posts Published via SocialAI</span>
             <Layers className="w-4 h-4 text-blue-400" />
           </div>
           <div className="flex items-baseline justify-between">
@@ -288,7 +288,7 @@ export default function AnalyticsDashboardPage() {
               {overview?.published_posts || overview?.total_posts || 0}
             </h2>
           </div>
-          <p className="text-[10px] text-slate-400">Total posts published across accounts</p>
+          <p className="text-[10px] text-slate-400">Total posts published through SocialAI</p>
         </div>
 
         {/* KPI 3: Total Reach */}

@@ -51,6 +51,7 @@ class AnalyticsService:
                     "logo_url": acc.logo_url,
                     "followers_count": followers,
                     "fan_count": fb_raw.get("fan_count", 0),
+                    "media_count": fb_raw.get("media_count", 0),
                     "category": fb_raw.get("category", "Facebook Page"),
                     "status": acc.status,
                     "link": f"https://facebook.com/{acc.account_id}"

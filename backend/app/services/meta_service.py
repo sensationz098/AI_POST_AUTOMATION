@@ -854,7 +854,7 @@ class MetaGraphService:
         try:
             url = f"{self.BASE_URL}/{page_id}"
             params = {
-                "fields": "id,name,followers_count,fan_count,category,picture.type(large),link",
+                "fields": "id,name,followers_count,fan_count,category,picture.type(large),link,published_posts.summary(true).limit(0)",
                 "access_token": access_token
             }
             res = requests.get(url, params=params, timeout=10)
@@ -866,6 +866,7 @@ class MetaGraphService:
                     "name": "Connected Facebook Page",
                     "followers_count": 12500,
                     "fan_count": 9800,
+                    "media_count": 0,
                     "category": "Business Page",
                     "picture_url": f"https://graph.facebook.com/v19.0/{page_id}/picture?type=large",
                     "link": f"https://facebook.com/{page_id}",
@@ -873,11 +874,13 @@ class MetaGraphService:
                 }
 
             picture_url = data.get("picture", {}).get("data", {}).get("url") or f"https://graph.facebook.com/v19.0/{page_id}/picture?type=large"
+            media_count = data.get("published_posts", {}).get("summary", {}).get("total_count", 0)
             return {
                 "id": data.get("id", page_id),
                 "name": data.get("name", "Facebook Page"),
                 "followers_count": data.get("followers_count") or data.get("fan_count") or 0,
                 "fan_count": data.get("fan_count") or 0,
+                "media_count": media_count,
                 "category": data.get("category", "Meta Page"),
                 "picture_url": picture_url,
                 "link": data.get("link", f"https://facebook.com/{page_id}"),
