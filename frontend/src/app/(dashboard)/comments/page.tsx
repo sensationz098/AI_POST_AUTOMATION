@@ -21,7 +21,9 @@ import {
   FileText,
   Trash2,
   Filter,
-  Share2
+  Share2,
+  Target,
+  Megaphone
 } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
@@ -42,6 +44,7 @@ function PostContextCard({
   platform: 'facebook' | 'instagram';
 }) {
   const isFb = platform === 'facebook';
+  const isAdComment = Boolean(metaAd);
   const accountDisplayName = account?.account_name || account?.display_name || (isFb ? 'Facebook Page' : 'Instagram Account');
 
   return (
@@ -49,6 +52,7 @@ function PostContextCard({
       {/* Receiving Social Account & Meta Ad Header Badge */}
       <div className="flex items-center justify-between text-[11px] pb-2 border-b border-slate-900/80">
         <div className="flex items-center space-x-2 min-w-0 flex-wrap gap-y-1">
+          {/* Platform Pill */}
           {isFb ? (
             <span className="px-2 py-0.5 rounded bg-blue-950/90 text-blue-300 border border-blue-800/70 font-bold text-[10px] flex items-center space-x-1 flex-shrink-0">
               <Facebook className="w-3 h-3 fill-current" />
@@ -60,15 +64,23 @@ function PostContextCard({
               <span>Instagram</span>
             </span>
           )}
+
+          {/* Comment Type Pill */}
+          {isAdComment ? (
+            <span className="px-2 py-0.5 rounded bg-purple-950/90 text-purple-300 border border-purple-800/70 font-bold text-[10px] flex items-center space-x-1 flex-shrink-0">
+              <Target className="w-3 h-3 text-purple-400" />
+              <span>Ad Comment</span>
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700/70 font-bold text-[10px] flex items-center space-x-1 flex-shrink-0">
+              <FileText className="w-3 h-3 text-slate-400" />
+              <span>Post Comment</span>
+            </span>
+          )}
+
           <span className="font-semibold text-slate-200 truncate">
             {isFb ? accountDisplayName : `@${accountDisplayName.replace(/^@/, '')}`}
           </span>
-
-          {metaAd && (
-            <span className="px-2 py-0.5 rounded bg-purple-950/90 text-purple-300 border border-purple-800/70 font-bold text-[10px] flex items-center space-x-1 flex-shrink-0" title={`Campaign: ${metaAd.campaign_name || 'N/A'}`}>
-              <span>🎯 Meta Ad: {metaAd.name || metaAd.meta_ad_id}</span>
-            </span>
-          )}
         </div>
 
         {post?.permalink ? (
@@ -92,8 +104,59 @@ function PostContextCard({
         ) : null}
       </div>
 
-      {/* Post Context Body */}
-      {post ? (
+      {/* Post/Ad Context Body */}
+      {isAdComment ? (
+        <div className="bg-purple-950/20 border border-purple-900/40 rounded-lg p-2.5 space-y-1.5 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center space-x-2 min-w-0">
+              <span className="font-bold text-slate-100 text-xs truncate">
+                Ad: {metaAd?.name || metaAd?.meta_ad_id || 'Meta Ad'}
+              </span>
+              {metaAd?.effective_status && (
+                <span className="px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[9px] font-mono font-bold uppercase">
+                  {metaAd.effective_status}
+                </span>
+              )}
+            </div>
+            {metaAd?.meta_ad_id && (
+              <span className="font-mono text-[10px] text-slate-500 truncate">
+                ID: {metaAd.meta_ad_id}
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400 font-sans">
+            {metaAd?.campaign_name && (
+              <div>
+                <span className="text-slate-500">Campaign: </span>
+                <span className="text-slate-300 font-medium">{metaAd.campaign_name}</span>
+              </div>
+            )}
+            {metaAd?.adset_name && (
+              <div>
+                <span className="text-slate-500">Ad Set: </span>
+                <span className="text-slate-300 font-medium">{metaAd.adset_name}</span>
+              </div>
+            )}
+          </div>
+
+          {post && (post.caption || post.title) && (
+            <div className="pt-1 border-t border-purple-900/30 flex items-center space-x-2">
+              {post.thumbnail_url || post.image_url ? (
+                <img
+                  src={post.thumbnail_url || post.image_url}
+                  alt="Ad creative preview"
+                  className="w-7 h-7 rounded object-cover border border-slate-800 bg-slate-900 flex-shrink-0"
+                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                />
+              ) : null}
+              <p className="text-[10px] text-slate-400 line-clamp-1 italic">
+                "{post.caption || post.title}"
+              </p>
+            </div>
+          )}
+        </div>
+      ) : post ? (
         <div className="flex items-start space-x-3 min-w-0 pt-0.5">
           {post.thumbnail_url || post.image_url ? (
             <img
@@ -537,6 +600,7 @@ export default function CommentsPage() {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [platformFilter, setPlatformFilter] = useState<'all' | 'facebook' | 'instagram'>('all');
+  const [commentTypeFilter, setCommentTypeFilter] = useState<'all' | 'organic' | 'ad'>('all');
 
   // Reply Form States
   const [activeReplyCommentId, setActiveReplyCommentId] = useState<number | null>(null);
@@ -713,9 +777,23 @@ export default function CommentsPage() {
     ? null
     : socialAccounts.find((a) => String(a.id) === selectedAccountId);
 
+  const organicCount = comments.filter((c) => !c.meta_ad_id && !c.meta_ad).length;
+  const adCount = comments.filter((c) => Boolean(c.meta_ad_id || c.meta_ad)).length;
+
   const filteredComments = comments.filter((comment) => {
-    if (platformFilter === 'all') return true;
-    return comment.platform === platformFilter;
+    // 1. Platform Filter
+    if (platformFilter !== 'all' && comment.platform !== platformFilter) {
+      return false;
+    }
+    // 2. Comment Type / Source Filter (Derive safely from meta_ad_id / meta_ad presence)
+    const isAd = Boolean(comment.meta_ad_id || comment.meta_ad);
+    if (commentTypeFilter === 'organic' && isAd) {
+      return false;
+    }
+    if (commentTypeFilter === 'ad' && !isAd) {
+      return false;
+    }
+    return true;
   });
 
   const formatDate = (isoString?: string) => {
@@ -753,11 +831,11 @@ export default function CommentsPage() {
               <h1 className="text-lg font-bold text-slate-100 tracking-tight flex items-center space-x-2">
                 <span>Social Comments & Replies</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold">
-                  Manual Comment Replies Active
+                  Organic & Ad Comments
                 </span>
               </h1>
               <p className="text-xs text-slate-400 mt-1">
-                View incoming Facebook & Instagram comments, see post context, and reply directly from your dashboard.
+                View incoming Facebook & Instagram organic post comments and synced Meta Ad comments in one place.
               </p>
             </div>
           </div>
@@ -800,59 +878,108 @@ export default function CommentsPage() {
         <div className="flex items-center space-x-2 text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/60">
           <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
           <span>
-            Strict User Isolation: Page access tokens are decrypted server-side only. AI automation is strictly disabled.
+            Strict User Isolation: Page access tokens are decrypted server-side only. Unified inbox for webhooks and synced Meta Ad comments.
           </span>
         </div>
       </div>
 
       {/* Filter Tabs & Counter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-        <div className="flex items-center space-x-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800">
-          <button
-            onClick={() => setPlatformFilter('all')}
-            className={`px-3 py-1.5 rounded-lg font-medium text-xs transition ${
-              platformFilter === 'all'
-                ? 'bg-indigo-600 text-white shadow'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            All Platforms ({comments.length})
-          </button>
-
-          {/* Show Facebook tab if all accounts or Facebook account is selected */}
-          {(!selectedAccount || selectedAccount.platform === 'facebook') && (
+      <div className="flex flex-col space-y-3 border-b border-slate-800 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Comment Type Filter Tabs */}
+          <div className="flex items-center space-x-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
             <button
-              onClick={() => setPlatformFilter('facebook')}
-              className={`px-3 py-1.5 rounded-lg font-medium text-xs transition flex items-center space-x-1.5 ${
-                platformFilter === 'facebook'
-                  ? 'bg-blue-600 text-white shadow'
+              onClick={() => setCommentTypeFilter('all')}
+              className={`px-3 py-1.5 rounded-lg font-medium text-xs transition ${
+                commentTypeFilter === 'all'
+                  ? 'bg-indigo-600 text-white shadow'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Facebook className="w-3 h-3 fill-current" />
-              <span>Facebook ({comments.filter((c) => c.platform === 'facebook').length})</span>
+              All Comments ({comments.length})
             </button>
-          )}
 
-          {/* Show Instagram tab if all accounts or Instagram account is selected */}
-          {(!selectedAccount || selectedAccount.platform === 'instagram') && (
             <button
-              onClick={() => setPlatformFilter('instagram')}
+              onClick={() => setCommentTypeFilter('organic')}
               className={`px-3 py-1.5 rounded-lg font-medium text-xs transition flex items-center space-x-1.5 ${
-                platformFilter === 'instagram'
-                  ? 'bg-pink-600 text-white shadow'
+                commentTypeFilter === 'organic'
+                  ? 'bg-slate-700 text-white shadow'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Instagram className="w-3 h-3" />
-              <span>Instagram ({comments.filter((c) => c.platform === 'instagram').length})</span>
+              <FileText className="w-3.5 h-3.5 text-slate-400" />
+              <span>Post Comments ({organicCount})</span>
             </button>
-          )}
+
+            <button
+              onClick={() => setCommentTypeFilter('ad')}
+              className={`px-3 py-1.5 rounded-lg font-medium text-xs transition flex items-center space-x-1.5 ${
+                commentTypeFilter === 'ad'
+                  ? 'bg-purple-600 text-white shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Target className="w-3.5 h-3.5 text-purple-300" />
+              <span>Ad Comments ({adCount})</span>
+            </button>
+          </div>
+
+          {/* Platform Filter Buttons */}
+          <div className="flex items-center space-x-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800">
+            <button
+              onClick={() => setPlatformFilter('all')}
+              className={`px-2.5 py-1 rounded-lg font-medium text-xs transition ${
+                platformFilter === 'all'
+                  ? 'bg-slate-800 text-indigo-300 border border-slate-700'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              All Platforms
+            </button>
+
+            {(!selectedAccount || selectedAccount.platform === 'facebook') && (
+              <button
+                onClick={() => setPlatformFilter('facebook')}
+                className={`px-2.5 py-1 rounded-lg font-medium text-xs transition flex items-center space-x-1 ${
+                  platformFilter === 'facebook'
+                    ? 'bg-blue-900/80 text-blue-200 border border-blue-700'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Facebook className="w-3 h-3 fill-current" />
+                <span>Facebook ({comments.filter((c) => c.platform === 'facebook').length})</span>
+              </button>
+            )}
+
+            {(!selectedAccount || selectedAccount.platform === 'instagram') && (
+              <button
+                onClick={() => setPlatformFilter('instagram')}
+                className={`px-2.5 py-1 rounded-lg font-medium text-xs transition flex items-center space-x-1 ${
+                  platformFilter === 'instagram'
+                    ? 'bg-pink-900/80 text-pink-200 border border-pink-700'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Instagram className="w-3 h-3" />
+                <span>Instagram ({comments.filter((c) => c.platform === 'instagram').length})</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="text-[11px] text-slate-400 font-mono">
-          Showing {filteredComments.length} comment{filteredComments.length !== 1 ? 's' : ''}
-          {selectedAccount ? ` for ${selectedAccount.account_name}` : ''}
+        <div className="text-[11px] text-slate-400 font-mono flex items-center justify-between flex-wrap gap-2">
+          <span>
+            Showing {filteredComments.length} comment{filteredComments.length !== 1 ? 's' : ''}
+            {commentTypeFilter !== 'all' ? ` (${commentTypeFilter === 'ad' ? 'Ad Comments' : 'Post Comments'})` : ''}
+            {selectedAccount ? ` for ${selectedAccount.account_name}` : ''}
+          </span>
+
+          {adCount > 0 && (
+            <span className="text-purple-400 text-[10px] font-sans flex items-center space-x-1">
+              <Target className="w-3 h-3" />
+              <span>{adCount} Meta Ad comment{adCount !== 1 ? 's' : ''} synced</span>
+            </span>
+          )}
         </div>
       </div>
 
@@ -901,32 +1028,53 @@ export default function CommentsPage() {
           </Link>
         </div>
       ) : filteredComments.length === 0 ? (
-        /* Empty State: No comments for selected account / platform filter */
+        /* Empty State: No comments matching current filters */
         <div className="linear-panel p-12 rounded-2xl text-center space-y-4 border border-slate-800 shadow-xl">
           <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 mx-auto shadow-inner">
-            <MessageSquare className="w-7 h-7 text-indigo-400/80" />
+            {commentTypeFilter === 'ad' ? (
+              <Target className="w-7 h-7 text-purple-400/80" />
+            ) : (
+              <MessageSquare className="w-7 h-7 text-indigo-400/80" />
+            )}
           </div>
           <div className="space-y-1 max-w-sm mx-auto">
             <h3 className="text-sm font-bold text-slate-200">
-              {platformFilter !== 'all'
-                ? `No ${platformFilter === 'facebook' ? 'Facebook' : 'Instagram'} comments for ${selectedAccount ? selectedAccount.account_name : 'this account'} yet`
+              {commentTypeFilter === 'ad'
+                ? 'No Meta Ad comments found'
+                : commentTypeFilter === 'organic'
+                ? 'No organic post comments found'
+                : platformFilter !== 'all'
+                ? `No ${platformFilter === 'facebook' ? 'Facebook' : 'Instagram'} comments`
                 : selectedAccount
                 ? `No comments for ${selectedAccount.account_name} yet`
                 : 'No comments received yet'}
             </h3>
-            <p className="text-xs text-slate-400">
-              {selectedAccount
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {commentTypeFilter === 'ad'
+                ? 'Sync active ad comments from your Meta Ad Accounts to view and reply to ad engagement.'
+                : selectedAccount
                 ? `Comments received for ${selectedAccount.account_name} will appear here.`
-                : 'Comments from your connected Facebook Pages and Instagram Professional accounts will appear here.'}
+                : 'Comments from your connected Facebook Pages, Instagram Professional accounts, and synced Meta Ads will appear here.'}
             </p>
           </div>
-          <button
-            onClick={handleRefresh}
-            className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-semibold text-xs transition inline-flex items-center space-x-2"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Check for New Comments</span>
-          </button>
+          <div className="flex items-center justify-center space-x-3 pt-1">
+            {commentTypeFilter === 'ad' && (
+              <Link
+                href="/meta-connect"
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition inline-flex items-center space-x-1.5 shadow-md"
+              >
+                <Target className="w-3.5 h-3.5" />
+                <span>Go to Sync Active Comments</span>
+              </Link>
+            )}
+            <button
+              onClick={handleRefresh}
+              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-semibold text-xs transition inline-flex items-center space-x-2"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Check for New Comments</span>
+            </button>
+          </div>
         </div>
       ) : (
         /* Comments List rendered via CommentConversation */
