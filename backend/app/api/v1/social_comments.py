@@ -57,6 +57,13 @@ def get_user_social_comments(
         social_account_id=social_account_id,
         meta_ad_id=meta_ad_id
     )
+
+    ad_count = sum(1 for c in comments if c.meta_ad_id is not None)
+    organic_count = len(comments) - ad_count
+    logger.info(
+        f"[COMMENTS_API] user_id={current_user.id} total_retrieved={len(comments)} "
+        f"organic_count={organic_count} ad_comment_count={ad_count}"
+    )
     
     # Defensive Protection: Fetch external_reply_ids for current_user to exclude any webhook echoes
     owner_reply_ids = {

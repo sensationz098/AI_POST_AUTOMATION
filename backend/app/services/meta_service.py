@@ -2988,7 +2988,10 @@ class MetaGraphService:
                             )
 
                             if comment_rec and hasattr(comment_rec, "id") and comment_rec.id:
-                                logger.info(f"[META_AD_COMMENT_SAVED] comment_id={ext_c_id} database_record_id={comment_rec.id}")
+                                logger.info(
+                                    f"[META_AD_COMMENT_SAVED] comment_id={ext_c_id} database_record_id={comment_rec.id} "
+                                    f"meta_ad_id={ad.id} meta_ad_name='{ad.name}'"
+                                )
                                 if already_exists:
                                     existing_comments_reused += 1
                                 else:
