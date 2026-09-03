@@ -47,7 +47,10 @@ export default function AdCommentsPage() {
   const [comments, setComments] = useState<SocialComment[]>([]);
   const [totalComments, setTotalComments] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
 
   // Reply state
   const [replyingToId, setReplyingToId] = useState<number | null>(null);
@@ -60,26 +63,46 @@ export default function AdCommentsPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const fetchAdComments = async () => {
+  const fetchAdComments = async (pageNum = 1, append = false) => {
     if (!adId) return;
-    setLoading(true);
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
-      const res = await apiClient.get(`/social-comments/ads/${adId}`);
+      const res = await apiClient.get(`/social-comments/ads/${adId}`, {
+        params: { page: pageNum, limit: 50 }
+      });
       setAd(res.data.ad);
-      setComments(res.data.comments || []);
       setTotalComments(res.data.total_comments || 0);
+      setHasNext(res.data.has_next || false);
+      setPage(pageNum);
+
+      if (append) {
+        setComments((prev) => [...prev, ...(res.data.comments || [])]);
+      } else {
+        setComments(res.data.comments || []);
+      }
     } catch (e: any) {
       console.error('Failed to fetch ad comments:', e);
       setError(e?.response?.data?.detail || 'Failed to load comments for this Meta Ad.');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    fetchAdComments();
+    fetchAdComments(1, false);
   }, [adId]);
+
+  const handleLoadMore = () => {
+    if (hasNext && !loadingMore) {
+      fetchAdComments(page + 1, true);
+    }
+  };
 
   const handleSendReply = async (commentId: number) => {
     if (!replyText.trim()) return;
@@ -169,7 +192,7 @@ export default function AdCommentsPage() {
         </div>
 
         <button
-          onClick={fetchAdComments}
+          onClick={() => fetchAdComments(1, false)}
           disabled={loading}
           className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white font-medium text-xs transition flex items-center space-x-2"
         >
@@ -247,7 +270,7 @@ export default function AdCommentsPage() {
           <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
           <p className="text-sm text-slate-400">Loading comments for this Meta Ad...</p>
         </div>
-      ) : comments.length === 0 ? (
+      ) : error ? null : comments.length === 0 ? (
         <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-12 text-center flex flex-col items-center justify-center space-y-3">
           <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center text-slate-400">
             <MessageSquare className="w-6 h-6" />
@@ -275,7 +298,7 @@ export default function AdCommentsPage() {
                       {initial}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                         <span className="font-bold text-sm text-slate-100 truncate">
                           {commenterName}
                         </span>
@@ -286,6 +309,12 @@ export default function AdCommentsPage() {
                         ) : (
                           <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700/60 text-[9px] font-semibold">
                             Privacy Protected
+                          </span>
+                        )}
+                        {comment.parent_comment_id && (
+                          <span className="px-1.5 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-800/60 text-[9px] font-semibold flex items-center space-x-1">
+                            <CornerDownRight className="w-2.5 h-2.5 inline" />
+                            <span>Reply</span>
                           </span>
                         )}
                       </div>
@@ -397,6 +426,29 @@ export default function AdCommentsPage() {
               </div>
             );
           })}
+
+          {/* Load More Pagination */}
+          {hasNext && (
+            <div className="pt-4 text-center">
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-indigo-300 hover:text-white text-xs font-semibold rounded-xl transition flex items-center space-x-2 mx-auto disabled:opacity-50"
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                    <span>Loading More Comments...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 text-indigo-400" />
+                    <span>Load More Comments ({comments.length} of {totalComments})</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

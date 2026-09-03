@@ -2631,16 +2631,22 @@ class MetaGraphService:
         comments_acc = []
         next_url = f"{self.BASE_URL}/{post_id}/comments"
         params = {
-            "fields": "id,message,created_time,from{id,name,username},username,parent",
+            "fields": "id,message,created_time,from{id,name,username},username,parent,comments.limit(100){id,message,created_time,from{id,name,username},username,parent}",
             "limit": limit,
             "access_token": raw_token
         }
         page_count = 0
-        max_pages = 10
+        max_pages = 500
+        visited_urls = set()
         err_details = dict(empty_err_details)
 
         try:
             while next_url and page_count < max_pages:
+                if next_url in visited_urls:
+                    logger.warning(f"[META_AD_COMMENTS_PAGINATION] post_id={post_id} Detected duplicate next URL loop, stopping pagination.")
+                    break
+                visited_urls.add(next_url)
+
                 if page_count > 0:
                     res = requests.get(next_url, timeout=15)
                 else:
@@ -2665,7 +2671,7 @@ class MetaGraphService:
                     logger.info(
                         f"[META_AD_COMMENT_RESPONSE] post_id={post_id} http_status={res.status_code} "
                         f"meta_error_code={err_code} meta_error_subcode={err_subcode} "
-                        f"comments_returned=0 has_paging=False next_page_exists=False"
+                        f"comments_returned={len(comments_acc)} has_paging=False next_page_exists=False"
                     )
 
                     # Check for missing pages_read_user_content or Page Public Content Access feature approval
@@ -2692,11 +2698,56 @@ class MetaGraphService:
 
                 res_data = res.json()
                 data = res_data.get("data", [])
+                page_items_added = 0
+
                 if isinstance(data, list):
-                    comments_acc.extend(data)
+                    for c in data:
+                        comments_acc.append(c)
+                        page_items_added += 1
+
+                        # Extract nested replies
+                        nested = c.get("comments", {}) if isinstance(c.get("comments"), dict) else {}
+                        nested_data = nested.get("data", []) if isinstance(nested.get("data"), list) else []
+                        for reply in nested_data:
+                            if isinstance(reply, dict):
+                                if not reply.get("parent") and c.get("id"):
+                                    reply["parent"] = {"id": c["id"]}
+                                comments_acc.append(reply)
+                                page_items_added += 1
+
+                        # Handle nested reply pagination if any single top-level comment has > 100 replies
+                        nested_next = nested.get("paging", {}).get("next") if isinstance(nested.get("paging"), dict) else None
+                        nested_visited = set()
+                        while nested_next and len(nested_visited) < 100:
+                            if nested_next in nested_visited:
+                                break
+                            nested_visited.add(nested_next)
+                            try:
+                                nres = requests.get(nested_next, timeout=15)
+                                if nres.status_code == 200:
+                                    nres_data = nres.json()
+                                    ndata = nres_data.get("data", [])
+                                    if isinstance(ndata, list):
+                                        for reply in ndata:
+                                            if isinstance(reply, dict):
+                                                if not reply.get("parent") and c.get("id"):
+                                                    reply["parent"] = {"id": c["id"]}
+                                                comments_acc.append(reply)
+                                                page_items_added += 1
+                                    nested_next = nres_data.get("paging", {}).get("next") if isinstance(nres_data.get("paging"), dict) else None
+                                else:
+                                    break
+                            except Exception:
+                                break
 
                 paging = res_data.get("paging", {})
                 next_url = paging.get("next")
+
+                logger.info(
+                    f"[META_AD_COMMENTS_PAGE] post_id={post_id} page={page_count} "
+                    f"comments_in_page={page_items_added} total_comments_fetched={len(comments_acc)} "
+                    f"has_next={bool(next_url)}"
+                )
 
             logger.info(
                 f"[META_AD_COMMENT_RESPONSE] post_id={post_id} http_status=200 "
