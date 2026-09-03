@@ -837,51 +837,69 @@ class MetaGraphService:
             raise
 
 
-    def fetch_facebook_page_post_count(self, page_id: str, access_token: str) -> Optional[int]:
+    def fetch_facebook_page_post_count(self, page_id: str, access_token: str) -> Tuple[Optional[int], str]:
         """
-        Retrieves actual platform post count for a Facebook Page by requesting lightweight 'id' fields
-        with limit=100 per request, following cursors up to a safe maximum cap (5,000 posts).
-        Returns None if the Meta API query fails or is unauthenticated.
+        Retrieves actual platform post count for a Facebook Page ONLY if the cursor fully terminates.
+        Returns (count, "meta_verified_exact_total") if exact cursor total is verified.
+        Returns (None, "meta_total_unavailable") if truncated, timed out, or unverified.
         """
         if not page_id or not access_token or page_id == "sandbox":
-            return None
+            return None, "meta_total_unavailable"
 
+        t0 = time.time()
         try:
             url = f"{self.BASE_URL}/{page_id}/published_posts"
             params = {"fields": "id", "limit": 100, "access_token": access_token}
-            res = requests.get(url, params=params, timeout=5)
+            res = requests.get(url, params=params, timeout=2.5)
+            duration_ms = int((time.time() - t0) * 1000)
+
             if res.status_code != 200:
-                logger.warning(f"[FB_POST_COUNT] Failed to fetch published_posts for page {page_id}: {res.text}")
-                return None
+                logger.warning(f"[PLATFORM_POST_COUNT] platform=facebook account_id={page_id} success=False count=null duration_ms={duration_ms} source=meta_total_unavailable error_type=HTTP_{res.status_code}")
+                return None, "meta_total_unavailable"
 
             data = res.json()
             items = data.get("data", [])
             total = len(items)
 
             curr_res = data
-            page_safety_cap = 50  # max 5,000 posts
+            page_safety_cap = 5  # max 500 posts check
             pages_fetched = 1
+            cursor_terminated = not bool(data.get("paging", {}).get("next"))
 
             while curr_res.get("paging", {}).get("next") and pages_fetched < page_safety_cap:
                 next_url = curr_res["paging"]["next"]
                 try:
-                    r_next = requests.get(next_url, timeout=5)
+                    r_next = requests.get(next_url, timeout=2.0)
                     if r_next.status_code != 200:
                         break
                     curr_res = r_next.json()
                     batch = curr_res.get("data", [])
                     total += len(batch)
                     pages_fetched += 1
-                    if not batch:
+                    if not bool(curr_res.get("paging", {}).get("next")):
+                        cursor_terminated = True
                         break
                 except Exception as ex:
-                    logger.warning(f"[FB_POST_COUNT] Cursor pagination timeout/error for page {page_id}: {ex}")
+                    logger.warning(f"[PLATFORM_POST_COUNT] platform=facebook account_id={page_id} cursor_error={ex}")
                     break
 
-            return total
+            total_duration_ms = int((time.time() - t0) * 1000)
+
+            if cursor_terminated:
+                logger.info(f"[PLATFORM_POST_COUNT] platform=facebook account_id={page_id} success=True count={total} duration_ms={total_duration_ms} source=meta_verified_exact_total")
+                return total, "meta_verified_exact_total"
+            else:
+                logger.warning(f"[PLATFORM_POST_COUNT] platform=facebook account_id={page_id} success=False count=null duration_ms={total_duration_ms} source=meta_total_unavailable reason=truncated_beyond_cap")
+                return None, "meta_total_unavailable"
+
+        except requests.Timeout:
+            duration_ms = int((time.time() - t0) * 1000)
+            logger.warning(f"[PLATFORM_POST_COUNT] platform=facebook account_id={page_id} success=False count=null duration_ms={duration_ms} source=meta_total_unavailable error_type=timeout")
+            return None, "meta_total_unavailable"
         except Exception as e:
-            logger.error(f"[FB_POST_COUNT] Exception fetching post count for page {page_id}: {e}")
-            return None
+            duration_ms = int((time.time() - t0) * 1000)
+            logger.error(f"[PLATFORM_POST_COUNT] platform=facebook account_id={page_id} success=False count=null duration_ms={duration_ms} source=meta_total_unavailable error_type={type(e).__name__}")
+            return None, "meta_total_unavailable"
 
     def fetch_facebook_page_metrics(self, page_id: str, access_token: str) -> Dict[str, Any]:
         """Fetch real Facebook Page metrics (followers, likes, category, picture) via Graph API."""
@@ -892,6 +910,7 @@ class MetaGraphService:
                 "followers_count": 18450,
                 "fan_count": 14200,
                 "media_count": 12,
+                "media_count_source": "sandbox",
                 "category": "Artificial Intelligence & Software",
                 "picture_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
                 "link": f"https://facebook.com/{page_id}",
@@ -904,7 +923,7 @@ class MetaGraphService:
                 "fields": "id,name,followers_count,fan_count,category,picture.type(large),link",
                 "access_token": access_token
             }
-            res = requests.get(url, params=params, timeout=10)
+            res = requests.get(url, params=params, timeout=5)
             data = res.json()
             if res.status_code != 200:
                 logger.warning(f"FB Page Metrics query warning: {data.get('error', {}).get('message')}")
@@ -914,6 +933,7 @@ class MetaGraphService:
                     "followers_count": None,
                     "fan_count": None,
                     "media_count": None,
+                    "media_count_source": "meta_total_unavailable",
                     "category": "Business Page",
                     "picture_url": f"https://graph.facebook.com/v19.0/{page_id}/picture?type=large",
                     "link": f"https://facebook.com/{page_id}",
@@ -921,13 +941,14 @@ class MetaGraphService:
                 }
 
             picture_url = data.get("picture", {}).get("data", {}).get("url") or f"https://graph.facebook.com/v19.0/{page_id}/picture?type=large"
-            media_count = self.fetch_facebook_page_post_count(page_id, access_token)
+            media_count, source = self.fetch_facebook_page_post_count(page_id, access_token)
             return {
                 "id": data.get("id", page_id),
                 "name": data.get("name", "Facebook Page"),
                 "followers_count": data.get("followers_count") or data.get("fan_count") or 0,
                 "fan_count": data.get("fan_count") or 0,
                 "media_count": media_count,
+                "media_count_source": source,
                 "category": data.get("category", "Meta Page"),
                 "picture_url": picture_url,
                 "link": data.get("link", f"https://facebook.com/{page_id}"),
@@ -941,6 +962,7 @@ class MetaGraphService:
                 "followers_count": None,
                 "fan_count": None,
                 "media_count": None,
+                "media_count_source": "meta_total_unavailable",
                 "category": "Meta Page",
                 "picture_url": f"https://graph.facebook.com/v19.0/{page_id}/picture?type=large",
                 "link": f"https://facebook.com/{page_id}",
@@ -961,26 +983,32 @@ class MetaGraphService:
                 "is_sandbox": True
             }
 
+        t0 = time.time()
         try:
             url = f"{self.BASE_URL}/{ig_user_id}"
             params = {
                 "fields": "id,username,name,followers_count,follows_count,media_count,profile_picture_url",
                 "access_token": access_token
             }
-            res = requests.get(url, params=params, timeout=10)
+            res = requests.get(url, params=params, timeout=5)
+            duration_ms = int((time.time() - t0) * 1000)
             data = res.json()
             if res.status_code != 200:
-                logger.warning(f"IG Account Metrics query warning: {data.get('error', {}).get('message')}")
+                logger.warning(f"[PLATFORM_POST_COUNT] platform=instagram account_id={ig_user_id} success=False count=null duration_ms={duration_ms} error_type=HTTP_{res.status_code}")
                 return {
                     "id": ig_user_id,
                     "username": "instagram_account",
                     "name": "Instagram Business",
                     "followers_count": 0,
                     "follows_count": 0,
-                    "media_count": 0,
+                    "media_count": None,
                     "profile_picture_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
                     "is_sandbox": False
                 }
+
+            media_count = data.get("media_count")
+            source = "meta_verified_exact_total" if media_count is not None else "meta_total_unavailable"
+            logger.info(f"[PLATFORM_POST_COUNT] platform=instagram account_id={ig_user_id} success=True count={media_count} duration_ms={duration_ms} source={source}")
 
             return {
                 "id": data.get("id", ig_user_id),
@@ -988,8 +1016,37 @@ class MetaGraphService:
                 "name": data.get("name", "Instagram Business"),
                 "followers_count": data.get("followers_count") or 0,
                 "follows_count": data.get("follows_count") or 0,
-                "media_count": data.get("media_count") or 0,
+                "media_count": media_count,
+                "media_count_source": source,
                 "profile_picture_url": data.get("profile_picture_url") or "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
+                "is_sandbox": False
+            }
+        except requests.Timeout:
+            duration_ms = int((time.time() - t0) * 1000)
+            logger.warning(f"[PLATFORM_POST_COUNT] platform=instagram account_id={ig_user_id} success=False count=null duration_ms={duration_ms} source=meta_total_unavailable error_type=timeout")
+            return {
+                "id": ig_user_id,
+                "username": "instagram_account",
+                "name": "Instagram Business",
+                "followers_count": 0,
+                "follows_count": 0,
+                "media_count": None,
+                "media_count_source": "meta_total_unavailable",
+                "profile_picture_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
+                "is_sandbox": False
+            }
+        except Exception as e:
+            duration_ms = int((time.time() - t0) * 1000)
+            logger.error(f"[PLATFORM_POST_COUNT] platform=instagram account_id={ig_user_id} success=False count=null duration_ms={duration_ms} source=meta_total_unavailable error_type={type(e).__name__}")
+            return {
+                "id": ig_user_id,
+                "username": "instagram_account",
+                "name": "Instagram Business",
+                "followers_count": 0,
+                "follows_count": 0,
+                "media_count": None,
+                "media_count_source": "meta_total_unavailable",
+                "profile_picture_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80",
                 "is_sandbox": False
             }
         except Exception as e:

@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy.orm import Session
 from app.repositories.analytics_repository import analytics_repo
 from app.repositories.brand_repository import brand_repo
@@ -37,44 +38,78 @@ class AnalyticsService:
         total_impressions_combined = summary.get("total_impressions", 0)
         has_live_meta = False
 
-        for acc in real_accounts:
+        def _fetch_account_entry(acc):
             token = decrypt_token(acc.access_token) or acc.access_token
-            if acc.platform == "facebook":
-                fb_raw = meta_service.fetch_facebook_page_metrics(page_id=acc.account_id, access_token=token)
-                followers = fb_raw.get("followers_count", 0)
-                total_followers_combined += followers
-                accounts_list.append({
-                    "id": acc.id,
-                    "account_id": acc.account_id,
-                    "account_name": acc.account_name,
-                    "platform": "facebook",
-                    "logo_url": acc.logo_url,
-                    "followers_count": followers,
-                    "fan_count": fb_raw.get("fan_count", 0),
-                    "media_count": fb_raw.get("media_count", 0),
-                    "category": fb_raw.get("category", "Facebook Page"),
-                    "status": acc.status,
-                    "link": f"https://facebook.com/{acc.account_id}"
-                })
-                if not fb_raw.get("is_sandbox"):
-                    has_live_meta = True
+            try:
+                if acc.platform == "facebook":
+                    fb_raw = meta_service.fetch_facebook_page_metrics(page_id=acc.account_id, access_token=token)
+                    followers = fb_raw.get("followers_count")
+                    return {
+                        "entry": {
+                            "id": acc.id,
+                            "account_id": acc.account_id,
+                            "account_name": acc.account_name,
+                            "platform": "facebook",
+                            "logo_url": acc.logo_url,
+                            "followers_count": followers if followers is not None else 0,
+                            "fan_count": fb_raw.get("fan_count"),
+                            "media_count": fb_raw.get("media_count"),
+                            "media_count_source": fb_raw.get("media_count_source", "meta_total_unavailable"),
+                            "category": fb_raw.get("category", "Facebook Page"),
+                            "status": acc.status,
+                            "link": f"https://facebook.com/{acc.account_id}"
+                        },
+                        "followers": followers or 0,
+                        "is_live": not fb_raw.get("is_sandbox")
+                    }
+                elif acc.platform == "instagram":
+                    ig_raw = meta_service.fetch_instagram_account_metrics(ig_user_id=acc.account_id, access_token=token)
+                    followers = ig_raw.get("followers_count")
+                    return {
+                        "entry": {
+                            "id": acc.id,
+                            "account_id": acc.account_id,
+                            "account_name": acc.account_name,
+                            "platform": "instagram",
+                            "logo_url": acc.logo_url,
+                            "followers_count": followers if followers is not None else 0,
+                            "media_count": ig_raw.get("media_count"),
+                            "media_count_source": ig_raw.get("media_count_source", "meta_verified_exact_total"),
+                            "status": acc.status,
+                            "link": f"https://instagram.com/{acc.account_name.lstrip('@')}"
+                        },
+                        "followers": followers or 0,
+                        "is_live": not ig_raw.get("is_sandbox")
+                    }
+            except Exception as e:
+                import logging
+                logging.getLogger("uvicorn.error").error(f"[ANALYTICS_ACCOUNT_ISOLATION_ERROR] platform={acc.platform} account_id={acc.account_id} error={e}")
+                return {
+                    "entry": {
+                        "id": acc.id,
+                        "account_id": acc.account_id,
+                        "account_name": acc.account_name,
+                        "platform": acc.platform,
+                        "logo_url": acc.logo_url,
+                        "followers_count": 0,
+                        "media_count": None,
+                        "media_count_source": "meta_total_unavailable",
+                        "status": acc.status,
+                        "link": f"https://facebook.com/{acc.account_id}" if acc.platform == "facebook" else f"https://instagram.com/{acc.account_name.lstrip('@')}"
+                    },
+                    "followers": 0,
+                    "is_live": False
+                }
 
-            elif acc.platform == "instagram":
-                ig_raw = meta_service.fetch_instagram_account_metrics(ig_user_id=acc.account_id, access_token=token)
-                followers = ig_raw.get("followers_count", 0)
-                total_followers_combined += followers
-                accounts_list.append({
-                    "id": acc.id,
-                    "account_id": acc.account_id,
-                    "account_name": acc.account_name,
-                    "platform": "instagram",
-                    "logo_url": acc.logo_url,
-                    "followers_count": followers,
-                    "media_count": ig_raw.get("media_count", 0),
-                    "status": acc.status,
-                    "link": f"https://instagram.com/{acc.account_name.lstrip('@')}"
-                })
-                if not ig_raw.get("is_sandbox"):
+        if real_accounts:
+            with ThreadPoolExecutor(max_workers=min(len(real_accounts), 10)) as executor:
+                futures = [executor.submit(_fetch_account_entry, acc) for acc in real_accounts]
+                results = [f.result() for f in futures]
+
+            for res in results:
+                accounts_list.append(res["entry"])
+                total_followers_combined += res["followers"]
+                if res["is_live"]:
                     has_live_meta = True
 
         summary["total_reach"] = total_reach_combined
