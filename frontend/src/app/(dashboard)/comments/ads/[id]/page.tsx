@@ -34,6 +34,8 @@ interface AdDetails {
   facebook_page_id?: string;
   facebook_post_id?: string;
   meta_ad_account_id?: string;
+  permalink?: string;
+  platform?: string;
 }
 
 export default function AdCommentsPage() {
@@ -127,6 +129,9 @@ export default function AdCommentsPage() {
     }
   };
 
+  const isInstagram = ad?.platform?.toLowerCase() === 'instagram';
+  const hasValidPermalink = ad?.permalink && (ad.permalink.startsWith('http://') || ad.permalink.startsWith('https://'));
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6 text-slate-100 font-sans">
       {/* Top Header & Breadcrumbs */}
@@ -193,6 +198,18 @@ export default function AdCommentsPage() {
           </div>
 
           <div className="flex items-center space-x-3">
+            {hasValidPermalink && (
+              <a
+                href={ad.permalink!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900/80 border border-blue-700/70 text-blue-200 text-xs font-semibold transition flex items-center space-x-1.5 shadow-sm"
+              >
+                {isInstagram ? <Instagram className="w-3.5 h-3.5 text-pink-400" /> : <Facebook className="w-3.5 h-3.5 text-blue-400" />}
+                <span>View on {isInstagram ? 'Instagram' : 'Facebook'}</span>
+                <ExternalLink className="w-3 h-3 ml-0.5 text-blue-300" />
+              </a>
+            )}
             <div className="px-3 py-1.5 rounded-lg bg-indigo-950/60 border border-indigo-800/60 text-indigo-300 text-xs font-semibold flex items-center space-x-1.5">
               <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
               <span>{totalComments} Comments</span>

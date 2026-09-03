@@ -186,6 +186,8 @@ export interface MetaAdCommentContext {
   campaign_name?: string | null;
   adset_name?: string | null;
   effective_status?: string | null;
+  permalink?: string | null;
+  platform?: 'facebook' | 'instagram' | string;
 }
 
 export interface SocialComment {
