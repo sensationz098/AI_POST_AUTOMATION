@@ -22,7 +22,7 @@ import {
   FileText
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { SocialComment, SocialCommentReply } from '@/lib/types';
+import { SocialComment, SocialCommentReply, MetaAdCommentsResponse } from '@/lib/types';
 
 interface AdDetails {
   id: number;
@@ -72,22 +72,57 @@ export default function AdCommentsPage() {
     }
     setError(null);
     try {
-      const res = await apiClient.get(`/social-comments/ads/${adId}`, {
+      const requestUrl = `/social-comments/ads/${adId}`;
+      const res = await apiClient.get<MetaAdCommentsResponse>(requestUrl, {
         params: { page: pageNum, limit: 50 }
       });
-      setAd(res.data.ad);
-      setTotalComments(res.data.total_comments || 0);
-      setHasNext(res.data.has_next || false);
-      setPage(pageNum);
+
+      const payload = res?.data;
+      const adObj = payload?.ad || null;
+      const commentsList = Array.isArray(payload?.comments) ? payload.comments : [];
+      const totalCnt = typeof payload?.total_comments === 'number' ? payload.total_comments : commentsList.length;
+      const hasNextPage = Boolean(payload?.has_next);
+      const currentPage = typeof payload?.page === 'number' ? payload.page : pageNum;
+
+      console.log('[AD_COMMENTS_FRONTEND_RESPONSE]', {
+        routeAdId: adId,
+        requestUrl,
+        httpStatus: res.status,
+        responseObjectKeys: Object.keys(res || {}),
+        responseDataKeys: Object.keys(payload || {}),
+        commentsArrayDetected: Array.isArray(payload?.comments),
+        commentsLength: commentsList.length,
+        totalComments: totalCnt,
+        page: currentPage,
+        hasNext: hasNextPage
+      });
+
+      setAd(adObj);
+      setTotalComments(totalCnt);
+      setHasNext(hasNextPage);
+      setPage(currentPage);
 
       if (append) {
-        setComments((prev) => [...prev, ...(res.data.comments || [])]);
+        setComments((prev) => [...prev, ...commentsList]);
       } else {
-        setComments(res.data.comments || []);
+        setComments(commentsList);
       }
     } catch (e: any) {
-      console.error('Failed to fetch ad comments:', e);
-      setError(e?.response?.data?.detail || 'Failed to load comments for this Meta Ad.');
+      const requestUrl = `/social-comments/ads/${adId}`;
+      const httpStatus = e?.response?.status;
+      const backendDetail = e?.response?.data?.detail;
+      const errorMsg = backendDetail || e?.message || 'Unable to display comments for this Meta Ad.';
+
+      console.error('[AD_COMMENTS_FRONTEND_ERROR]', {
+        routeAdId: adId,
+        requestUrl,
+        errorName: e?.name || 'Error',
+        errorMessage: e?.message || String(e),
+        httpStatus: httpStatus || 'N/A',
+        backendDetail: backendDetail || 'N/A'
+      });
+
+      setError(errorMsg);
     } finally {
       setLoading(false);
       setLoadingMore(false);
