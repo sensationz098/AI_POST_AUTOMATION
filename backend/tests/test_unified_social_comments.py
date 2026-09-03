@@ -396,3 +396,138 @@ def test_11_12_delete_organic_and_ad_comments(client, db_session):
     res_list = client.get("/api/v1/social-comments/")
     assert res_list.status_code == 200
     assert len(res_list.json()) == 0
+
+
+def test_13_facebook_ad_comment_identity_resolution(db_session):
+    user, fb_acc, _, ad_acct, ad = setup_test_environment(db_session)
+
+    mock_comments = [
+        {
+            "id": "fb_identity_c1",
+            "message": "Awesome product!",
+            "created_time": "2026-09-03T11:30:00+00:00",
+            "from": {"id": "fb_usr_999", "name": "John Doe"}
+        }
+    ]
+
+    with patch.object(meta_service, "fetch_comments_for_facebook_post", return_value=mock_comments):
+        res = meta_service.sync_comments_for_meta_ads(db=db_session, user_id=user.id, meta_ad_account_id=ad_acct.meta_ad_account_id)
+
+    assert res["success"] is True
+    saved = db_session.query(SocialComment).filter(SocialComment.external_comment_id == "fb_identity_c1").first()
+    assert saved is not None
+    assert saved.commenter_id == "fb_usr_999"
+    assert saved.commenter_name == "John Doe"
+
+
+def test_14_instagram_ad_comment_username_resolution(db_session):
+    user, fb_acc, _, ad_acct, ad = setup_test_environment(db_session)
+
+    mock_comments = [
+        {
+            "id": "ig_identity_c2",
+            "message": "Love this design!",
+            "created_time": "2026-09-03T11:35:00+00:00",
+            "username": "design_fanatic_ig"
+        }
+    ]
+
+    with patch.object(meta_service, "fetch_comments_for_facebook_post", return_value=mock_comments):
+        res = meta_service.sync_comments_for_meta_ads(db=db_session, user_id=user.id, meta_ad_account_id=ad_acct.meta_ad_account_id)
+
+    assert res["success"] is True
+    saved = db_session.query(SocialComment).filter(SocialComment.external_comment_id == "ig_identity_c2").first()
+    assert saved is not None
+    assert saved.commenter_name == "design_fanatic_ig"
+
+
+def test_15_enrichment_of_existing_anonymous_comment(db_session):
+    user, fb_acc, _, ad_acct, ad = setup_test_environment(db_session)
+
+    # 1. Initially comment exists with NULL name/id
+    existing_anon = SocialComment(
+        user_id=user.id,
+        social_account_id=fb_acc.id,
+        platform="facebook",
+        external_comment_id="anon_comment_555",
+        comment_text="Initial webhook comment without name",
+        commenter_id=None,
+        commenter_name=None,
+        webhook_object="page",
+        meta_ad_id=None
+    )
+    db_session.add(existing_anon)
+    db_session.commit()
+
+    # 2. Later Ad Sync provides commenter_id and commenter_name
+    mock_comments = [
+        {
+            "id": "anon_comment_555",
+            "message": "Initial webhook comment without name",
+            "created_time": "2026-09-03T11:40:00+00:00",
+            "from": {"id": "usr_777", "name": "Jane Smith"}
+        }
+    ]
+
+    with patch.object(meta_service, "fetch_comments_for_facebook_post", return_value=mock_comments):
+        res = meta_service.sync_comments_for_meta_ads(db=db_session, user_id=user.id, meta_ad_account_id=ad_acct.meta_ad_account_id)
+
+    # Verify existing DB row enriched with commenter_name and commenter_id
+    db_session.refresh(existing_anon)
+    assert existing_anon.commenter_id == "usr_777"
+    assert existing_anon.commenter_name == "Jane Smith"
+    assert existing_anon.meta_ad_id == ad.id
+
+
+def test_16_preservation_of_existing_valid_commenter_name(db_session):
+    user, fb_acc, _, ad_acct, ad = setup_test_environment(db_session)
+
+    existing_valid = SocialComment(
+        user_id=user.id,
+        social_account_id=fb_acc.id,
+        platform="facebook",
+        external_comment_id="valid_name_888",
+        comment_text="Known commenter",
+        commenter_id="usr_888",
+        commenter_name="Original Name",
+        webhook_object="page",
+        meta_ad_id=None
+    )
+    db_session.add(existing_valid)
+    db_session.commit()
+
+    # Later sync returns comment without name
+    mock_comments = [
+        {
+            "id": "valid_name_888",
+            "message": "Known commenter",
+            "created_time": "2026-09-03T11:45:00+00:00"
+        }
+    ]
+
+    with patch.object(meta_service, "fetch_comments_for_facebook_post", return_value=mock_comments):
+        res = meta_service.sync_comments_for_meta_ads(db=db_session, user_id=user.id, meta_ad_account_id=ad_acct.meta_ad_account_id)
+
+    db_session.refresh(existing_valid)
+    assert existing_valid.commenter_name == "Original Name"
+
+
+def test_17_meta_no_identity_fallback_persists_successfully(db_session):
+    user, fb_acc, _, ad_acct, ad = setup_test_environment(db_session)
+
+    mock_comments = [
+        {
+            "id": "no_identity_999",
+            "message": "Comment with no identity payload from Meta",
+            "created_time": "2026-09-03T11:50:00+00:00"
+        }
+    ]
+
+    with patch.object(meta_service, "fetch_comments_for_facebook_post", return_value=mock_comments):
+        res = meta_service.sync_comments_for_meta_ads(db=db_session, user_id=user.id, meta_ad_account_id=ad_acct.meta_ad_account_id)
+
+    saved = db_session.query(SocialComment).filter(SocialComment.external_comment_id == "no_identity_999").first()
+    assert saved is not None
+    assert saved.commenter_name is None
+    assert saved.commenter_id is None
+

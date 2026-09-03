@@ -288,6 +288,11 @@ def get_user_social_comments(
                 "effective_status": c.meta_ad.effective_status
             }
 
+        logger.debug(
+            f"[META_COMMENT_API_IDENTITY] comment_id={c.external_comment_id} "
+            f"commenter_name={c.commenter_name or 'NONE'} commenter_id_present={bool(c.commenter_id)}"
+        )
+
         res_list.append({
             "id": c.id,
             "social_account_id": c.social_account_id,

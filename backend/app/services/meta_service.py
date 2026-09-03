@@ -2631,7 +2631,7 @@ class MetaGraphService:
         comments_acc = []
         next_url = f"{self.BASE_URL}/{post_id}/comments"
         params = {
-            "fields": "id,message,created_time,from,parent",
+            "fields": "id,message,created_time,from{id,name,username},username,parent",
             "limit": limit,
             "access_token": raw_token
         }
@@ -2934,9 +2934,34 @@ class MetaGraphService:
                         except Exception:
                             event_ts = datetime.now(timezone.utc)
 
-                    from_data = raw_comment.get("from") or {}
-                    commenter_id = str(from_data.get("id")) if from_data.get("id") else None
-                    commenter_name = from_data.get("name")
+                    from_data = raw_comment.get("from") if isinstance(raw_comment.get("from"), dict) else {}
+                    commenter_id = (
+                        str(from_data.get("id")).strip() if from_data.get("id") else
+                        (str(raw_comment.get("from_id")).strip() if raw_comment.get("from_id") else None)
+                    )
+                    commenter_name = (
+                        from_data.get("name") or
+                        from_data.get("username") or
+                        raw_comment.get("username") or
+                        raw_comment.get("from_name")
+                    )
+                    if commenter_name:
+                        commenter_name = str(commenter_name).strip()
+                        if not commenter_name:
+                            commenter_name = None
+
+                    has_from = isinstance(raw_comment.get("from"), dict)
+                    has_from_id = bool(from_data.get("id"))
+                    has_from_name = bool(from_data.get("name"))
+                    has_from_username = bool(from_data.get("username"))
+                    has_top_username = bool(raw_comment.get("username"))
+
+                    logger.info(
+                        f"[META_AD_COMMENT_IDENTITY] platform=facebook comment_id={ext_c_id} "
+                        f"has_from={has_from} has_from_id={has_from_id} has_from_name={has_from_name} "
+                        f"has_from_username={has_from_username} has_username={has_top_username} "
+                        f"resolved_name={'YES' if commenter_name else 'NO'}"
+                    )
 
                     parent_id = None
                     parent_data = raw_comment.get("parent")
