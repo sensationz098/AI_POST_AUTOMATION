@@ -247,3 +247,83 @@ def test_get_social_comments_with_meta_ad_filter(client, db_session):
     assert data[0]["meta_ad_id"] == ad.id
     assert data[0]["meta_ad"]["name"] == "Campaign Ad 1"
     assert data[0]["meta_ad"]["campaign_name"] == "Conversion Campaign"
+
+
+def test_get_comments_for_specific_ad_resolution_and_security(client, db_session):
+    # 1. Create Owner User and Unauthorized User
+    owner = User(email="ad_owner@example.com", full_name="Ad Owner", hashed_password="pw", is_active=True)
+    other_user = User(email="other_user@example.com", full_name="Other User", hashed_password="pw", is_active=True)
+    db_session.add_all([owner, other_user])
+    db_session.commit()
+    db_session.refresh(owner)
+    db_session.refresh(other_user)
+
+    # 2. Create Meta Ad with large 64-bit external meta_ad_id
+    ext_meta_ad_id = "120247633040840010"
+    ad = MetaAd(
+        id=51,
+        user_id=owner.id,
+        meta_ad_account_id="act_515151",
+        meta_ad_id=ext_meta_ad_id,
+        name="Targeted Campaign Ad #51",
+        campaign_name="Conversion Booster",
+        mapping_status="MAPPED"
+    )
+    db_session.add(ad)
+    db_session.commit()
+    db_session.refresh(ad)
+
+    # 3. Create social comments linked to Ad #51
+    sa = SocialAccount(user_id=owner.id, platform="facebook", account_id="page_51", account_name="Page 51", access_token="tok")
+    db_session.add(sa)
+    db_session.commit()
+    db_session.refresh(sa)
+
+    comments_to_add = [
+        SocialComment(
+            user_id=owner.id,
+            social_account_id=sa.id,
+            platform="facebook",
+            external_comment_id=f"c_ad51_{i}",
+            comment_text=f"Ad comment #{i}",
+            webhook_object="ad_comment",
+            meta_ad_id=ad.id
+        )
+        for i in range(15)
+    ]
+    db_session.add_all(comments_to_add)
+    db_session.commit()
+
+    fastapi_app = client.app
+    from app.api.v1.deps import get_current_user
+    fastapi_app.dependency_overrides[get_current_user] = lambda: owner
+
+    # A. Access by internal DB ID '51'
+    res_id = client.get(f"/api/v1/social-comments/ads/{ad.id}?page=1&limit=10")
+    assert res_id.status_code == 200
+    body_id = res_id.json()
+    assert body_id["ad"]["id"] == 51
+    assert body_id["ad"]["name"] == "Targeted Campaign Ad #51"
+    assert body_id["total_comments"] == 15
+    assert len(body_id["comments"]) == 10
+    assert body_id["has_next"] is True
+
+    # B. Access by external string Meta Ad ID '120247633040840010' (must not crash with Postgres integer overflow)
+    res_ext = client.get(f"/api/v1/social-comments/ads/{ext_meta_ad_id}?page=1&limit=10")
+    assert res_ext.status_code == 200
+    body_ext = res_ext.json()
+    assert body_ext["ad"]["id"] == 51
+    assert body_ext["total_comments"] == 15
+    assert len(body_ext["comments"]) == 10
+
+    # C. Page 2 pagination test
+    res_p2 = client.get(f"/api/v1/social-comments/ads/{ad.id}?page=2&limit=10")
+    assert res_p2.status_code == 200
+    body_p2 = res_p2.json()
+    assert len(body_p2["comments"]) == 5
+    assert body_p2["has_next"] is False
+
+    # D. Tenant Isolation: Other user access should return 404
+    fastapi_app.dependency_overrides[get_current_user] = lambda: other_user
+    res_unauth = client.get(f"/api/v1/social-comments/ads/{ad.id}")
+    assert res_unauth.status_code == 404
