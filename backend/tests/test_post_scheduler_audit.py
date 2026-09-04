@@ -243,3 +243,57 @@ def test_post_scheduler_account_user_isolation(client, db_session):
     assert res_b.status_code == 200
     posts_b = res_b.json()
     assert not any(p["id"] == post_a.id for p in posts_b)
+
+
+def test_get_posts_n_plus_one_query_performance(client, db_session):
+    """Verify that fetching N posts executes O(1) batch queries instead of O(N) queries."""
+    import time
+    from sqlalchemy import event
+
+    headers, brand_id, user_id = get_auth_token_and_user(client)
+
+    # Create 30 posts with PublishingBatch and PublishingJob records
+    posts_list = []
+    for i in range(30):
+        p = Post(
+            brand_id=brand_id, user_id=user_id, title=f"Scale Post {i}",
+            caption=f"Caption {i}", platforms=["facebook", "instagram"],
+            status="PUBLISHED"
+        )
+        posts_list.append(p)
+    db_session.add_all(posts_list)
+    db_session.commit()
+
+    for p in posts_list:
+        batch = PublishingBatch(post_id=p.id, user_id=user_id, status=BatchStatus.SUCCESS.value, total_targets=2, successful_targets=2, failed_targets=0)
+        db_session.add(batch)
+        db_session.commit()
+
+        j_fb = PublishingJob(batch_id=batch.id, social_account_id=1, platform="facebook", status=JobStatus.SUCCESS.value, external_post_id=f"fb_scale_{p.id}")
+        j_ig = PublishingJob(batch_id=batch.id, social_account_id=2, platform="instagram", status=JobStatus.SUCCESS.value, external_post_id=f"ig_scale_{p.id}")
+        db_session.add_all([j_fb, j_ig])
+    db_session.commit()
+
+    query_count = 0
+    def count_queries(conn, cursor, statement, parameters, context, executemany):
+        nonlocal query_count
+        query_count += 1
+
+    engine = db_session.bind
+    event.listen(engine, "before_cursor_execute", count_queries)
+
+    start_time = time.perf_counter()
+    res = client.get("/api/v1/posts/", headers=headers)
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+    event.remove(engine, "before_cursor_execute", count_queries)
+
+    assert res.status_code == 200
+    returned_posts = res.json()
+    assert len(returned_posts) >= 30
+
+    # Ensure total SQL queries is capped (e.g. <= 5 queries total for 30 posts)
+    assert query_count <= 5, f"Too many SQL queries executed: {query_count} (expected O(1) batch queries <= 5)"
+    # Ensure total execution time is under 1 second
+    assert elapsed_ms < 1000, f"Endpoint took too long: {elapsed_ms:.2f} ms"
+
