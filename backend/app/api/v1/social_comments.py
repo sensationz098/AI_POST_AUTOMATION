@@ -463,18 +463,28 @@ def get_user_social_comments(
 
 @router.get("/overview", response_model=dict)
 def get_engagement_overview(
+    social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Retrieve high-level Engagement metrics and recent top Ads & Posts with clear comment counts.
+    Strictly scoped to social_account_id if provided.
     """
-    top_level_comment_count = social_comment_repo.count_by_user_id(db, current_user.id, top_level_only=True)
-    reply_count = social_comment_repo.count_replies_by_user_id(db, current_user.id)
+    if social_account_id is not None:
+        account = db.query(SocialAccount).filter(
+            SocialAccount.id == social_account_id,
+            SocialAccount.user_id == current_user.id
+        ).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Social account not found")
+
+    top_level_comment_count = social_comment_repo.count_by_user_id(db, current_user.id, social_account_id=social_account_id, top_level_only=True)
+    reply_count = social_comment_repo.count_replies_by_user_id(db, current_user.id, social_account_id=social_account_id)
     total_interaction_count = top_level_comment_count + reply_count
 
-    total_ad_comments = social_comment_repo.count_by_user_id(db, current_user.id, is_ad=True, top_level_only=True)
-    total_post_comments = social_comment_repo.count_by_user_id(db, current_user.id, is_ad=False, top_level_only=True)
+    total_ad_comments = social_comment_repo.count_by_user_id(db, current_user.id, social_account_id=social_account_id, is_ad=True, top_level_only=True)
+    total_post_comments = social_comment_repo.count_by_user_id(db, current_user.id, social_account_id=social_account_id, is_ad=False, top_level_only=True)
 
     from app.models.social_comment import SocialComment
     from app.models.social_comment_reply import SocialCommentReply
@@ -482,7 +492,7 @@ def get_engagement_overview(
     from sqlalchemy import func, or_
 
     # Top-level comment counts per MetaAd
-    ad_top_counts_raw = db.query(
+    ad_top_q = db.query(
         SocialComment.meta_ad_id,
         func.count(SocialComment.id)
     ).filter(
@@ -490,12 +500,15 @@ def get_engagement_overview(
         SocialComment.is_deleted.isnot(True),
         SocialComment.meta_ad_id.isnot(None),
         or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == "")
-    ).group_by(SocialComment.meta_ad_id).all()
+    )
+    if social_account_id:
+        ad_top_q = ad_top_q.filter(SocialComment.social_account_id == social_account_id)
+    ad_top_counts_raw = ad_top_q.group_by(SocialComment.meta_ad_id).all()
 
     ad_top_map = {row[0]: row[1] for row in ad_top_counts_raw if row[0]}
 
     # Meta child replies per MetaAd
-    ad_meta_reply_raw = db.query(
+    ad_meta_reply_q = db.query(
         SocialComment.meta_ad_id,
         func.count(SocialComment.id)
     ).filter(
@@ -504,11 +517,14 @@ def get_engagement_overview(
         SocialComment.meta_ad_id.isnot(None),
         SocialComment.parent_comment_id.isnot(None),
         SocialComment.parent_comment_id != ""
-    ).group_by(SocialComment.meta_ad_id).all()
+    )
+    if social_account_id:
+        ad_meta_reply_q = ad_meta_reply_q.filter(SocialComment.social_account_id == social_account_id)
+    ad_meta_reply_raw = ad_meta_reply_q.group_by(SocialComment.meta_ad_id).all()
     ad_meta_reply_map = {row[0]: row[1] for row in ad_meta_reply_raw if row[0]}
 
     # Manual owner replies per MetaAd
-    ad_manual_reply_raw = db.query(
+    ad_manual_reply_q = db.query(
         SocialComment.meta_ad_id,
         func.count(SocialCommentReply.id)
     ).join(
@@ -518,7 +534,10 @@ def get_engagement_overview(
         SocialCommentReply.status == "SUCCESS",
         SocialComment.is_deleted.isnot(True),
         SocialComment.meta_ad_id.isnot(None)
-    ).group_by(SocialComment.meta_ad_id).all()
+    )
+    if social_account_id:
+        ad_manual_reply_q = ad_manual_reply_q.filter(SocialComment.social_account_id == social_account_id)
+    ad_manual_reply_raw = ad_manual_reply_q.group_by(SocialComment.meta_ad_id).all()
     ad_manual_reply_map = {row[0]: row[1] for row in ad_manual_reply_raw if row[0]}
 
     # Top recent Ads with comments
@@ -547,7 +566,7 @@ def get_engagement_overview(
         })
 
     # Top-level comment counts per organic external_post_id
-    post_top_raw = db.query(
+    post_top_q = db.query(
         SocialComment.external_post_id,
         func.count(SocialComment.id)
     ).filter(
@@ -556,7 +575,10 @@ def get_engagement_overview(
         SocialComment.meta_ad_id.is_(None),
         SocialComment.external_post_id.isnot(None),
         or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == "")
-    ).group_by(SocialComment.external_post_id).all()
+    )
+    if social_account_id:
+        post_top_q = post_top_q.filter(SocialComment.social_account_id == social_account_id)
+    post_top_raw = post_top_q.group_by(SocialComment.external_post_id).all()
 
     post_top_map = {row[0]: row[1] for row in post_top_raw if row[0]}
 
@@ -592,9 +614,13 @@ def get_engagement_overview(
         # External cached posts fallback
         remaining_pids = [pid for pid in post_top_map.keys() if pid not in added_pids]
         if remaining_pids and len(recent_posts) < 6:
-            ext_ctxs = db.query(ExternalPostContext).filter(
+            ext_ctx_q = db.query(ExternalPostContext).filter(
                 ExternalPostContext.external_post_id.in_(remaining_pids)
-            ).limit(6 - len(recent_posts)).all()
+            )
+            if social_account_id:
+                ext_ctx_q = ext_ctx_q.filter(ExternalPostContext.social_account_id == social_account_id)
+            ext_ctxs = ext_ctx_q.limit(6 - len(recent_posts)).all()
+
             for ctx in ext_ctxs:
                 c_cnt = post_top_map.get(ctx.external_post_id, 0)
                 recent_posts.append({
@@ -626,20 +652,32 @@ def get_engagement_overview(
 def get_meta_ads_with_comments(
     status: Optional[str] = Query(None, description="Filter by ad status ('ACTIVE', 'PAUSED', 'ALL')"),
     ad_account_id: Optional[str] = Query(None, description="Filter by Meta Ad Account ID"),
+    social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
     q: Optional[str] = Query(None, description="Search ad name, campaign, or adset"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Retrieve all Meta Ads for authenticated user with exact non-deleted comment & reply metrics.
+    Optionally scoped to a specific social_account_id.
     """
+    if social_account_id is not None:
+        account = db.query(SocialAccount).filter(
+            SocialAccount.id == social_account_id,
+            SocialAccount.user_id == current_user.id
+        ).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Social account not found")
+    else:
+        account = None
+
     from app.models.meta_ad import MetaAd
     from app.models.social_comment import SocialComment
     from app.models.social_comment_reply import SocialCommentReply
     from sqlalchemy import func, or_
 
     # Top-level comment counts per MetaAd
-    ad_top_counts_raw = db.query(
+    ad_top_q = db.query(
         SocialComment.meta_ad_id,
         func.count(SocialComment.id)
     ).filter(
@@ -647,11 +685,14 @@ def get_meta_ads_with_comments(
         SocialComment.is_deleted.isnot(True),
         SocialComment.meta_ad_id.isnot(None),
         or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == "")
-    ).group_by(SocialComment.meta_ad_id).all()
+    )
+    if social_account_id:
+        ad_top_q = ad_top_q.filter(SocialComment.social_account_id == social_account_id)
+    ad_top_counts_raw = ad_top_q.group_by(SocialComment.meta_ad_id).all()
     ad_top_map = {row[0]: row[1] for row in ad_top_counts_raw if row[0]}
 
     # Meta child replies per MetaAd
-    ad_meta_reply_raw = db.query(
+    ad_meta_reply_q = db.query(
         SocialComment.meta_ad_id,
         func.count(SocialComment.id)
     ).filter(
@@ -660,11 +701,14 @@ def get_meta_ads_with_comments(
         SocialComment.meta_ad_id.isnot(None),
         SocialComment.parent_comment_id.isnot(None),
         SocialComment.parent_comment_id != ""
-    ).group_by(SocialComment.meta_ad_id).all()
+    )
+    if social_account_id:
+        ad_meta_reply_q = ad_meta_reply_q.filter(SocialComment.social_account_id == social_account_id)
+    ad_meta_reply_raw = ad_meta_reply_q.group_by(SocialComment.meta_ad_id).all()
     ad_meta_reply_map = {row[0]: row[1] for row in ad_meta_reply_raw if row[0]}
 
     # Manual owner replies per MetaAd
-    ad_manual_reply_raw = db.query(
+    ad_manual_reply_q = db.query(
         SocialComment.meta_ad_id,
         func.count(SocialCommentReply.id)
     ).join(
@@ -674,10 +718,24 @@ def get_meta_ads_with_comments(
         SocialCommentReply.status == "SUCCESS",
         SocialComment.is_deleted.isnot(True),
         SocialComment.meta_ad_id.isnot(None)
-    ).group_by(SocialComment.meta_ad_id).all()
+    )
+    if social_account_id:
+        ad_manual_reply_q = ad_manual_reply_q.filter(SocialComment.social_account_id == social_account_id)
+    ad_manual_reply_raw = ad_manual_reply_q.group_by(SocialComment.meta_ad_id).all()
     ad_manual_reply_map = {row[0]: row[1] for row in ad_manual_reply_raw if row[0]}
 
     query = db.query(MetaAd).filter(MetaAd.user_id == current_user.id)
+
+    if social_account_id and account:
+        acc_ext_id = account.account_id
+        ad_ids_with_comments = list(ad_top_map.keys())
+        query = query.filter(
+            or_(
+                MetaAd.facebook_page_id == acc_ext_id,
+                MetaAd.instagram_account_id == acc_ext_id,
+                MetaAd.id.in_(ad_ids_with_comments) if ad_ids_with_comments else False
+            )
+        )
 
     if ad_account_id:
         raw_id = str(ad_account_id).strip()
@@ -736,6 +794,7 @@ def get_comments_for_specific_ad(
     skip: int = Query(0, ge=0),
     page: Optional[int] = Query(None, ge=1),
     limit: int = Query(50, ge=1, le=100),
+    social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
     reply_status: Optional[str] = Query(None, description="Filter by reply status ('all', 'replied', 'unreplied')"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -745,6 +804,14 @@ def get_comments_for_specific_ad(
     Supports looking up meta_ad by numeric database ID or string meta_ad_id.
     Returns explicit top-level comment, reply, and total interaction metrics alongside filtered counts.
     """
+    if social_account_id is not None:
+        account = db.query(SocialAccount).filter(
+            SocialAccount.id == social_account_id,
+            SocialAccount.user_id == current_user.id
+        ).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Social account not found")
+
     from app.models.meta_ad import MetaAd
 
     if page is not None and page > 0 and skip == 0:
@@ -767,15 +834,19 @@ def get_comments_for_specific_ad(
     import time
     t0 = time.time()
 
-    top_level_comment_count = social_comment_repo.count_by_user_id(db, current_user.id, meta_ad_id=ad.id, top_level_only=True)
-    reply_count = social_comment_repo.count_replies_by_user_id(db, current_user.id, meta_ad_id=ad.id)
+    top_level_comment_count = social_comment_repo.count_by_user_id(
+        db, current_user.id, social_account_id=social_account_id, meta_ad_id=ad.id, top_level_only=True
+    )
+    reply_count = social_comment_repo.count_replies_by_user_id(
+        db, current_user.id, social_account_id=social_account_id, meta_ad_id=ad.id
+    )
     total_interaction_count = top_level_comment_count + reply_count
 
     filtered_top_level_count = social_comment_repo.count_by_user_id(
-        db, current_user.id, meta_ad_id=ad.id, top_level_only=True, reply_status=reply_status
+        db, current_user.id, social_account_id=social_account_id, meta_ad_id=ad.id, top_level_only=True, reply_status=reply_status
     )
     raw_comments = social_comment_repo.get_by_user_id(
-        db, current_user.id, skip=skip, limit=limit, meta_ad_id=ad.id, top_level_only=True, reply_status=reply_status
+        db, current_user.id, skip=skip, limit=limit, social_account_id=social_account_id, meta_ad_id=ad.id, top_level_only=True, reply_status=reply_status
     )
 
     formatted_comments = _format_comments_response_list(raw_comments, current_user, db)
@@ -824,12 +895,22 @@ def get_comments_for_specific_ad(
 def get_posts_with_comments(
     q: Optional[str] = Query(None, description="Search post caption or title"),
     platform: Optional[str] = Query(None, description="Filter by platform ('facebook' or 'instagram')"),
+    social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Retrieve all organic posts with exact non-deleted comment counts for current user.
+    Optionally scoped to a specific social_account_id.
     """
+    if social_account_id is not None:
+        account = db.query(SocialAccount).filter(
+            SocialAccount.id == social_account_id,
+            SocialAccount.user_id == current_user.id
+        ).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Social account not found")
+
     from app.models.social_comment import SocialComment
     from app.models.post import Post
     from app.models.external_post_context import ExternalPostContext
@@ -848,6 +929,8 @@ def get_posts_with_comments(
     )
     if platform:
         query_counts = query_counts.filter(SocialComment.platform == platform)
+    if social_account_id:
+        query_counts = query_counts.filter(SocialComment.social_account_id == social_account_id)
 
     post_counts_raw = query_counts.group_by(SocialComment.external_post_id, SocialComment.platform).all()
     post_count_map = {row[0]: row[2] for row in post_counts_raw if row[0]}
@@ -893,9 +976,13 @@ def get_posts_with_comments(
         remaining = [pid for pid in post_count_map.keys() if pid not in added_pids]
         ext_found_pids = set()
         if remaining:
-            ext_ctxs = db.query(ExternalPostContext).filter(
+            ext_ctx_q = db.query(ExternalPostContext).filter(
                 ExternalPostContext.external_post_id.in_(remaining)
-            ).all()
+            )
+            if social_account_id:
+                ext_ctx_q = ext_ctx_q.filter(ExternalPostContext.social_account_id == social_account_id)
+            ext_ctxs = ext_ctx_q.all()
+
             for ctx in ext_ctxs:
                 ext_found_pids.add(ctx.external_post_id)
                 if q and q.strip():
@@ -942,6 +1029,7 @@ def get_comments_for_specific_post(
     post_identifier: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
+    social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
     reply_status: Optional[str] = Query(None, description="Filter by reply status ('all', 'replied', 'unreplied')"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -949,6 +1037,14 @@ def get_comments_for_specific_post(
     """
     Retrieve single Organic Post details + paginated comments for THAT specific Post only.
     """
+    if social_account_id is not None:
+        account = db.query(SocialAccount).filter(
+            SocialAccount.id == social_account_id,
+            SocialAccount.user_id == current_user.id
+        ).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Social account not found")
+
     from app.models.post import Post
     from app.models.external_post_context import ExternalPostContext
 
@@ -972,9 +1068,13 @@ def get_comments_for_specific_post(
             }
 
     if not post_meta:
-        ctx = db.query(ExternalPostContext).filter(
+        ctx_q = db.query(ExternalPostContext).filter(
             ExternalPostContext.external_post_id == str(post_identifier)
-        ).first()
+        )
+        if social_account_id:
+            ctx_q = ctx_q.filter(ExternalPostContext.social_account_id == social_account_id)
+        ctx = ctx_q.first()
+
         if ctx:
             ext_pid = ctx.external_post_id
             post_meta = {
@@ -1002,15 +1102,19 @@ def get_comments_for_specific_post(
             "permalink": _resolve_post_permalink(post_identifier, "facebook", db)
         }
 
-    top_level_comment_count = social_comment_repo.count_by_user_id(db, current_user.id, external_post_id=ext_pid, is_ad=False, top_level_only=True)
-    reply_count = social_comment_repo.count_replies_by_user_id(db, current_user.id, external_post_id=ext_pid, is_ad=False)
+    top_level_comment_count = social_comment_repo.count_by_user_id(
+        db, current_user.id, social_account_id=social_account_id, external_post_id=ext_pid, is_ad=False, top_level_only=True
+    )
+    reply_count = social_comment_repo.count_replies_by_user_id(
+        db, current_user.id, social_account_id=social_account_id, external_post_id=ext_pid, is_ad=False
+    )
     total_interaction_count = top_level_comment_count + reply_count
 
     filtered_top_level_count = social_comment_repo.count_by_user_id(
-        db, current_user.id, external_post_id=ext_pid, is_ad=False, top_level_only=True, reply_status=reply_status
+        db, current_user.id, social_account_id=social_account_id, external_post_id=ext_pid, is_ad=False, top_level_only=True, reply_status=reply_status
     )
     raw_comments = social_comment_repo.get_by_user_id(
-        db, current_user.id, skip=skip, limit=limit, external_post_id=ext_pid, is_ad=False, top_level_only=True, reply_status=reply_status
+        db, current_user.id, skip=skip, limit=limit, social_account_id=social_account_id, external_post_id=ext_pid, is_ad=False, top_level_only=True, reply_status=reply_status
     )
 
     formatted_comments = _format_comments_response_list(raw_comments, current_user, db)

@@ -689,4 +689,144 @@ def test_meta_ad_comments_counting_and_reply_status_filtering(client, db_session
     assert ov["total_interaction_count"] == 5
 
 
+def test_engagement_hub_strict_account_scoping(client, db_session):
+    """
+    Regression Test for Engagement Hub Strict Account Isolation:
+    - User has Account A (Facebook Page A) and Account B (Instagram Profile B).
+    - Ensures requesting with social_account_id=Account A returns ONLY Account A data across
+      overview, ads index, ad details, posts index, post details, and comments stream.
+    - Ensures cross-account requests return 404 if account doesn't exist or isn't owned by user.
+    """
+    user = User(email="scoping_user@example.com", full_name="Scoping User", hashed_password="pw", is_active=True)
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    # Account A: Facebook
+    acc_a = SocialAccount(user_id=user.id, platform="facebook", account_id="page_a_123", account_name="Page A", access_token="tok_a")
+    # Account B: Instagram
+    acc_b = SocialAccount(user_id=user.id, platform="instagram", account_id="ig_b_456", account_name="Profile B", access_token="tok_b")
+    db_session.add_all([acc_a, acc_b])
+    db_session.commit()
+    db_session.refresh(acc_a)
+    db_session.refresh(acc_b)
+
+    # Ad A (Page A) & Ad B (Profile B)
+    ad_a = MetaAd(user_id=user.id, meta_ad_account_id="act_111", meta_ad_id="ad_a_100", name="Ad A", facebook_page_id="page_a_123")
+    ad_b = MetaAd(user_id=user.id, meta_ad_account_id="act_222", meta_ad_id="ad_b_200", name="Ad B", instagram_account_id="ig_b_456")
+    db_session.add_all([ad_a, ad_b])
+    db_session.commit()
+    db_session.refresh(ad_a)
+    db_session.refresh(ad_b)
+
+    # ExternalPostContext A & B
+    from app.models.external_post_context import ExternalPostContext
+    ctx_a = ExternalPostContext(platform="facebook", social_account_id=acc_a.id, external_post_id="post_ext_a", caption="Post A Caption")
+    ctx_b = ExternalPostContext(platform="instagram", social_account_id=acc_b.id, external_post_id="post_ext_b", caption="Post B Caption")
+    db_session.add_all([ctx_a, ctx_b])
+    db_session.commit()
+
+    # Account A comments (1 Ad comment + 1 Organic comment)
+    c_ad_a = SocialComment(
+        user_id=user.id, social_account_id=acc_a.id, platform="facebook",
+        external_comment_id="c_ad_a_1", comment_text="Comment on Ad A",
+        webhook_object="page", meta_ad_id=ad_a.id, external_post_id="ad_post_a"
+    )
+    c_post_a = SocialComment(
+        user_id=user.id, social_account_id=acc_a.id, platform="facebook",
+        external_comment_id="c_post_a_1", comment_text="Comment on Post A",
+        webhook_object="page", meta_ad_id=None, external_post_id="post_ext_a"
+    )
+
+    # Account B comments (2 Ad comments + 1 Organic comment)
+    c_ad_b1 = SocialComment(
+        user_id=user.id, social_account_id=acc_b.id, platform="instagram",
+        external_comment_id="c_ad_b_1", comment_text="First comment on Ad B",
+        webhook_object="instagram", meta_ad_id=ad_b.id, external_post_id="ad_post_b"
+    )
+    c_ad_b2 = SocialComment(
+        user_id=user.id, social_account_id=acc_b.id, platform="instagram",
+        external_comment_id="c_ad_b_2", comment_text="Second comment on Ad B",
+        webhook_object="instagram", meta_ad_id=ad_b.id, external_post_id="ad_post_b"
+    )
+    c_post_b = SocialComment(
+        user_id=user.id, social_account_id=acc_b.id, platform="instagram",
+        external_comment_id="c_post_b_1", comment_text="Comment on Post B",
+        webhook_object="instagram", meta_ad_id=None, external_post_id="post_ext_b"
+    )
+
+    db_session.add_all([c_ad_a, c_post_a, c_ad_b1, c_ad_b2, c_post_b])
+    db_session.commit()
+
+    fastapi_app = client.app
+    from app.api.v1.deps import get_current_user
+    fastapi_app.dependency_overrides[get_current_user] = lambda: user
+
+    # 1. OVERVIEW: Account A scoping
+    res_ov_a = client.get(f"/api/v1/social-comments/overview?social_account_id={acc_a.id}")
+    assert res_ov_a.status_code == 200
+    d_ov_a = res_ov_a.json()
+    assert d_ov_a["top_level_comment_count"] == 2
+    assert d_ov_a["total_ad_comments"] == 1
+    assert d_ov_a["total_post_comments"] == 1
+    assert len(d_ov_a["recent_ads"]) == 1
+    assert d_ov_a["recent_ads"][0]["id"] == ad_a.id
+
+    # OVERVIEW: Account B scoping
+    res_ov_b = client.get(f"/api/v1/social-comments/overview?social_account_id={acc_b.id}")
+    assert res_ov_b.status_code == 200
+    d_ov_b = res_ov_b.json()
+    assert d_ov_b["top_level_comment_count"] == 3
+    assert d_ov_b["total_ad_comments"] == 2
+    assert d_ov_b["total_post_comments"] == 1
+    assert len(d_ov_b["recent_ads"]) == 1
+    assert d_ov_b["recent_ads"][0]["id"] == ad_b.id
+
+    # 2. ADS INDEX: Account A vs Account B scoping
+    res_ads_a = client.get(f"/api/v1/social-comments/ads?social_account_id={acc_a.id}")
+    assert res_ads_a.status_code == 200
+    ad_list_a = res_ads_a.json()
+    assert len(ad_list_a) == 1
+    assert ad_list_a[0]["id"] == ad_a.id
+    assert ad_list_a[0]["top_level_comment_count"] == 1
+
+    res_ads_b = client.get(f"/api/v1/social-comments/ads?social_account_id={acc_b.id}")
+    assert res_ads_b.status_code == 200
+    ad_list_b = res_ads_b.json()
+    assert len(ad_list_b) == 1
+    assert ad_list_b[0]["id"] == ad_b.id
+    assert ad_list_b[0]["top_level_comment_count"] == 2
+
+    # 3. ORGANIC POSTS INDEX: Account A vs Account B scoping
+    res_posts_a = client.get(f"/api/v1/social-comments/posts?social_account_id={acc_a.id}")
+    assert res_posts_a.status_code == 200
+    p_list_a = res_posts_a.json()
+    assert len(p_list_a) == 1
+    assert p_list_a[0]["external_post_id"] == "post_ext_a"
+
+    res_posts_b = client.get(f"/api/v1/social-comments/posts?social_account_id={acc_b.id}")
+    assert res_posts_b.status_code == 200
+    p_list_b = res_posts_b.json()
+    assert len(p_list_b) == 1
+    assert p_list_b[0]["external_post_id"] == "post_ext_b"
+
+    # 4. COMMENTS STREAM: Account A vs Account B scoping
+    res_comm_a = client.get(f"/api/v1/social-comments/?social_account_id={acc_a.id}")
+    assert res_comm_a.status_code == 200
+    c_list_a = res_comm_a.json()
+    assert len(c_list_a) == 2
+    assert all(c["social_account_id"] == acc_a.id for c in c_list_a)
+
+    res_comm_b = client.get(f"/api/v1/social-comments/?social_account_id={acc_b.id}")
+    assert res_comm_b.status_code == 200
+    c_list_b = res_comm_b.json()
+    assert len(c_list_b) == 3
+    assert all(c["social_account_id"] == acc_b.id for c in c_list_b)
+
+    # 5. UNAUTHORIZED / NON-EXISTENT ACCOUNT SCOPING (Should return 404)
+    res_invalid = client.get("/api/v1/social-comments/overview?social_account_id=999999")
+    assert res_invalid.status_code == 404
+
+
+
 

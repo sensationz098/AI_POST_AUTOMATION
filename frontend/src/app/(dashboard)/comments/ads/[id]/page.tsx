@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
   ArrowLeft, 
@@ -19,13 +19,14 @@ import {
   ExternalLink,
   Facebook,
   Instagram,
-  FileText
+  FileText,
+  ChevronDown
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { SocialComment, SocialCommentReply, MetaAdCommentsResponse } from '@/lib/types';
 
 interface AdDetails {
-  id: number;
+  id: number | string;
   meta_ad_id: string;
   name: string;
   campaign_name?: string;
@@ -41,7 +42,9 @@ interface AdDetails {
 export default function AdCommentsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const adId = params?.id as string;
+  const socialAccountId = searchParams?.get('social_account_id');
 
   const [ad, setAd] = useState<AdDetails | null>(null);
   const [comments, setComments] = useState<SocialComment[]>([]);
@@ -78,8 +81,11 @@ export default function AdCommentsPage() {
     setError(null);
     try {
       const requestUrl = `/social-comments/ads/${adId}`;
+      const queryParams: any = { page: pageNum, limit: 50, reply_status: currentFilter };
+      if (socialAccountId) queryParams.social_account_id = socialAccountId;
+
       const res = await apiClient.get<MetaAdCommentsResponse>(requestUrl, {
-        params: { page: pageNum, limit: 50, reply_status: currentFilter }
+        params: queryParams
       });
 
       const payload = res?.data;

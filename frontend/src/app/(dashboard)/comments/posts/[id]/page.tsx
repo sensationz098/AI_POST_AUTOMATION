@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
   ArrowLeft, 
@@ -38,7 +38,9 @@ interface PostDetails {
 export default function PostCommentsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const postId = params?.id as string;
+  const socialAccountId = searchParams?.get('social_account_id');
 
   const [post, setPost] = useState<PostDetails | null>(null);
   const [comments, setComments] = useState<SocialComment[]>([]);
@@ -62,7 +64,12 @@ export default function PostCommentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiClient.get(`/social-comments/posts/${postId}`);
+      const queryParams: any = {};
+      if (socialAccountId) queryParams.social_account_id = socialAccountId;
+
+      const res = await apiClient.get(`/social-comments/posts/${postId}`, {
+        params: queryParams
+      });
       setPost(res.data.post);
       setComments(res.data.comments || []);
       setTotalComments(res.data.total_comments || 0);
