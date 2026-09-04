@@ -154,13 +154,32 @@ class PostService:
             )
         return post
 
+    def _enrich_posts_with_external_ids(self, db: Session, posts: List[Post]) -> List[Post]:
+        from app.models.publishing_batch import PublishingBatch, PublishingJob, JobStatus
+        for p in posts:
+            if p.status == PostStatus.PUBLISHED.value and (not p.fb_post_id or not p.ig_media_id):
+                batches = db.query(PublishingBatch).filter(PublishingBatch.post_id == p.id).all()
+                if batches:
+                    b_ids = [b.id for b in batches]
+                    jobs = db.query(PublishingJob).filter(
+                        PublishingJob.batch_id.in_(b_ids),
+                        PublishingJob.status == JobStatus.SUCCESS.value
+                    ).all()
+                    for j in jobs:
+                        if j.platform == "facebook" and j.external_post_id and not p.fb_post_id:
+                            p.fb_post_id = j.external_post_id
+                        elif j.platform == "instagram" and j.external_post_id and not p.ig_media_id:
+                            p.ig_media_id = j.external_post_id
+        return posts
+
     def get_user_posts(self, db: Session, user_id: int, status: Optional[str] = None) -> List[Post]:
         """Retrieve all posts belonging to the authenticated user across all brands."""
         self.check_and_publish_due_posts(db, user_id)
         query = db.query(Post).filter(Post.user_id == user_id)
         if status:
             query = query.filter(Post.status == status)
-        return query.order_by(Post.created_at.desc()).all()
+        posts = query.order_by(Post.created_at.desc()).all()
+        return self._enrich_posts_with_external_ids(db, posts)
 
     def get_brand_posts(self, db: Session, brand_id: int, user_id: int, status: Optional[str] = None) -> List[Post]:
         from app.models.brand import BrandProfile

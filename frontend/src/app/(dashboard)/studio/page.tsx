@@ -803,29 +803,7 @@ export default function AIStudioPage() {
         }
       }
 
-      // Sync published post to local storage queue for immediate visibility across tabs
-      try {
-        const newPostObj = {
-          id: postId || Date.now(),
-          brand_id: selectedBrand?.id || 1,
-          user_id: 1,
-          title: topic,
-          caption,
-          hashtags,
-          cta,
-          seo_keywords: seoKeywords,
-          image_url: imageUrl,
-          platforms: ['facebook', 'instagram'],
-          status: 'PUBLISHED',
-          published_at: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          retry_count: 0,
-          max_retries: 3
-        };
-        const existingQueue = JSON.parse(localStorage.getItem('local_posts_queue') || '[]');
-        localStorage.setItem('local_posts_queue', JSON.stringify([newPostObj, ...existingQueue]));
-      } catch {}
+
     } catch (e: any) {
       if (e.code === 'ECONNABORTED' || e.message?.toLowerCase().includes('timeout')) {
         setStatusNotification('❌ Publishing request timed out after 300 seconds. Media processing or platform publishing may still be finalizing in the background.');
