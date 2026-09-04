@@ -724,6 +724,39 @@ def get_meta_ads_with_comments(
     ad_manual_reply_raw = ad_manual_reply_q.group_by(SocialComment.meta_ad_id).all()
     ad_manual_reply_map = {row[0]: row[1] for row in ad_manual_reply_raw if row[0]}
 
+    # Unreplied top-level comments per MetaAd
+    from sqlalchemy.orm import aliased
+    from sqlalchemy import exists, not_, String
+    child_alias = aliased(SocialComment)
+    has_meta_reply = exists().where(
+        child_alias.user_id == current_user.id,
+        child_alias.is_deleted.isnot(True),
+        or_(
+            child_alias.parent_comment_id == SocialComment.external_comment_id,
+            child_alias.parent_comment_id == func.cast(SocialComment.id, String)
+        )
+    )
+    has_manual_reply = exists().where(
+        SocialCommentReply.comment_id == SocialComment.id,
+        SocialCommentReply.status == "SUCCESS"
+    )
+    has_any_reply = or_(has_manual_reply, has_meta_reply)
+
+    ad_unreplied_q = db.query(
+        SocialComment.meta_ad_id,
+        func.count(SocialComment.id)
+    ).filter(
+        SocialComment.user_id == current_user.id,
+        SocialComment.is_deleted.isnot(True),
+        SocialComment.meta_ad_id.isnot(None),
+        or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == ""),
+        not_(has_any_reply)
+    )
+    if social_account_id:
+        ad_unreplied_q = ad_unreplied_q.filter(SocialComment.social_account_id == social_account_id)
+    ad_unreplied_raw = ad_unreplied_q.group_by(SocialComment.meta_ad_id).all()
+    ad_unreplied_map = {row[0]: row[1] for row in ad_unreplied_raw if row[0]}
+
     query = db.query(MetaAd).filter(MetaAd.user_id == current_user.id)
 
     if social_account_id and account:
@@ -747,6 +780,15 @@ def get_meta_ads_with_comments(
         target_st = status.upper()
         if target_st == "ACTIVE":
             query = query.filter(or_(MetaAd.effective_status == "ACTIVE", MetaAd.effective_status.is_(None)))
+        elif target_st == "PAUSED":
+            query = query.filter(
+                or_(
+                    MetaAd.effective_status == "PAUSED",
+                    MetaAd.effective_status == "CAMPAIGN_PAUSED",
+                    MetaAd.effective_status == "ADSET_PAUSED",
+                    MetaAd.effective_status.like("%PAUSED%")
+                )
+            )
         else:
             query = query.filter(MetaAd.effective_status == target_st)
 
@@ -777,6 +819,8 @@ def get_meta_ads_with_comments(
     for ad in all_ads:
         t_cnt = ad_top_map.get(ad.id, 0)
         r_cnt = ad_meta_reply_map.get(ad.id, 0) + ad_manual_reply_map.get(ad.id, 0)
+        unreplied_cnt = ad_unreplied_map.get(ad.id, 0)
+        replied_cnt = max(0, t_cnt - unreplied_cnt)
         res.append({
             "id": ad.id,
             "meta_ad_id": ad.meta_ad_id,
@@ -790,6 +834,8 @@ def get_meta_ads_with_comments(
             "created_at": ad.created_at.isoformat() if ad.created_at else None,
             "top_level_comment_count": t_cnt,
             "reply_count": r_cnt,
+            "unreplied_comment_count": unreplied_cnt,
+            "replied_comment_count": replied_cnt,
             "total_interaction_count": t_cnt + r_cnt,
             "comment_count": t_cnt,
             "permalink": _resolve_ad_permalink(ad, db, ctx_map=ctx_map),
