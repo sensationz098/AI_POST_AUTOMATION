@@ -158,25 +158,47 @@ class PostService:
     def _enrich_posts_with_external_ids(self, db: Session, posts: List[Post]) -> List[Post]:
         from app.models.publishing_batch import PublishingBatch, PublishingJob, JobStatus
         from app.models.external_post_context import ExternalPostContext
+        import time
 
         if not posts:
             return posts
 
-        for p in posts:
-            if not p.fb_post_id or not p.ig_media_id:
-                batches = db.query(PublishingBatch).filter(PublishingBatch.post_id == p.id).all()
-                if batches:
-                    b_ids = [b.id for b in batches]
-                    jobs = db.query(PublishingJob).filter(
-                        PublishingJob.batch_id.in_(b_ids),
-                        PublishingJob.status == JobStatus.SUCCESS.value
-                    ).all()
-                    for j in jobs:
-                        if j.platform == "facebook" and j.external_post_id and not p.fb_post_id:
-                            p.fb_post_id = j.external_post_id
-                        elif j.platform == "instagram" and j.external_post_id and not p.ig_media_id:
-                            p.ig_media_id = j.external_post_id
+        t0 = time.perf_counter()
 
+        # 1. Identify posts that need external platform ID lookup from PublishingJobs
+        needs_lookup_ids = [p.id for p in posts if not p.fb_post_id or not p.ig_media_id]
+
+        if needs_lookup_ids:
+            jobs = (
+                db.query(PublishingJob, PublishingBatch.post_id)
+                .join(PublishingBatch, PublishingJob.batch_id == PublishingBatch.id)
+                .filter(
+                    PublishingBatch.post_id.in_(needs_lookup_ids),
+                    PublishingJob.status == JobStatus.SUCCESS.value,
+                    PublishingJob.external_post_id.isnot(None)
+                )
+                .all()
+            )
+
+            job_map = {}
+            for job, post_id in jobs:
+                if post_id not in job_map:
+                    job_map[post_id] = {}
+                if job.platform == "facebook" and job.external_post_id:
+                    job_map[post_id]["facebook"] = job.external_post_id
+                elif job.platform == "instagram" and job.external_post_id:
+                    job_map[post_id]["instagram"] = job.external_post_id
+
+            for p in posts:
+                if p.id in job_map:
+                    if not p.fb_post_id and "facebook" in job_map[p.id]:
+                        p.fb_post_id = job_map[p.id]["facebook"]
+                    if not p.ig_media_id and "instagram" in job_map[p.id]:
+                        p.ig_media_id = job_map[p.id]["instagram"]
+
+        t1 = time.perf_counter()
+
+        # 2. Collect all fb_post_id and ig_media_id values for single batch lookup in ExternalPostContext
         fb_ids = {p.fb_post_id for p in posts if p.fb_post_id}
         ig_ids = {p.ig_media_id for p in posts if p.ig_media_id}
         all_ids = fb_ids.union(ig_ids)
@@ -186,6 +208,9 @@ class PostService:
             contexts = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id.in_(all_ids)).all()
             ctx_map = {c.external_post_id: c for c in contexts}
 
+        t2 = time.perf_counter()
+
+        # 3. Resolve fb_post_url and ig_media_url in memory
         for p in posts:
             if p.fb_post_id:
                 ctx = ctx_map.get(p.fb_post_id)
@@ -205,16 +230,38 @@ class PostService:
             else:
                 setattr(p, "ig_media_url", None)
 
+        t3 = time.perf_counter()
+        logger.info(
+            f"[POST_ENRICHMENT_TIMING] posts={len(posts)} | "
+            f"jobs_batch_query={(t1-t0)*1000:.1f}ms | "
+            f"context_batch_query={(t2-t1)*1000:.1f}ms | "
+            f"url_mapping={(t3-t2)*1000:.1f}ms | "
+            f"total={(t3-t0)*1000:.1f}ms"
+        )
+
         return posts
 
     def get_user_posts(self, db: Session, user_id: int, status: Optional[str] = None) -> List[Post]:
         """Retrieve all posts belonging to the authenticated user across all brands."""
+        import time
+        t0 = time.perf_counter()
         self.check_and_publish_due_posts(db, user_id)
+        t1 = time.perf_counter()
         query = db.query(Post).filter(Post.user_id == user_id)
         if status:
             query = query.filter(Post.status == status)
         posts = query.order_by(Post.created_at.desc()).all()
-        return self._enrich_posts_with_external_ids(db, posts)
+        t2 = time.perf_counter()
+        result = self._enrich_posts_with_external_ids(db, posts)
+        t3 = time.perf_counter()
+        logger.info(
+            f"[GET_USER_POSTS_TIMING] user_id={user_id} count={len(result)} | "
+            f"due_check={(t1-t0)*1000:.1f}ms | "
+            f"posts_fetch={(t2-t1)*1000:.1f}ms | "
+            f"enrichment={(t3-t2)*1000:.1f}ms | "
+            f"total={(t3-t0)*1000:.1f}ms"
+        )
+        return result
 
     def get_brand_posts(self, db: Session, brand_id: int, user_id: int, status: Optional[str] = None) -> List[Post]:
         from app.models.brand import BrandProfile
@@ -230,7 +277,8 @@ class PostService:
             else:
                 return self.get_user_posts(db, user_id, status)
         self.check_and_publish_due_posts(db, user_id)
-        return post_repo.get_by_brand(db, brand_id, status)
+        posts = post_repo.get_by_brand(db, brand_id, status)
+        return self._enrich_posts_with_external_ids(db, posts)
 
     def update_post(self, db: Session, post_id: int, user_id: int, post_in: PostUpdate) -> Post:
         post = self.get_post(db, post_id, user_id)
