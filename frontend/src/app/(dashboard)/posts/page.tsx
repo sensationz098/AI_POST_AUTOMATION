@@ -36,33 +36,27 @@ export default function PostSchedulerPage() {
     details?: any[];
   } | null>(null);
 
-  useEffect(() => {
-    async function fetchPosts() {
-      setIsLoading(true);
-      setFetchError(null);
-      let localQueue: SocialPost[] = [];
+  const fetchPosts = async () => {
+    setIsLoading(true);
+    setFetchError(null);
+    try {
+      // Clear legacy local storage queue if present
       try {
-        const stored = localStorage.getItem('local_posts_queue');
-        if (stored) localQueue = JSON.parse(stored);
+        localStorage.removeItem('local_posts_queue');
       } catch {}
 
-      try {
-        const res = await apiClient.get('/posts/');
-        const apiPosts = Array.isArray(res.data) ? res.data : [];
-        const combined = [...localQueue, ...apiPosts];
-        const uniquePosts = Array.from(new Map(combined.map(p => [p.id, p])).values());
-        setPosts(uniquePosts);
-      } catch (e: any) {
-        if (localQueue.length > 0) {
-          setPosts(localQueue);
-        } else {
-          setPosts([]);
-          setFetchError(e.response?.data?.detail || e.message || 'Failed to load post queue.');
-        }
-      } finally {
-        setIsLoading(false);
-      }
+      const res = await apiClient.get('/posts/');
+      const apiPosts = Array.isArray(res.data) ? res.data : [];
+      setPosts(apiPosts);
+    } catch (e: any) {
+      setPosts([]);
+      setFetchError(e.response?.data?.detail || e.message || 'Failed to load post queue.');
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  useEffect(() => {
     fetchPosts();
   }, []);
 
@@ -73,14 +67,11 @@ export default function PostSchedulerPage() {
   const handleRetry = async (postId: number) => {
     try {
       await apiClient.post(`/posts/${postId}/retry`);
+      await fetchPosts();
     } catch (e) {
-      // Mock local state update if sandbox mode
+      // Refresh backend list
+      await fetchPosts();
     }
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId ? { ...p, status: 'PUBLISHED', published_at: new Date().toISOString() } : p
-      )
-    );
   };
 
   const handleDeletePost = async (postId: number) => {
@@ -91,18 +82,8 @@ export default function PostSchedulerPage() {
       const data = res.data;
 
       if (data && data.success === true) {
-        // Successful deletion across all targets
-        setPosts((prev) => prev.filter((p) => p.id !== postId));
-
-        // Remove from local storage queue if present
-        try {
-          const stored = localStorage.getItem('local_posts_queue');
-          if (stored) {
-            const queue: SocialPost[] = JSON.parse(stored);
-            const updatedQueue = queue.filter((p) => p.id !== postId);
-            localStorage.setItem('local_posts_queue', JSON.stringify(updatedQueue));
-          }
-        } catch {}
+        // Refresh posts from backend after successful deletion
+        await fetchPosts();
 
         setDeleteStatusMessage({
           type: 'success',
@@ -264,11 +245,13 @@ export default function PostSchedulerPage() {
                   <tr key={post.id} className="hover:bg-slate-800/40 transition-colors duration-150">
                     <td className="p-3">
                       <div className="flex items-center space-x-2.5">
-                        <span className="text-[10px] font-mono text-slate-500 font-bold">#{post.id}</span>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-mono text-slate-400 font-bold">#{post.id}</span>
+                        </div>
                         {post.image_url ? (
                           <img
                             src={post.image_url}
-                            alt={post.title}
+                            alt={post.title || 'Post thumbnail'}
                             className="w-9 h-9 rounded object-cover border border-slate-700 flex-shrink-0"
                           />
                         ) : (
@@ -279,8 +262,16 @@ export default function PostSchedulerPage() {
                       </div>
                     </td>
                     <td className="p-3 max-w-sm">
-                      <h4 className="font-semibold text-slate-100 text-xs truncate">{post.title || 'Untitled Post'}</h4>
+                      <h4 className="font-semibold text-slate-100 text-xs truncate">
+                        {post.title && post.title.trim() ? post.title : (post.caption ? (post.caption.slice(0, 45) + (post.caption.length > 45 ? '...' : '')) : 'Untitled Post')}
+                      </h4>
                       <p className="text-slate-400 text-[11px] truncate mt-0.5">{post.caption}</p>
+                      {(post.fb_post_id || post.ig_media_id) && (
+                        <div className="flex items-center space-x-2 mt-1 text-[9px] font-mono text-indigo-400/90">
+                          {post.fb_post_id && <span>FB ID: {post.fb_post_id}</span>}
+                          {post.ig_media_id && <span>IG ID: {post.ig_media_id}</span>}
+                        </div>
+                      )}
                     </td>
                     <td className="p-3">
                       <div className="flex items-center space-x-1.5">

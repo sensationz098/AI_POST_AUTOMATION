@@ -287,6 +287,17 @@ def publish_multi_account(
             post.last_error = f"Published to {res_batch.successful_targets} of {res_batch.total_targets} target accounts."
         else:
             post.last_error = None
+
+        # Populate fb_post_id and ig_media_id on post from successful jobs
+        jobs = db.query(PublishingJob).filter(
+            PublishingJob.batch_id == batch.id,
+            PublishingJob.status == JobStatus.SUCCESS.value
+        ).all()
+        for j in jobs:
+            if j.platform == "facebook" and j.external_post_id and not post.fb_post_id:
+                post.fb_post_id = j.external_post_id
+            elif j.platform == "instagram" and j.external_post_id and not post.ig_media_id:
+                post.ig_media_id = j.external_post_id
     else:
         post.status = "FAILED"
         post.last_error = f"Multi-account publishing failed on {res_batch.failed_targets} target accounts."
