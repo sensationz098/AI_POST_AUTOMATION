@@ -48,6 +48,8 @@ export interface SocialPost {
   last_error?: string;
   fb_post_id?: string;
   ig_media_id?: string;
+  fb_post_url?: string | null;
+  ig_media_url?: string | null;
   created_at: string;
   updated_at: string;
 }

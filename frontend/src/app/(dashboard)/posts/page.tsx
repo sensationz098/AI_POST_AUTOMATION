@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Calendar as CalendarIcon, 
   Send, 
@@ -13,13 +13,102 @@ import {
   Filter,
   Trash2,
   Loader2,
-  X
+  X,
+  ExternalLink,
+  ChevronDown
 } from 'lucide-react';
 import { PostStatusBadge } from '@/components/PostStatusBadge';
 import { SocialPost } from '@/lib/types';
 import { apiClient } from '@/lib/api';
 import Link from 'next/link';
 
+function ViewPostButton({ post }: { post: SocialPost }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fbUrl = post.fb_post_url || (post.fb_post_id ? `https://www.facebook.com/${post.fb_post_id}` : null);
+  const igUrl = post.ig_media_url || (post.ig_media_id ? `https://www.instagram.com/p/${post.ig_media_id}` : null);
+
+  const hasFb = Boolean(fbUrl && post.fb_post_id);
+  const hasIg = Boolean(igUrl && post.ig_media_id);
+
+  if (!hasFb && !hasIg) {
+    return null;
+  }
+
+  if (hasFb && hasIg) {
+    return (
+      <div className="relative inline-block text-left" ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="px-2.5 py-1 rounded bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-800/80 text-indigo-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+          title="View published post options"
+        >
+          <ExternalLink className="w-3 h-3 text-indigo-400" />
+          <span>View Post</span>
+          <ChevronDown className="w-3 h-3 text-indigo-400" />
+        </button>
+
+        {isOpen && (
+          <div className="origin-top-right absolute right-0 mt-1 w-36 rounded-md shadow-2xl bg-slate-900 border border-slate-800 ring-1 ring-black ring-opacity-5 z-30">
+            <div className="py-1" role="menu">
+              <a
+                href={fbUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsOpen(false)}
+                className="flex items-center px-3 py-1.5 text-[11px] text-slate-200 hover:bg-slate-800 hover:text-blue-300 transition-colors"
+                role="menuitem"
+              >
+                <span className="w-2 h-2 rounded-full bg-blue-500 mr-2 flex-shrink-0"></span>
+                View on Facebook
+              </a>
+              <a
+                href={igUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsOpen(false)}
+                className="flex items-center px-3 py-1.5 text-[11px] text-slate-200 hover:bg-slate-800 hover:text-pink-300 transition-colors"
+                role="menuitem"
+              >
+                <span className="w-2 h-2 rounded-full bg-pink-500 mr-2 flex-shrink-0"></span>
+                View on Instagram
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const singleUrl = hasFb ? fbUrl! : igUrl!;
+  const platformName = hasFb ? 'Facebook' : 'Instagram';
+  const platformColor = hasFb ? 'text-blue-400' : 'text-pink-400';
+
+  return (
+    <a
+      href={singleUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+      title={`Open live post on ${platformName}`}
+    >
+      <ExternalLink className={`w-3 h-3 ${platformColor}`} />
+      <span>View Post</span>
+    </a>
+  );
+}
 
 export default function PostSchedulerPage() {
   const [posts, setPosts] = useState<SocialPost[]>([]);
@@ -307,6 +396,7 @@ export default function PostSchedulerPage() {
                     </td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end space-x-1.5">
+                        <ViewPostButton post={post} />
                         {post.status === 'FAILED' ? (
                           <button
                             onClick={() => handleRetry(post.id)}
