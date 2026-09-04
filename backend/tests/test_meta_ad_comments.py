@@ -550,7 +550,10 @@ def test_top_level_comments_and_nested_replies_separation(client, db_session):
     assert res.status_code == 200
     data = res.json()
 
-    # Total comments must reflect 2 top-level parent comments
+    # Total comments must reflect 3 counts: top-level, replies, total interactions
+    assert data["top_level_comment_count"] == 2
+    assert data["reply_count"] == 2
+    assert data["total_interaction_count"] == 4
     assert data["total_comments"] == 2
     assert len(data["comments"]) == 2
 
@@ -569,5 +572,121 @@ def test_top_level_comments_and_nested_replies_separation(client, db_session):
     p2_res = next(c for c in data["comments"] if c["external_comment_id"] == "p2_ext_id")
     assert len(p2_res["replies"]) == 1
     assert p2_res["replies"][0]["message"] == "Please DM us for fee details."
+
+
+def test_meta_ad_comments_counting_and_reply_status_filtering(client, db_session):
+    """
+    Test unambiguous counting semantics and reply_status filtering:
+    - Top-level comment count vs reply count vs total interactions.
+    - Filtering by All, Replied, and Unreplied.
+    """
+    user = User(email="filter_user@example.com", full_name="Filter User", hashed_password="pw", is_active=True)
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    sa = SocialAccount(user_id=user.id, platform="facebook", account_id="page_flt_1", account_name="Flt Page", access_token="tok")
+    db_session.add(sa)
+    db_session.commit()
+    db_session.refresh(sa)
+
+    ad = MetaAd(user_id=user.id, meta_ad_account_id="act_flt", meta_ad_id="ad_flt_100", name="Filter Ad", facebook_post_id="post_flt_1")
+    db_session.add(ad)
+    db_session.commit()
+    db_session.refresh(ad)
+
+    # Parent 1: Has Meta child reply
+    p1 = SocialComment(
+        user_id=user.id, social_account_id=sa.id, platform="facebook",
+        external_comment_id="flt_p1", comment_text="First comment",
+        webhook_object="ad_comment", meta_ad_id=ad.id, external_post_id="post_flt_1", parent_comment_id=None
+    )
+    # Parent 2: Has manual owner reply
+    p2 = SocialComment(
+        user_id=user.id, social_account_id=sa.id, platform="facebook",
+        external_comment_id="flt_p2", comment_text="Second comment",
+        webhook_object="ad_comment", meta_ad_id=ad.id, external_post_id="post_flt_1", parent_comment_id=None
+    )
+    # Parent 3: Unreplied comment
+    p3 = SocialComment(
+        user_id=user.id, social_account_id=sa.id, platform="facebook",
+        external_comment_id="flt_p3", comment_text="Third comment unreplied",
+        webhook_object="ad_comment", meta_ad_id=ad.id, external_post_id="post_flt_1", parent_comment_id=None
+    )
+    db_session.add_all([p1, p2, p3])
+    db_session.commit()
+
+    # Meta child reply to p1
+    c1 = SocialComment(
+        user_id=user.id, social_account_id=sa.id, platform="facebook",
+        external_comment_id="flt_c1", comment_text="Meta reply to p1",
+        webhook_object="ad_comment", meta_ad_id=ad.id, external_post_id="post_flt_1", parent_comment_id="flt_p1"
+    )
+    db_session.add(c1)
+
+    # Manual owner reply to p2
+    from app.models.social_comment_reply import SocialCommentReply
+    r2 = SocialCommentReply(
+        comment_id=p2.id, user_id=user.id, platform="facebook",
+        message="Manual reply to p2", status="SUCCESS", external_reply_id="flt_r2"
+    )
+    db_session.add(r2)
+    db_session.commit()
+
+    fastapi_app = client.app
+    from app.api.v1.deps import get_current_user
+    fastapi_app.dependency_overrides[get_current_user] = lambda: user
+
+    # 1. Fetch ALL comments for Ad
+    res_all = client.get(f"/api/v1/social-comments/ads/{ad.id}")
+    assert res_all.status_code == 200
+    d_all = res_all.json()
+    assert d_all["top_level_comment_count"] == 3
+    assert d_all["reply_count"] == 2
+    assert d_all["total_interaction_count"] == 5
+    assert d_all["filtered_top_level_count"] == 3
+    assert len(d_all["comments"]) == 3
+
+    # 2. Fetch UNREPLIED comments for Ad
+    res_unreplied = client.get(f"/api/v1/social-comments/ads/{ad.id}?reply_status=unreplied")
+    assert res_unreplied.status_code == 200
+    d_unreplied = res_unreplied.json()
+    assert d_unreplied["top_level_comment_count"] == 3
+    assert d_unreplied["reply_count"] == 2
+    assert d_unreplied["total_interaction_count"] == 5
+    assert d_unreplied["filtered_top_level_count"] == 1
+    assert len(d_unreplied["comments"]) == 1
+    assert d_unreplied["comments"][0]["external_comment_id"] == "flt_p3"
+
+    # 3. Fetch REPLIED comments for Ad
+    res_replied = client.get(f"/api/v1/social-comments/ads/{ad.id}?reply_status=replied")
+    assert res_replied.status_code == 200
+    d_replied = res_replied.json()
+    assert d_replied["top_level_comment_count"] == 3
+    assert d_replied["reply_count"] == 2
+    assert d_replied["total_interaction_count"] == 5
+    assert d_replied["filtered_top_level_count"] == 2
+    replied_ids = [c["external_comment_id"] for c in d_replied["comments"]]
+    assert "flt_p1" in replied_ids
+    assert "flt_p2" in replied_ids
+    assert "flt_p3" not in replied_ids
+
+    # 4. Verify Ads List API metrics
+    res_ads = client.get("/api/v1/social-comments/ads")
+    assert res_ads.status_code == 200
+    ad_item = next(a for a in res_ads.json() if a["id"] == ad.id)
+    assert ad_item["top_level_comment_count"] == 3
+    assert ad_item["reply_count"] == 2
+    assert ad_item["total_interaction_count"] == 5
+    assert ad_item["comment_count"] == 3
+
+    # 5. Verify Engagement Overview metrics
+    res_overview = client.get("/api/v1/social-comments/overview")
+    assert res_overview.status_code == 200
+    ov = res_overview.json()
+    assert ov["top_level_comment_count"] == 3
+    assert ov["reply_count"] == 2
+    assert ov["total_interaction_count"] == 5
+
 
 

@@ -294,7 +294,11 @@ export interface MetaAdCommentsResponse {
     permalink?: string;
     platform?: string;
   };
+  top_level_comment_count?: number;
+  reply_count?: number;
+  total_interaction_count?: number;
   total_comments: number;
+  filtered_top_level_count?: number;
   skip: number;
   limit: number;
   page: number;

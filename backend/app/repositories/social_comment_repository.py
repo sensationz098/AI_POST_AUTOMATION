@@ -116,6 +116,47 @@ class SocialCommentRepository:
                     db.refresh(ext)
             return ext
 
+    def _apply_reply_status_filter(
+        self,
+        query,
+        user_id: int,
+        reply_status: Optional[str]
+    ):
+        if not reply_status or reply_status.lower() == "all":
+            return query
+
+        from app.models.social_comment_reply import SocialCommentReply
+        from sqlalchemy.orm import aliased
+        from sqlalchemy import exists, or_, not_, func, String
+
+        norm_status = reply_status.lower().strip()
+        if norm_status not in ("replied", "unreplied"):
+            return query
+
+        has_manual_reply = exists().where(
+            SocialCommentReply.comment_id == SocialComment.id,
+            SocialCommentReply.status == "SUCCESS"
+        )
+
+        child_alias = aliased(SocialComment)
+        has_meta_reply = exists().where(
+            child_alias.user_id == user_id,
+            child_alias.is_deleted.isnot(True),
+            or_(
+                child_alias.parent_comment_id == SocialComment.external_comment_id,
+                child_alias.parent_comment_id == func.cast(SocialComment.id, String)
+            )
+        )
+
+        has_any_reply = or_(has_manual_reply, has_meta_reply)
+
+        if norm_status == "replied":
+            return query.filter(has_any_reply)
+        elif norm_status == "unreplied":
+            return query.filter(not_(has_any_reply))
+
+        return query
+
     def get_by_user_id(
         self,
         db: Session,
@@ -127,7 +168,8 @@ class SocialCommentRepository:
         meta_ad_id: Optional[int] = None,
         external_post_id: Optional[str] = None,
         is_ad: Optional[bool] = None,
-        top_level_only: bool = True
+        top_level_only: bool = True,
+        reply_status: Optional[str] = "all"
     ) -> List[SocialComment]:
         """Fetch comments belonging to a specific user with pagination, excluding owner reply echoes."""
         from app.models.social_comment_reply import SocialCommentReply
@@ -152,6 +194,7 @@ class SocialCommentRepository:
         )
         if top_level_only:
             query = query.filter(or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == ""))
+            query = self._apply_reply_status_filter(query, user_id, reply_status)
         if platform:
             query = query.filter(SocialComment.platform == platform)
         if social_account_id:
@@ -176,7 +219,8 @@ class SocialCommentRepository:
         meta_ad_id: Optional[int] = None,
         external_post_id: Optional[str] = None,
         is_ad: Optional[bool] = None,
-        top_level_only: bool = True
+        top_level_only: bool = True,
+        reply_status: Optional[str] = "all"
     ) -> int:
         """Count comments belonging to a specific user, excluding owner reply echoes."""
         from app.models.social_comment_reply import SocialCommentReply
@@ -196,6 +240,7 @@ class SocialCommentRepository:
         )
         if top_level_only:
             query = query.filter(or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == ""))
+            query = self._apply_reply_status_filter(query, user_id, reply_status)
         if platform:
             query = query.filter(SocialComment.platform == platform)
         if social_account_id:
@@ -210,6 +255,78 @@ class SocialCommentRepository:
             query = query.filter(SocialComment.meta_ad_id.is_(None))
 
         return query.count()
+
+    def count_replies_by_user_id(
+        self,
+        db: Session,
+        user_id: int,
+        platform: Optional[str] = None,
+        social_account_id: Optional[int] = None,
+        meta_ad_id: Optional[int] = None,
+        external_post_id: Optional[str] = None,
+        is_ad: Optional[bool] = None
+    ) -> int:
+        """
+        Count total replies (both Meta-ingested child comments and manual SocialCommentReply records)
+        matching the provided filters, excluding owner reply echoes.
+        """
+        from app.models.social_comment_reply import SocialCommentReply
+        from sqlalchemy import or_
+
+        reply_subquery = db.query(SocialCommentReply.external_reply_id).filter(
+            SocialCommentReply.user_id == user_id,
+            SocialCommentReply.external_reply_id.isnot(None)
+        )
+        if platform:
+            reply_subquery = reply_subquery.filter(SocialCommentReply.platform == platform)
+
+        # 1. Ingested Meta child replies
+        meta_replies_query = db.query(SocialComment).filter(
+            SocialComment.user_id == user_id,
+            SocialComment.is_deleted.isnot(True),
+            SocialComment.parent_comment_id.isnot(None),
+            SocialComment.parent_comment_id != "",
+            ~SocialComment.external_comment_id.in_(reply_subquery)
+        )
+        if platform:
+            meta_replies_query = meta_replies_query.filter(SocialComment.platform == platform)
+        if social_account_id:
+            meta_replies_query = meta_replies_query.filter(SocialComment.social_account_id == social_account_id)
+        if meta_ad_id is not None:
+            meta_replies_query = meta_replies_query.filter(SocialComment.meta_ad_id == meta_ad_id)
+        if external_post_id:
+            meta_replies_query = meta_replies_query.filter(SocialComment.external_post_id == external_post_id)
+        if is_ad is True:
+            meta_replies_query = meta_replies_query.filter(SocialComment.meta_ad_id.isnot(None))
+        elif is_ad is False:
+            meta_replies_query = meta_replies_query.filter(SocialComment.meta_ad_id.is_(None))
+
+        meta_child_count = meta_replies_query.count()
+
+        # 2. Manual owner replies (SocialCommentReply) joined to top-level SocialComment
+        manual_replies_query = db.query(SocialCommentReply).join(
+            SocialComment, SocialCommentReply.comment_id == SocialComment.id
+        ).filter(
+            SocialCommentReply.user_id == user_id,
+            SocialCommentReply.status == "SUCCESS",
+            SocialComment.is_deleted.isnot(True)
+        )
+        if platform:
+            manual_replies_query = manual_replies_query.filter(SocialCommentReply.platform == platform)
+        if social_account_id:
+            manual_replies_query = manual_replies_query.filter(SocialComment.social_account_id == social_account_id)
+        if meta_ad_id is not None:
+            manual_replies_query = manual_replies_query.filter(SocialComment.meta_ad_id == meta_ad_id)
+        if external_post_id:
+            manual_replies_query = manual_replies_query.filter(SocialComment.external_post_id == external_post_id)
+        if is_ad is True:
+            manual_replies_query = manual_replies_query.filter(SocialComment.meta_ad_id.isnot(None))
+        elif is_ad is False:
+            manual_replies_query = manual_replies_query.filter(SocialComment.meta_ad_id.is_(None))
+
+        manual_reply_count = manual_replies_query.count()
+
+        return meta_child_count + manual_reply_count
 
     def get_by_id_and_user_id(
         self,

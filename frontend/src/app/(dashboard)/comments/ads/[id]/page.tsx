@@ -45,7 +45,12 @@ export default function AdCommentsPage() {
 
   const [ad, setAd] = useState<AdDetails | null>(null);
   const [comments, setComments] = useState<SocialComment[]>([]);
-  const [totalComments, setTotalComments] = useState(0);
+  const [topLevelCount, setTopLevelCount] = useState(0);
+  const [replyCount, setReplyCount] = useState(0);
+  const [totalInteractions, setTotalInteractions] = useState(0);
+  const [filteredCount, setFilteredCount] = useState(0);
+  const [replyStatusFilter, setReplyStatusFilter] = useState<'all' | 'unreplied' | 'replied'>('all');
+
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +68,7 @@ export default function AdCommentsPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const fetchAdComments = async (pageNum = 1, append = false) => {
+  const fetchAdComments = async (pageNum = 1, append = false, currentFilter = replyStatusFilter) => {
     if (!adId) return;
     if (append) {
       setLoadingMore(true);
@@ -74,31 +79,37 @@ export default function AdCommentsPage() {
     try {
       const requestUrl = `/social-comments/ads/${adId}`;
       const res = await apiClient.get<MetaAdCommentsResponse>(requestUrl, {
-        params: { page: pageNum, limit: 50 }
+        params: { page: pageNum, limit: 50, reply_status: currentFilter }
       });
 
       const payload = res?.data;
       const adObj = payload?.ad || null;
       const commentsList = Array.isArray(payload?.comments) ? payload.comments : [];
-      const totalCnt = typeof payload?.total_comments === 'number' ? payload.total_comments : commentsList.length;
+      
+      const tTop = typeof payload?.top_level_comment_count === 'number' ? payload.top_level_comment_count : (payload?.total_comments || 0);
+      const tReply = typeof payload?.reply_count === 'number' ? payload.reply_count : 0;
+      const tTotal = typeof payload?.total_interaction_count === 'number' ? payload.total_interaction_count : (tTop + tReply);
+      const fCount = typeof payload?.filtered_top_level_count === 'number' ? payload.filtered_top_level_count : tTop;
       const hasNextPage = Boolean(payload?.has_next);
       const currentPage = typeof payload?.page === 'number' ? payload.page : pageNum;
 
       console.log('[AD_COMMENTS_FRONTEND_RESPONSE]', {
         routeAdId: adId,
         requestUrl,
-        httpStatus: res.status,
-        responseObjectKeys: Object.keys(res || {}),
-        responseDataKeys: Object.keys(payload || {}),
-        commentsArrayDetected: Array.isArray(payload?.comments),
+        topLevelCount: tTop,
+        replyCount: tReply,
+        totalInteractions: tTotal,
+        filteredCount: fCount,
         commentsLength: commentsList.length,
-        totalComments: totalCnt,
         page: currentPage,
         hasNext: hasNextPage
       });
 
       setAd(adObj);
-      setTotalComments(totalCnt);
+      setTopLevelCount(tTop);
+      setReplyCount(tReply);
+      setTotalInteractions(tTotal);
+      setFilteredCount(fCount);
       setHasNext(hasNextPage);
       setPage(currentPage);
 
@@ -130,12 +141,17 @@ export default function AdCommentsPage() {
   };
 
   useEffect(() => {
-    fetchAdComments(1, false);
+    fetchAdComments(1, false, replyStatusFilter);
   }, [adId]);
+
+  const handleFilterChange = (newFilter: 'all' | 'unreplied' | 'replied') => {
+    setReplyStatusFilter(newFilter);
+    fetchAdComments(1, false, newFilter);
+  };
 
   const handleLoadMore = () => {
     if (hasNext && !loadingMore) {
-      fetchAdComments(page + 1, true);
+      fetchAdComments(page + 1, true, replyStatusFilter);
     }
   };
 
@@ -158,6 +174,8 @@ export default function AdCommentsPage() {
           return c;
         })
       );
+      setReplyCount((prev) => prev + 1);
+      setTotalInteractions((prev) => prev + 1);
 
       setReplySuccess('Reply posted successfully!');
       setReplyText('');
@@ -178,7 +196,9 @@ export default function AdCommentsPage() {
     try {
       await apiClient.delete(`/social-comments/${commentId}`);
       setComments((prev) => prev.filter((c) => c.id !== commentId));
-      setTotalComments((prev) => Math.max(0, prev - 1));
+      setTopLevelCount((prev) => Math.max(0, prev - 1));
+      setTotalInteractions((prev) => Math.max(0, prev - 1));
+      setFilteredCount((prev) => Math.max(0, prev - 1));
     } catch (e: any) {
       console.error('Failed to delete comment:', e);
       setDeleteError(e?.response?.data?.detail || 'Failed to delete comment.');
@@ -227,7 +247,7 @@ export default function AdCommentsPage() {
         </div>
 
         <button
-          onClick={() => fetchAdComments(1, false)}
+          onClick={() => fetchAdComments(1, false, replyStatusFilter)}
           disabled={loading}
           className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white font-medium text-xs transition flex items-center space-x-2"
         >
@@ -236,26 +256,26 @@ export default function AdCommentsPage() {
         </button>
       </div>
 
-      {/* Ad Context Banner */}
+      {/* Ad Context & Metric Cards Banner */}
       {ad && (
-        <div className="bg-slate-900/60 border border-slate-800/90 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
-          <div className="space-y-1">
-            <div className="flex items-center space-x-2 text-xs text-slate-400">
-              <span className="font-semibold text-slate-300">Campaign:</span>
-              <span className="text-slate-200">{ad.campaign_name || 'N/A'}</span>
-              <span className="text-slate-600">•</span>
-              <span className="font-semibold text-slate-300">Ad Set:</span>
-              <span className="text-slate-200">{ad.adset_name || 'N/A'}</span>
+        <div className="space-y-4">
+          <div className="bg-slate-900/60 border border-slate-800/90 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2 text-xs text-slate-400">
+                <span className="font-semibold text-slate-300">Campaign:</span>
+                <span className="text-slate-200">{ad.campaign_name || 'N/A'}</span>
+                <span className="text-slate-600">•</span>
+                <span className="font-semibold text-slate-300">Ad Set:</span>
+                <span className="text-slate-200">{ad.adset_name || 'N/A'}</span>
+              </div>
+              <div className="flex items-center space-x-3 text-[11px] font-mono text-slate-400">
+                <span>Meta Ad ID: {ad.meta_ad_id}</span>
+                {ad.facebook_post_id && (
+                  <span>Backing Post ID: {ad.facebook_post_id}</span>
+                )}
+              </div>
             </div>
-            <div className="flex items-center space-x-3 text-[11px] font-mono text-slate-400">
-              <span>Meta Ad ID: {ad.meta_ad_id}</span>
-              {ad.facebook_post_id && (
-                <span>Backing Post ID: {ad.facebook_post_id}</span>
-              )}
-            </div>
-          </div>
 
-          <div className="flex items-center space-x-3">
             {hasValidPermalink && (
               <a
                 href={ad.permalink!}
@@ -268,13 +288,76 @@ export default function AdCommentsPage() {
                 <ExternalLink className="w-3 h-3 ml-0.5 text-blue-300" />
               </a>
             )}
-            <div className="px-3 py-1.5 rounded-lg bg-indigo-950/60 border border-indigo-800/60 text-indigo-300 text-xs font-semibold flex items-center space-x-1.5">
-              <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{totalComments} Comments</span>
+          </div>
+
+          {/* Unambiguous Count Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Top-Level Comments</p>
+                <p className="text-xl font-bold text-slate-100 mt-0.5">{topLevelCount}</p>
+              </div>
+              <div className="p-2.5 rounded-lg bg-indigo-950/80 border border-indigo-800/60 text-indigo-400">
+                <MessageSquare className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Nested Replies</p>
+                <p className="text-xl font-bold text-slate-100 mt-0.5">{replyCount}</p>
+              </div>
+              <div className="p-2.5 rounded-lg bg-purple-950/80 border border-purple-800/60 text-purple-400">
+                <CornerDownRight className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Interactions</p>
+                <p className="text-xl font-bold text-slate-100 mt-0.5">{totalInteractions}</p>
+              </div>
+              <div className="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-800/60 text-emerald-400">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Reply Status Filter Controls */}
+      <div className="flex items-center justify-between bg-slate-900/40 p-2.5 rounded-xl border border-slate-800/80">
+        <div className="flex items-center space-x-1.5">
+          <span className="text-xs font-semibold text-slate-400 mr-2">Filter Status:</span>
+          {(['all', 'unreplied', 'replied'] as const).map((filterOpt) => {
+            const isActive = replyStatusFilter === filterOpt;
+            const labels = {
+              all: `All Comments (${topLevelCount})`,
+              unreplied: 'Unreplied',
+              replied: 'Replied'
+            };
+
+            return (
+              <button
+                key={filterOpt}
+                onClick={() => handleFilterChange(filterOpt)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  isActive
+                    ? 'bg-indigo-600 text-white shadow-sm font-semibold'
+                    : 'bg-slate-800/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                {labels[filterOpt]}
+              </button>
+            );
+          })}
+        </div>
+        <span className="text-xs text-slate-400 font-mono">
+          Showing {comments.length} of {filteredCount} threads
+        </span>
+      </div>
+
+      {/* Error State */}
 
       {/* Error State */}
       {error && (
@@ -485,7 +568,7 @@ export default function AdCommentsPage() {
                 ) : (
                   <>
                     <RefreshCw className="w-4 h-4 text-indigo-400" />
-                    <span>Load More Comments ({comments.length} of {totalComments})</span>
+                    <span>Load More Comments ({comments.length} of {filteredCount})</span>
                   </>
                 )}
               </button>
