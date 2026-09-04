@@ -259,7 +259,10 @@ export default function EngagementDashboardPage() {
   const fetchOverview = async () => {
     setLoadingOverview(true);
     try {
-      const res = await apiClient.get('/social-comments/overview');
+      const params = new URLSearchParams();
+      if (selectedAccountId !== 'ALL') params.append('social_account_id', selectedAccountId);
+      const url = `/social-comments/overview${params.toString() ? `?${params.toString()}` : ''}`;
+      const res = await apiClient.get(url);
       setOverview(res.data);
     } catch (e) {
       console.error('Failed to fetch overview metrics:', e);
@@ -274,6 +277,7 @@ export default function EngagementDashboardPage() {
       const params = new URLSearchParams();
       if (adSearch.trim()) params.append('q', adSearch.trim());
       if (adStatusFilter && adStatusFilter !== 'ALL') params.append('status', adStatusFilter);
+      if (selectedAccountId !== 'ALL') params.append('social_account_id', selectedAccountId);
 
       const res = await apiClient.get(`/social-comments/ads?${params.toString()}`);
       setAds(res.data || []);
@@ -290,6 +294,7 @@ export default function EngagementDashboardPage() {
       const params = new URLSearchParams();
       if (postSearch.trim()) params.append('q', postSearch.trim());
       if (postPlatformFilter && postPlatformFilter !== 'ALL') params.append('platform', postPlatformFilter.toLowerCase());
+      if (selectedAccountId !== 'ALL') params.append('social_account_id', selectedAccountId);
 
       const res = await apiClient.get(`/social-comments/posts?${params.toString()}`);
       setPosts(res.data || []);
@@ -575,7 +580,7 @@ export default function EngagementDashboardPage() {
                           {ad.comment_count} comments
                         </span>
                         <Link
-                          href={`/comments/ads/${ad.id}`}
+                          href={`/comments/ads/${ad.id}${selectedAccountId !== 'ALL' ? `?social_account_id=${selectedAccountId}` : ''}`}
                           className="p-1.5 rounded-lg bg-slate-900 hover:bg-purple-900/60 text-purple-300 transition"
                           title="View Ad Comments"
                         >
@@ -630,7 +635,7 @@ export default function EngagementDashboardPage() {
                           {p.comment_count} comments
                         </span>
                         <Link
-                          href={`/comments/posts/${p.external_post_id}`}
+                          href={`/comments/posts/${p.external_post_id}${selectedAccountId !== 'ALL' ? `?social_account_id=${selectedAccountId}` : ''}`}
                           className="p-1.5 rounded-lg bg-slate-900 hover:bg-blue-900/60 text-blue-300 transition"
                           title="View Post Comments"
                         >
@@ -745,7 +750,7 @@ export default function EngagementDashboardPage() {
                         </a>
                       )}
                       <Link
-                        href={`/comments/ads/${ad.id}`}
+                        href={`/comments/ads/${ad.id}${selectedAccountId !== 'ALL' ? `?social_account_id=${selectedAccountId}` : ''}`}
                         className="px-3 py-1.5 rounded-lg bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-800/80 font-semibold text-xs transition flex items-center space-x-1"
                       >
                         <span>Manage Comments</span>
@@ -858,7 +863,7 @@ export default function EngagementDashboardPage() {
                         </a>
                       )}
                       <Link
-                        href={`/comments/posts/${p.external_post_id}`}
+                        href={`/comments/posts/${p.external_post_id}${selectedAccountId !== 'ALL' ? `?social_account_id=${selectedAccountId}` : ''}`}
                         className="px-3 py-1.5 rounded-lg bg-blue-950/80 hover:bg-blue-900 text-blue-200 border border-blue-800/80 font-semibold text-xs transition flex items-center space-x-1"
                       >
                         <span>Manage Comments</span>
