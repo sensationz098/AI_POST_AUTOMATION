@@ -56,6 +56,8 @@ interface AdItem {
   created_at?: string;
   comment_count: number;
   top_level_comment_count?: number;
+  unreplied_comment_count?: number;
+  replied_comment_count?: number;
   permalink?: string;
   platform?: string;
 }
@@ -91,6 +93,7 @@ export default function EngagementDashboardPage() {
   // Content Feed state
   const [activeTab, setActiveTab] = useState<'posts' | 'ads' | 'stream'>(tabParam);
   const [replyStatusFilter, setReplyStatusFilter] = useState<'all' | 'unreplied' | 'replied'>('all');
+  const [adStatusFilter, setAdStatusFilter] = useState<'all' | 'active' | 'paused'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [platformFilter, setPlatformFilter] = useState('ALL');
 
@@ -140,7 +143,7 @@ export default function EngagementDashboardPage() {
       setOverview(res.data);
     } catch (e) {
       console.error('Failed to fetch overview metrics:', e);
-    } fontually: {
+    } finally {
       setLoadingOverview(false);
     }
   };
@@ -163,13 +166,14 @@ export default function EngagementDashboardPage() {
     }
   };
 
-  // 4. Fetch Meta Ads index
+  // 4. Fetch Meta Ads index with ad status filtering
   const fetchAds = async () => {
     setLoadingAds(true);
     try {
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.append('q', searchQuery.trim());
       if (selectedAccountId !== 'ALL') params.append('social_account_id', selectedAccountId);
+      if (adStatusFilter !== 'all') params.append('status', adStatusFilter.toUpperCase());
 
       const res = await apiClient.get(`/social-comments/ads?${params.toString()}`);
       setAds(res.data || []);
@@ -214,13 +218,13 @@ export default function EngagementDashboardPage() {
     setOverview(null);
   };
 
-  // Trigger Data Fetch on Tab or Account ID Change
+  // Trigger Data Fetch on Tab, Account ID, Platform, or Ad Status Change
   useEffect(() => {
     fetchOverview();
     if (activeTab === 'posts') fetchPosts();
     if (activeTab === 'ads') fetchAds();
     if (activeTab === 'stream') fetchCommentsFeed();
-  }, [activeTab, selectedAccountId, platformFilter]);
+  }, [activeTab, selectedAccountId, platformFilter, adStatusFilter]);
 
   // Reply Addition Handler (Updates Thread local state & metrics)
   const handleReplyAdded = (commentId: number, newReply: SocialCommentReply) => {
@@ -258,7 +262,50 @@ export default function EngagementDashboardPage() {
     return true;
   });
 
+  // Combined filtering for Meta Ads (Ad Status + Thread Status)
+  const filteredAds = ads.filter((ad) => {
+    if (replyStatusFilter === 'unreplied') {
+      const unrepliedCount = ad.unreplied_comment_count ?? (ad.top_level_comment_count ?? ad.comment_count);
+      return unrepliedCount > 0;
+    }
+    if (replyStatusFilter === 'replied') {
+      const repliedCount = ad.replied_comment_count ?? ((ad.top_level_comment_count ?? ad.comment_count) - (ad.unreplied_comment_count ?? 0));
+      return repliedCount > 0;
+    }
+    return true;
+  });
+
   const selectedAccountObj = socialAccounts.find((a) => String(a.id) === String(selectedAccountId));
+
+  const getAdsEmptyDescription = () => {
+    if (adStatusFilter === 'active' && replyStatusFilter === 'unreplied') {
+      return `No unreplied conversations found for active ads${selectedAccountId !== 'ALL' ? ` on ${selectedAccountObj?.account_name || 'selected account'}` : ''}.`;
+    }
+    if (adStatusFilter === 'active' && replyStatusFilter === 'replied') {
+      return `No replied conversations found for active ads${selectedAccountId !== 'ALL' ? ` on ${selectedAccountObj?.account_name || 'selected account'}` : ''}.`;
+    }
+    if (adStatusFilter === 'paused' && replyStatusFilter === 'unreplied') {
+      return `No unreplied conversations found for paused ads${selectedAccountId !== 'ALL' ? ` on ${selectedAccountObj?.account_name || 'selected account'}` : ''}.`;
+    }
+    if (adStatusFilter === 'paused' && replyStatusFilter === 'replied') {
+      return `No replied conversations found for paused ads${selectedAccountId !== 'ALL' ? ` on ${selectedAccountObj?.account_name || 'selected account'}` : ''}.`;
+    }
+    if (adStatusFilter === 'active') {
+      return `No active Meta Ads found${selectedAccountId !== 'ALL' ? ` for ${selectedAccountObj?.account_name || 'selected account'}` : ''}.`;
+    }
+    if (adStatusFilter === 'paused') {
+      return `No paused Meta Ads found${selectedAccountId !== 'ALL' ? ` for ${selectedAccountObj?.account_name || 'selected account'}` : ''}.`;
+    }
+    if (replyStatusFilter === 'unreplied') {
+      return `No unreplied conversations found for Meta Ads.`;
+    }
+    if (replyStatusFilter === 'replied') {
+      return `No replied conversations found for Meta Ads.`;
+    }
+    return selectedAccountId !== 'ALL'
+      ? `No synced Meta Ads found for ${selectedAccountObj?.account_name || 'selected account'}.`
+      : 'No synced Meta Ads match your current filter.';
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 text-slate-100 font-sans">
@@ -317,6 +364,8 @@ export default function EngagementDashboardPage() {
         onTabChange={handleTabChange}
         replyStatusFilter={replyStatusFilter}
         onReplyStatusChange={setReplyStatusFilter}
+        adStatusFilter={adStatusFilter}
+        onAdStatusChange={setAdStatusFilter}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onSearchSubmit={() => {
@@ -380,7 +429,7 @@ export default function EngagementDashboardPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between text-xs text-slate-400 font-medium px-1 pb-1 border-b border-slate-800/60">
               <span className="flex items-center space-x-2 text-purple-300 font-bold">
-                <span>Meta Ads ({ads.length})</span>
+                <span>Meta Ads ({filteredAds.length})</span>
                 <span className="text-slate-600">•</span>
                 <span className="text-slate-400 font-normal">{overview?.total_ad_comments ?? 0} Meta Ad Conversations</span>
               </span>
@@ -392,22 +441,20 @@ export default function EngagementDashboardPage() {
                 <PostSkeleton />
                 <PostSkeleton />
               </div>
-            ) : ads.length === 0 ? (
+            ) : filteredAds.length === 0 ? (
               <ContextualEmptyState
                 type="ads"
-                description={
-                  selectedAccountId !== 'ALL'
-                    ? `No synced Meta Ads found for ${selectedAccountObj?.account_name || 'selected account'}.`
-                    : 'No synced Meta Ads with comments match your current filter.'
-                }
+                description={getAdsEmptyDescription()}
                 onResetFilters={() => {
                   setSearchQuery('');
+                  setAdStatusFilter('all');
+                  setReplyStatusFilter('all');
                   fetchAds();
                 }}
               />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {ads.map((ad) => (
+                {filteredAds.map((ad) => (
                   <AdCardComponent
                     key={ad.id}
                     ad={ad}

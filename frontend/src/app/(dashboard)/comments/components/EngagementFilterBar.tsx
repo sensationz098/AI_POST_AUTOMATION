@@ -8,6 +8,8 @@ interface FilterBarProps {
   onTabChange: (tab: 'posts' | 'ads' | 'stream') => void;
   replyStatusFilter: 'all' | 'unreplied' | 'replied';
   onReplyStatusChange: (status: 'all' | 'unreplied' | 'replied') => void;
+  adStatusFilter?: 'all' | 'active' | 'paused';
+  onAdStatusChange?: (status: 'all' | 'active' | 'paused') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onSearchSubmit: () => void;
@@ -20,6 +22,8 @@ export default function EngagementFilterBar({
   onTabChange,
   replyStatusFilter,
   onReplyStatusChange,
+  adStatusFilter = 'all',
+  onAdStatusChange,
   searchQuery,
   onSearchChange,
   onSearchSubmit,
@@ -97,52 +101,100 @@ export default function EngagementFilterBar({
         </div>
       </div>
 
-      {/* Bottom Row: Reply Status Filter Pills */}
-      <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
-        <div className="flex items-center space-x-2">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center space-x-1">
-            <Filter className="w-3 h-3 text-slate-500" />
-            <span>Filter Threads:</span>
-          </span>
+      {/* Bottom Row: Filter Pills */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 overflow-x-auto pb-1">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Dedicated Meta Ad Status Filter — Displayed ONLY on Meta Ads Tab */}
+          {activeTab === 'ads' && onAdStatusChange && (
+            <div className="flex items-center space-x-2 border-r border-slate-800/80 pr-3">
+              <span className="text-[11px] font-bold text-purple-400 uppercase tracking-wider flex items-center space-x-1">
+                <Target className="w-3 h-3 text-purple-400" />
+                <span>Ad Status:</span>
+              </span>
 
-          <button
-            onClick={() => onReplyStatusChange('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-              replyStatusFilter === 'all'
-                ? 'bg-indigo-950 text-indigo-200 border border-indigo-700/80'
-                : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
-            }`}
-          >
-            All Threads
-          </button>
+              <button
+                onClick={() => onAdStatusChange('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  adStatusFilter === 'all'
+                    ? 'bg-purple-950 text-purple-200 border border-purple-700/80 shadow-sm'
+                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                }`}
+              >
+                All Ads
+              </button>
 
-          <button
-            onClick={() => onReplyStatusChange('unreplied')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 ${
-              replyStatusFilter === 'unreplied'
-                ? 'bg-amber-950 text-amber-200 border border-amber-700/80'
-                : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-            <span>Unreplied</span>
-          </button>
+              <button
+                onClick={() => onAdStatusChange('active')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 ${
+                  adStatusFilter === 'active'
+                    ? 'bg-emerald-950 text-emerald-200 border border-emerald-700/80 shadow-sm'
+                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>Active</span>
+              </button>
 
-          <button
-            onClick={() => onReplyStatusChange('replied')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 ${
-              replyStatusFilter === 'replied'
-                ? 'bg-emerald-950 text-emerald-200 border border-emerald-700/80'
-                : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            <span>Replied</span>
-          </button>
+              <button
+                onClick={() => onAdStatusChange('paused')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 ${
+                  adStatusFilter === 'paused'
+                    ? 'bg-amber-950 text-amber-200 border border-amber-700/80 shadow-sm'
+                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                <span>Paused</span>
+              </button>
+            </div>
+          )}
+
+          {/* Thread Status Filter */}
+          <div className="flex items-center space-x-2">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center space-x-1">
+              <Filter className="w-3 h-3 text-slate-500" />
+              <span>Thread Status:</span>
+            </span>
+
+            <button
+              onClick={() => onReplyStatusChange('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                replyStatusFilter === 'all'
+                  ? 'bg-indigo-950 text-indigo-200 border border-indigo-700/80 shadow-sm'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+              }`}
+            >
+              All Threads
+            </button>
+
+            <button
+              onClick={() => onReplyStatusChange('unreplied')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 ${
+                replyStatusFilter === 'unreplied'
+                  ? 'bg-amber-950 text-amber-200 border border-amber-700/80 shadow-sm'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+              <span>Unreplied</span>
+            </button>
+
+            <button
+              onClick={() => onReplyStatusChange('replied')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 ${
+                replyStatusFilter === 'replied'
+                  ? 'bg-emerald-950 text-emerald-200 border border-emerald-700/80 shadow-sm'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span>Replied</span>
+            </button>
+          </div>
         </div>
 
         {/* Future AI Priority Filter Pill Placeholder */}
-        <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-500 bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800/60 opacity-75">
+        <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-500 bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800/60 opacity-75 whitespace-nowrap self-start sm:self-auto">
           <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
           <span>Needs Attention (AI Priority Ready)</span>
         </div>
