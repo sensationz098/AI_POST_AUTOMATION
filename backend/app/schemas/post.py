@@ -61,6 +61,8 @@ class PostResponse(BaseModel):
     last_error: Optional[str]
     fb_post_id: Optional[str]
     ig_media_id: Optional[str]
+    fb_post_url: Optional[str] = None
+    ig_media_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

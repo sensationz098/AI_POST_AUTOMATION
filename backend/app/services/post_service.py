@@ -152,12 +152,18 @@ class PostService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Post not found or access denied"
             )
+        self._enrich_posts_with_external_ids(db, [post])
         return post
 
     def _enrich_posts_with_external_ids(self, db: Session, posts: List[Post]) -> List[Post]:
         from app.models.publishing_batch import PublishingBatch, PublishingJob, JobStatus
+        from app.models.external_post_context import ExternalPostContext
+
+        if not posts:
+            return posts
+
         for p in posts:
-            if p.status == PostStatus.PUBLISHED.value and (not p.fb_post_id or not p.ig_media_id):
+            if not p.fb_post_id or not p.ig_media_id:
                 batches = db.query(PublishingBatch).filter(PublishingBatch.post_id == p.id).all()
                 if batches:
                     b_ids = [b.id for b in batches]
@@ -170,6 +176,35 @@ class PostService:
                             p.fb_post_id = j.external_post_id
                         elif j.platform == "instagram" and j.external_post_id and not p.ig_media_id:
                             p.ig_media_id = j.external_post_id
+
+        fb_ids = {p.fb_post_id for p in posts if p.fb_post_id}
+        ig_ids = {p.ig_media_id for p in posts if p.ig_media_id}
+        all_ids = fb_ids.union(ig_ids)
+
+        ctx_map = {}
+        if all_ids:
+            contexts = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id.in_(all_ids)).all()
+            ctx_map = {c.external_post_id: c for c in contexts}
+
+        for p in posts:
+            if p.fb_post_id:
+                ctx = ctx_map.get(p.fb_post_id)
+                if ctx and ctx.permalink:
+                    setattr(p, "fb_post_url", ctx.permalink)
+                else:
+                    setattr(p, "fb_post_url", f"https://www.facebook.com/{p.fb_post_id}")
+            else:
+                setattr(p, "fb_post_url", None)
+
+            if p.ig_media_id:
+                ctx = ctx_map.get(p.ig_media_id)
+                if ctx and ctx.permalink:
+                    setattr(p, "ig_media_url", ctx.permalink)
+                else:
+                    setattr(p, "ig_media_url", f"https://www.instagram.com/p/{p.ig_media_id}")
+            else:
+                setattr(p, "ig_media_url", None)
+
         return posts
 
     def get_user_posts(self, db: Session, user_id: int, status: Optional[str] = None) -> List[Post]:
