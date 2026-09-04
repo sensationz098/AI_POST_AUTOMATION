@@ -12,7 +12,8 @@ from app.core.config import settings
 
 def generate_signature(payload_bytes: bytes) -> str:
     """Helper to generate valid X-Hub-Signature-256 header."""
-    digest = hmac.new(settings.META_APP_SECRET.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
+    secret = (settings.META_APP_SECRET or "test_secret").encode("utf-8")
+    digest = hmac.new(secret, payload_bytes, hashlib.sha256).hexdigest()
     return f"sha256={digest}"
 
 def test_valid_facebook_signature_accepted(client):
@@ -276,7 +277,8 @@ def test_access_tokens_and_secrets_never_appear_in_comment_records(db_session):
         assert settings.META_APP_SECRET not in comment_dict
 
 def test_webhook_get_verification_unaffected(client):
-    res = client.get(f"/api/v1/webhooks/meta?hub.mode=subscribe&hub.verify_token={settings.META_WEBHOOK_VERIFY_TOKEN}&hub.challenge=test_challenge_123")
+    token = settings.META_WEBHOOK_VERIFY_TOKEN or "test_verify_token"
+    res = client.get(f"/api/v1/webhooks/meta?hub.mode=subscribe&hub.verify_token={token}&hub.challenge=test_challenge_123")
     assert res.status_code == 200
     assert res.text == "test_challenge_123"
 

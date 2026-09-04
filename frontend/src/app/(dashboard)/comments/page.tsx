@@ -332,6 +332,15 @@ export default function EngagementDashboardPage() {
         {/* VIEW 1: ORGANIC POSTS FEED */}
         {activeTab === 'posts' && (
           <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-medium px-1 pb-1 border-b border-slate-800/60">
+              <span className="flex items-center space-x-2 text-indigo-300 font-bold">
+                <span>Organic Posts ({posts.length})</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-400 font-normal">{overview?.total_post_comments ?? 0} Organic Conversations</span>
+              </span>
+              <span className="text-[11px] text-slate-500 font-mono">Strictly Non-Ad Organic Content</span>
+            </div>
+
             {loadingPosts ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <PostSkeleton />
@@ -369,6 +378,15 @@ export default function EngagementDashboardPage() {
         {/* VIEW 2: META ADS FEED */}
         {activeTab === 'ads' && (
           <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-medium px-1 pb-1 border-b border-slate-800/60">
+              <span className="flex items-center space-x-2 text-purple-300 font-bold">
+                <span>Meta Ads ({ads.length})</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-400 font-normal">{overview?.total_ad_comments ?? 0} Meta Ad Conversations</span>
+              </span>
+              <span className="text-[11px] text-slate-500 font-mono">Meta Campaign Ad Content</span>
+            </div>
+
             {loadingAds ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <PostSkeleton />
@@ -404,6 +422,15 @@ export default function EngagementDashboardPage() {
         {/* VIEW 3: UNIFIED CONVERSATION STREAM */}
         {activeTab === 'stream' && (
           <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-medium px-1 pb-1 border-b border-slate-800/60">
+              <span className="flex items-center space-x-2 text-emerald-300 font-bold">
+                <span>All Conversations Stream ({filteredComments.length})</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-400 font-normal">Full Scoped Feed</span>
+              </span>
+              <span className="text-[11px] text-slate-500 font-mono">Parent Context Enabled</span>
+            </div>
+
             {commentsError && (
               <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/80 text-rose-300 text-sm flex items-center space-x-3">
                 <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />

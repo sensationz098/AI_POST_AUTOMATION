@@ -728,12 +728,12 @@ def get_meta_ads_with_comments(
 
     if social_account_id and account:
         acc_ext_id = account.account_id
-        ad_ids_with_comments = list(ad_top_map.keys())
+        ad_ids_with_comments = set(ad_top_map.keys()).union(set(ad_meta_reply_map.keys())).union(set(ad_manual_reply_map.keys()))
         query = query.filter(
             or_(
                 MetaAd.facebook_page_id == acc_ext_id,
                 MetaAd.instagram_account_id == acc_ext_id,
-                MetaAd.id.in_(ad_ids_with_comments) if ad_ids_with_comments else False
+                MetaAd.id.in_(list(ad_ids_with_comments)) if ad_ids_with_comments else False
             )
         )
 
@@ -763,6 +763,16 @@ def get_meta_ads_with_comments(
 
     all_ads = query.order_by(MetaAd.updated_at.desc()).all()
 
+    # Pre-fetch ExternalPostContext map for permalinks to avoid N+1 queries
+    all_fb_pids = [ad.facebook_post_id.strip() for ad in all_ads if ad.facebook_post_id and ad.facebook_post_id.strip()]
+    all_ig_mids = [ad.instagram_media_id.strip() for ad in all_ads if ad.instagram_media_id and ad.instagram_media_id.strip()]
+    all_ext_ids = list(set(all_fb_pids + all_ig_mids))
+    ctx_map = {}
+    if all_ext_ids:
+        from app.models.external_post_context import ExternalPostContext
+        ext_ctxs = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id.in_(all_ext_ids)).all()
+        ctx_map = {c.external_post_id.strip(): c for c in ext_ctxs}
+
     res = []
     for ad in all_ads:
         t_cnt = ad_top_map.get(ad.id, 0)
@@ -782,7 +792,7 @@ def get_meta_ads_with_comments(
             "reply_count": r_cnt,
             "total_interaction_count": t_cnt + r_cnt,
             "comment_count": t_cnt,
-            "permalink": _resolve_ad_permalink(ad, db),
+            "permalink": _resolve_ad_permalink(ad, db, ctx_map=ctx_map),
             "platform": "facebook" if (not ad.engagement_object_type or ad.engagement_object_type == "FACEBOOK_POST") else "instagram"
         })
     return res
@@ -914,7 +924,25 @@ def get_posts_with_comments(
     from app.models.social_comment import SocialComment
     from app.models.post import Post
     from app.models.external_post_context import ExternalPostContext
+    from app.models.meta_ad import MetaAd
     from sqlalchemy import func, or_
+
+    # Collect all post IDs that belong to Meta Ads to exclude them from organic posts
+    ad_post_ids_q = db.query(MetaAd.facebook_post_id).filter(
+        MetaAd.user_id == current_user.id,
+        MetaAd.facebook_post_id.isnot(None)
+    ).union(
+        db.query(MetaAd.instagram_media_id).filter(
+            MetaAd.user_id == current_user.id,
+            MetaAd.instagram_media_id.isnot(None)
+        )
+    ).union(
+        db.query(MetaAd.engagement_object_id).filter(
+            MetaAd.user_id == current_user.id,
+            MetaAd.engagement_object_id.isnot(None)
+        )
+    )
+    ad_post_ids = {row[0].strip() for row in ad_post_ids_q.all() if row[0] and row[0].strip()}
 
     query_counts = db.query(
         SocialComment.external_post_id,
@@ -927,6 +955,8 @@ def get_posts_with_comments(
         SocialComment.external_post_id.isnot(None),
         or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == "")
     )
+    if ad_post_ids:
+        query_counts = query_counts.filter(~SocialComment.external_post_id.in_(list(ad_post_ids)))
     if platform:
         query_counts = query_counts.filter(SocialComment.platform == platform)
     if social_account_id:

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { SocialComment, SocialCommentReply } from '@/lib/types';
-import { User, Clock, CornerDownRight, CheckCircle2, Trash2, Loader2, MessageSquare } from 'lucide-react';
+import { User, Clock, CornerDownRight, CheckCircle2, Trash2, Loader2, MessageSquare, ExternalLink, Megaphone, FileText } from 'lucide-react';
 
 import ReplyComposer from './ReplyComposer';
 import AIAssistanceCard from './AIAssistanceCard';
@@ -18,7 +18,7 @@ export default function ConversationThread({
   comment,
   onReplyAdded,
   onCommentDeleted,
-  showPostContext = false,
+  showPostContext = true,
 }: ConversationThreadProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -28,6 +28,9 @@ export default function ConversationThread({
 
   const repliesList = comment.replies || [];
   const isReplied = repliesList.length > 0;
+
+  const postCtx = comment.post;
+  const adCtx = comment.meta_ad;
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this comment?')) return;
@@ -47,6 +50,47 @@ export default function ConversationThread({
 
   return (
     <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-4 space-y-3 transition-colors hover:border-slate-700/80 shadow-sm">
+      {/* Context Banner: Parent Meta Ad or Organic Post Source */}
+      {showPostContext && (adCtx || postCtx) && (
+        <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/70 text-xs flex items-center justify-between gap-3 text-slate-300">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            {adCtx ? (
+              <span className="px-2 py-0.5 rounded bg-purple-950/90 text-purple-300 border border-purple-800/80 text-[10px] font-extrabold flex items-center space-x-1 flex-shrink-0">
+                <Megaphone className="w-3 h-3 text-purple-400" />
+                <span>Meta Ad</span>
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded bg-indigo-950/90 text-indigo-300 border border-indigo-800/80 text-[10px] font-extrabold flex items-center space-x-1 flex-shrink-0">
+                <FileText className="w-3 h-3 text-indigo-400" />
+                <span>Organic Post</span>
+              </span>
+            )}
+
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-slate-200 truncate">
+                {adCtx?.name || postCtx?.title || (postCtx?.caption ? postCtx.caption.slice(0, 60) : 'Social Content')}
+              </p>
+              {adCtx?.campaign_name && (
+                <p className="text-[10px] text-slate-400 truncate">
+                  Campaign: <span className="text-slate-300 font-medium">{adCtx.campaign_name}</span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          {(adCtx?.permalink || postCtx?.permalink) && (
+            <a
+              href={adCtx?.permalink || postCtx?.permalink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700/60 text-slate-300 hover:text-white text-[11px] font-medium transition flex items-center space-x-1 flex-shrink-0"
+            >
+              <span>View Source</span>
+              <ExternalLink className="w-3 h-3 text-indigo-400" />
+            </a>
+          )}
+        </div>
+      )}
       {/* Thread Header: Customer Identity & Reply Status Badge */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center space-x-3 min-w-0">
