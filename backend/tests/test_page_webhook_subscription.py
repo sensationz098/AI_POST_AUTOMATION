@@ -170,7 +170,8 @@ def test_webhook_post_recognizes_page_object_with_event_type(client):
         "object": "page",
         "entry": [{"id": "page_123", "time": 1700000000, "changes": [{"field": "feed", "value": {"item": "status"}}]}]
     }).encode("utf-8")
-    expected_hash = hmac.new(settings.META_APP_SECRET.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+    secret = (settings.META_APP_SECRET or "test_secret").encode("utf-8")
+    expected_hash = hmac.new(secret, payload, hashlib.sha256).hexdigest()
     headers = {"X-Hub-Signature-256": f"sha256={expected_hash}"}
 
     res = client.post("/api/v1/webhooks/meta", data=payload, headers=headers)
@@ -183,7 +184,8 @@ def test_webhook_post_recognizes_instagram_object_with_event_type(client):
         "object": "instagram",
         "entry": [{"id": "ig_456", "time": 1700000000, "changes": [{"field": "comments", "value": {"id": "c_1"}}]}]
     }).encode("utf-8")
-    expected_hash = hmac.new(settings.META_APP_SECRET.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+    secret = (settings.META_APP_SECRET or "test_secret").encode("utf-8")
+    expected_hash = hmac.new(secret, payload, hashlib.sha256).hexdigest()
     headers = {"X-Hub-Signature-256": f"sha256={expected_hash}"}
 
     res = client.post("/api/v1/webhooks/meta", data=payload, headers=headers)

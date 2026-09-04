@@ -13,14 +13,16 @@ interface AIAssistanceProps {
 }
 
 export default function AIAssistanceCard({
-  intent = 'General Inquiry',
-  sentiment = 'Positive',
-  priority = 'Medium',
+  intent,
+  sentiment,
+  priority,
   knowledgeUsed,
   suggestedReply,
   onUseSuggestedReply,
 }: AIAssistanceProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  const hasAnalysis = Boolean(intent || sentiment || priority);
 
   return (
     <div className="mt-2.5 rounded-xl border border-indigo-900/60 bg-gradient-to-r from-indigo-950/40 via-purple-950/20 to-slate-950/60 overflow-hidden text-xs shadow-sm">
@@ -40,7 +42,7 @@ export default function AIAssistanceCard({
         </div>
 
         <div className="flex items-center space-x-2 text-[11px] text-slate-400">
-          <span>{isExpanded ? 'Hide AI Details' : 'Inspect AI Analysis'}</span>
+          <span>{isExpanded ? 'Hide AI Details' : hasAnalysis ? 'Inspect AI Analysis' : 'AI Analysis Pending'}</span>
           {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </div>
       </button>
@@ -49,17 +51,29 @@ export default function AIAssistanceCard({
       {isExpanded && (
         <div className="p-3 space-y-3 border-t border-indigo-900/40 text-slate-300">
           {/* Metadata Badges */}
-          <div className="flex items-center space-x-2 flex-wrap gap-y-1 text-[10px]">
-            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
-              Intent: <strong className="text-indigo-300">{intent}</strong>
-            </span>
-            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
-              Sentiment: <strong className="text-emerald-400">{sentiment}</strong>
-            </span>
-            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
-              Priority: <strong className="text-amber-300">{priority}</strong>
-            </span>
-          </div>
+          {hasAnalysis ? (
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1 text-[10px]">
+              {intent && (
+                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                  Intent: <strong className="text-indigo-300">{intent}</strong>
+                </span>
+              )}
+              {sentiment && (
+                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                  Sentiment: <strong className="text-emerald-400">{sentiment}</strong>
+                </span>
+              )}
+              {priority && (
+                <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                  Priority: <strong className="text-amber-300">{priority}</strong>
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="text-[10px] text-slate-400 italic">
+              AI analysis unavailable. Connect RAG embeddings to enable live comment classification.
+            </div>
+          )}
 
           {knowledgeUsed && (
             <div className="text-[11px] text-slate-400 bg-slate-950/60 p-2 rounded-lg border border-slate-800 font-mono">
