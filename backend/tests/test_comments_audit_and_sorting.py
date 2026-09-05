@@ -680,3 +680,16 @@ def test_engagement_metrics_scoping_posts_ads_and_all(db_session: Session, test_
     assert data_acc1_posts["reply_count"] == 2
     assert data_acc1_posts["total_interaction_count"] == 4
 
+    # Query 5: Verify account_metrics breakdown in scope=posts
+    assert "account_metrics" in data_posts
+    acc_metrics_map = {m["social_account_id"]: m for m in data_posts["account_metrics"]}
+    assert acc1.id in acc_metrics_map
+    assert acc2.id in acc_metrics_map
+    assert acc_metrics_map[acc1.id]["top_level_comment_count"] == 2
+    assert acc_metrics_map[acc1.id]["reply_count"] == 2
+    assert acc_metrics_map[acc1.id]["total_interaction_count"] == 4
+    assert acc_metrics_map[acc2.id]["top_level_comment_count"] == 1
+    assert acc_metrics_map[acc2.id]["reply_count"] == 0
+    assert acc_metrics_map[acc2.id]["total_interaction_count"] == 1
+
+
