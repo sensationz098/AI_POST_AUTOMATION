@@ -116,6 +116,7 @@ export interface SocialAccount {
   token_type?: string;
   expires_at?: string;
   status: 'CONNECTED' | 'TOKEN_EXPIRED' | 'REVOKED';
+  username?: string;
   logo_url?: string;
   metadata_json?: Record<string, any>;
   created_at: string;

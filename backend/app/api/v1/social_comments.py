@@ -662,6 +662,44 @@ def get_engagement_overview(
                     "comment_count": c_cnt
                 })
 
+    # Calculate connected accounts breakdown (respects organic vs ad vs all scope)
+    connected_accounts = db.query(SocialAccount).filter(
+        SocialAccount.user_id == current_user.id,
+        SocialAccount.status == "CONNECTED"
+    ).all()
+
+    account_metrics = []
+    for acc in connected_accounts:
+        acc_top = social_comment_repo.count_by_user_id(
+            db,
+            user_id=current_user.id,
+            social_account_id=acc.id,
+            is_ad=False if norm_scope == "posts" else (True if norm_scope == "ads" else None),
+            top_level_only=True
+        )
+        acc_reply = social_comment_repo.count_replies_by_user_id(
+            db,
+            user_id=current_user.id,
+            social_account_id=acc.id,
+            is_ad=False if norm_scope == "posts" else (True if norm_scope == "ads" else None)
+        )
+        meta_json = acc.metadata_json or {}
+        username_val = meta_json.get("username") if isinstance(meta_json, dict) else None
+        if not username_val and (acc.platform or "").lower() == "instagram":
+            username_val = acc.account_name
+        acc_name = acc.account_name or f"{acc.platform.capitalize()} Account"
+        account_metrics.append({
+            "social_account_id": acc.id,
+            "account_name": acc_name,
+            "username": username_val,
+            "platform": (acc.platform or "").lower(),
+            "logo_url": acc.logo_url,
+            "top_level_comment_count": acc_top,
+            "reply_count": acc_reply,
+            "total_interaction_count": acc_top + acc_reply,
+            "is_selected": (social_account_id == acc.id) if social_account_id is not None else False
+        })
+
     return {
         "scope": norm_scope,
         "top_level_comment_count": active_top_count,
@@ -688,7 +726,8 @@ def get_engagement_overview(
             "total_interaction_count": all_total_count
         },
         "recent_ads": recent_ads,
-        "recent_posts": recent_posts
+        "recent_posts": recent_posts,
+        "account_metrics": account_metrics
     }
 
 

@@ -14,6 +14,7 @@ import { apiClient } from '@/lib/api';
 import { SocialAccount } from '@/lib/types';
 
 import AccountSelector from '../components/AccountSelector';
+import AccountCommentBreakdownBar, { AccountMetric } from '../components/AccountCommentBreakdownBar';
 import EngagementMetricsBar from '../components/EngagementMetricsBar';
 import PostCardComponent from '../components/PostCardComponent';
 import ContextualEmptyState from '../components/ContextualEmptyState';
@@ -34,6 +35,7 @@ interface OverviewMetrics {
     reply_count: number;
     total_interaction_count: number;
   };
+  account_metrics?: AccountMetric[];
 }
 
 interface PostItem {
@@ -197,7 +199,32 @@ export default function OrganicCommentsPage() {
         onSelectAccount={handleSelectAccount}
       />
 
-      {/* 2. Contextual Engagement Metrics Bar */}
+      {/* 2. Comments by Account Breakdown Bar */}
+      {socialAccounts.length > 0 && (
+        <AccountCommentBreakdownBar
+          accounts={
+            overview?.account_metrics && overview.account_metrics.length > 0
+              ? overview.account_metrics
+              : socialAccounts.map((a) => ({
+                  social_account_id: a.id,
+                  account_name: a.account_name,
+                  username: a.username || (a.platform === 'instagram' ? a.account_name : undefined),
+                  platform: a.platform,
+                  logo_url: a.logo_url,
+                  top_level_comment_count: 0,
+                  reply_count: 0,
+                  total_interaction_count: 0,
+                }))
+          }
+          selectedAccountId={selectedAccountId}
+          onSelectAccount={handleSelectAccount}
+          totalOrganicConversations={overview?.total_post_comments ?? 0}
+          totalOrganicReplies={overview?.post_reply_count ?? 0}
+          loading={loadingOverview}
+        />
+      )}
+
+      {/* 3. Contextual Engagement Metrics Bar */}
       <EngagementMetricsBar
         title="POST CONVERSATION METRICS"
         subtitle="Scoped to Organic Posts"
