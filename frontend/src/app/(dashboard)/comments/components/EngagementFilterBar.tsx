@@ -1,13 +1,15 @@
 'use client';
 
 import React from 'react';
-import { Search, Filter, Sparkles, FileText, Target, MessageSquare } from 'lucide-react';
+import { Search, Filter, Sparkles, FileText, Target, MessageSquare, ArrowUpDown } from 'lucide-react';
 
 interface FilterBarProps {
   activeTab: 'posts' | 'ads' | 'stream';
   onTabChange: (tab: 'posts' | 'ads' | 'stream') => void;
   replyStatusFilter: 'all' | 'unreplied' | 'replied';
   onReplyStatusChange: (status: 'all' | 'unreplied' | 'replied') => void;
+  sortOrder?: 'desc' | 'asc';
+  onSortOrderChange?: (sort: 'desc' | 'asc') => void;
   adStatusFilter?: 'all' | 'active' | 'paused';
   onAdStatusChange?: (status: 'all' | 'active' | 'paused') => void;
   searchQuery: string;
@@ -22,6 +24,8 @@ export default function EngagementFilterBar({
   onTabChange,
   replyStatusFilter,
   onReplyStatusChange,
+  sortOrder = 'desc',
+  onSortOrderChange,
   adStatusFilter = 'all',
   onAdStatusChange,
   searchQuery,
@@ -101,7 +105,7 @@ export default function EngagementFilterBar({
         </div>
       </div>
 
-      {/* Bottom Row: Filter Pills */}
+      {/* Bottom Row: Filter Pills & Sorting */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 overflow-x-auto pb-1">
         <div className="flex flex-wrap items-center gap-3">
           {/* Dedicated Meta Ad Status Filter — Displayed ONLY on Meta Ads Tab */}
@@ -191,6 +195,38 @@ export default function EngagementFilterBar({
               <span>Replied</span>
             </button>
           </div>
+
+          {/* Dedicated Sort Order Controls */}
+          {onSortOrderChange && (
+            <div className="flex items-center space-x-2 border-l border-slate-800/80 pl-3">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center space-x-1">
+                <ArrowUpDown className="w-3 h-3 text-slate-500" />
+                <span>Sort:</span>
+              </span>
+
+              <button
+                onClick={() => onSortOrderChange('desc')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  sortOrder === 'desc'
+                    ? 'bg-indigo-950 text-indigo-200 border border-indigo-700/80 shadow-sm'
+                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                }`}
+              >
+                Newest First
+              </button>
+
+              <button
+                onClick={() => onSortOrderChange('asc')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  sortOrder === 'asc'
+                    ? 'bg-indigo-950 text-indigo-200 border border-indigo-700/80 shadow-sm'
+                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                }`}
+              >
+                Oldest First
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Future AI Priority Filter Pill Placeholder */}

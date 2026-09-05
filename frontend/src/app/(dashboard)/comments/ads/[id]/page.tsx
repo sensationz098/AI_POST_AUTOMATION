@@ -47,6 +47,7 @@ export default function AdCommentsPage() {
   const [replyCount, setReplyCount] = useState(0);
   const [totalInteractions, setTotalInteractions] = useState(0);
   const [replyStatusFilter, setReplyStatusFilter] = useState<'all' | 'unreplied' | 'replied'>('all');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -55,7 +56,7 @@ export default function AdCommentsPage() {
   const [hasNext, setHasNext] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const fetchAdComments = async (pageNum = 1, append = false, currentFilter = replyStatusFilter) => {
+  const fetchAdComments = async (pageNum = 1, append = false, currentFilter = replyStatusFilter, currentSort = sortOrder) => {
     if (!adId) return;
     if (append) {
       setLoadingMore(true);
@@ -66,7 +67,7 @@ export default function AdCommentsPage() {
 
     try {
       const requestUrl = `/social-comments/ads/${adId}`;
-      const queryParams: any = { page: pageNum, limit: 50, reply_status: currentFilter };
+      const queryParams: any = { page: pageNum, limit: 50, reply_status: currentFilter, sort_order: currentSort };
       if (socialAccountId) queryParams.social_account_id = socialAccountId;
 
       const res = await apiClient.get<MetaAdCommentsResponse>(requestUrl, {
@@ -98,7 +99,7 @@ export default function AdCommentsPage() {
     } catch (e: any) {
       console.error('Failed to fetch ad comments:', e);
       setError(e?.response?.data?.detail || 'Failed to load comments for this Meta ad.');
-    } fontually: {
+    } finally {
       setLoading(false);
       setLoadingMore(false);
     }
@@ -106,13 +107,13 @@ export default function AdCommentsPage() {
 
   useEffect(() => {
     setPage(1);
-    fetchAdComments(1, false, replyStatusFilter);
-  }, [adId, replyStatusFilter, socialAccountId]);
+    fetchAdComments(1, false, replyStatusFilter, sortOrder);
+  }, [adId, replyStatusFilter, sortOrder, socialAccountId]);
 
   const handleLoadMore = () => {
     if (!hasNext || loadingMore) return;
     const nextPage = page + 1;
-    fetchAdComments(nextPage, true, replyStatusFilter);
+    fetchAdComments(nextPage, true, replyStatusFilter, sortOrder);
   };
 
   const handleReplyAdded = (commentId: number, newReply: SocialCommentReply) => {
@@ -164,7 +165,7 @@ export default function AdCommentsPage() {
         </div>
 
         <button
-          onClick={() => fetchAdComments(1, false, replyStatusFilter)}
+          onClick={() => fetchAdComments(1, false, replyStatusFilter, sortOrder)}
           className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-semibold transition flex items-center space-x-1.5"
         >
           <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
@@ -211,8 +212,8 @@ export default function AdCommentsPage() {
             totalInteractions={totalInteractions}
           />
 
-          {/* Filter Bar */}
-          <div className="flex items-center justify-between bg-slate-900/60 p-3 rounded-2xl border border-slate-800/90">
+          {/* Filter & Sort Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/90">
             <div className="flex items-center space-x-2">
               <span className="text-xs font-bold text-slate-400 uppercase">Filter:</span>
               <button
@@ -244,6 +245,30 @@ export default function AdCommentsPage() {
                 }`}
               >
                 Replied
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-2 border-t sm:border-t-0 sm:border-l border-slate-800/80 pt-2 sm:pt-0 sm:pl-3">
+              <span className="text-xs font-bold text-slate-400 uppercase">Sort:</span>
+              <button
+                onClick={() => setSortOrder('desc')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  sortOrder === 'desc'
+                    ? 'bg-purple-950 text-purple-200 border border-purple-800 shadow-sm'
+                    : 'bg-slate-950 text-slate-400 border border-slate-800'
+                }`}
+              >
+                Newest First
+              </button>
+              <button
+                onClick={() => setSortOrder('asc')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  sortOrder === 'asc'
+                    ? 'bg-purple-950 text-purple-200 border border-purple-800 shadow-sm'
+                    : 'bg-slate-950 text-slate-400 border border-slate-800'
+                }`}
+              >
+                Oldest First
               </button>
             </div>
           </div>

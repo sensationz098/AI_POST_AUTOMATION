@@ -157,37 +157,50 @@ export default function ConversationThread({
         onUseSuggestedReply={handleUseSuggestedReply}
       />
 
-      {/* Nested Brand Replies Branch */}
+      {/* Nested Replies Branch */}
       {repliesList.length > 0 && (
         <div className="pl-4 border-l-2 border-indigo-500/40 space-y-2 mt-3 pt-1">
           <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider block">
-            Brand Responses ({repliesList.length})
+            Replies ({repliesList.length})
           </span>
 
-          {repliesList.map((reply: SocialCommentReply) => (
-            <div
-              key={reply.id}
-              className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/60 text-xs text-slate-200 flex items-start space-x-2.5 shadow-sm"
-            >
-              <CornerDownRight className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0 space-y-1">
-                <p className="text-slate-100 font-sans leading-relaxed">{reply.message}</p>
-                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
-                  <span className="flex items-center space-x-1 font-semibold text-indigo-300">
-                    <span>Official Brand Reply</span>
-                  </span>
-                  <span className="flex items-center space-x-1.5">
-                    <span className="text-emerald-400 font-bold flex items-center space-x-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                      <span>Sent</span>
+          {repliesList.map((reply: SocialCommentReply) => {
+            const isOwnerReply = reply.source === 'owner';
+            const customerName = reply.commenter_name || (reply.source === 'meta' ? 'Customer Reply' : null);
+
+            return (
+              <div
+                key={reply.id}
+                className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/60 text-xs text-slate-200 flex items-start space-x-2.5 shadow-sm"
+              >
+                <CornerDownRight className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0 space-y-1">
+                  <p className="text-slate-100 font-sans leading-relaxed">{reply.message}</p>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
+                    {isOwnerReply ? (
+                      <span className="flex items-center space-x-1 font-semibold text-indigo-300">
+                        <span>Official Brand Reply</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center space-x-1 font-semibold text-slate-300">
+                        <span>{customerName || 'Customer Reply'}</span>
+                      </span>
+                    )}
+                    <span className="flex items-center space-x-1.5">
+                      {isOwnerReply && (
+                        <span className="text-emerald-400 font-bold flex items-center space-x-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          <span>Sent</span>
+                        </span>
+                      )}
+                      {isOwnerReply && <span className="text-slate-600">•</span>}
+                      <span>{reply.created_at ? new Date(reply.created_at).toLocaleString() : ''}</span>
                     </span>
-                    <span className="text-slate-600">•</span>
-                    <span>{reply.created_at ? new Date(reply.created_at).toLocaleString() : ''}</span>
-                  </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
