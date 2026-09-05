@@ -41,6 +41,8 @@ interface OverviewMetrics {
 interface PostItem {
   id: number | string;
   external_post_id: string;
+  social_account_id?: number;
+  account_name?: string;
   title: string;
   caption?: string;
   image_url?: string;
@@ -158,6 +160,19 @@ export default function OrganicCommentsPage() {
     const timeA = a.published_at ? new Date(a.published_at).getTime() : 0;
     const timeB = b.published_at ? new Date(b.published_at).getTime() : 0;
     return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
+  });
+
+  // Defensive Filter: When an individual account is selected, strictly enforce account & platform isolation
+  const accountScopedPosts = sortedPosts.filter((post) => {
+    if (selectedAccountId !== 'ALL' && selectedAccountObj) {
+      if (post.platform && selectedAccountObj.platform && post.platform.toLowerCase() !== selectedAccountObj.platform.toLowerCase()) {
+        return false;
+      }
+      if (post.social_account_id && String(post.social_account_id) !== String(selectedAccountId)) {
+        return false;
+      }
+    }
+    return true;
   });
 
   const organicMetrics = overview?.posts_metrics ?? {
@@ -358,7 +373,7 @@ export default function OrganicCommentsPage() {
       <div className="space-y-4 pt-2">
         <div className="flex items-center justify-between text-xs text-slate-400 font-medium px-1 pb-1 border-b border-slate-800/60">
           <span className="flex items-center space-x-2 text-blue-300 font-bold">
-            <span>Organic Posts ({sortedPosts.length})</span>
+            <span>Organic Posts ({accountScopedPosts.length})</span>
             <span className="text-slate-600">•</span>
             <span className="text-slate-400 font-normal">
               {organicMetrics.top_level_comment_count} Organic Conversations
@@ -372,7 +387,7 @@ export default function OrganicCommentsPage() {
             <PostSkeleton />
             <PostSkeleton />
           </div>
-        ) : sortedPosts.length === 0 ? (
+        ) : accountScopedPosts.length === 0 ? (
           <ContextualEmptyState
             type="posts"
             description={
@@ -389,12 +404,12 @@ export default function OrganicCommentsPage() {
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {sortedPosts.map((post) => (
+            {accountScopedPosts.map((post) => (
               <PostCardComponent
-                key={post.id}
+                key={`${post.platform}_${post.external_post_id || post.id}`}
                 post={post}
                 selectedAccountId={selectedAccountId}
-                accountName={selectedAccountObj?.account_name}
+                accountName={selectedAccountObj?.account_name || post.account_name}
               />
             ))}
           </div>

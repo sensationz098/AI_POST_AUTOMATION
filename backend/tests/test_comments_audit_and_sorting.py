@@ -693,3 +693,195 @@ def test_engagement_metrics_scoping_posts_ads_and_all(db_session: Session, test_
     assert acc_metrics_map[acc2.id]["total_interaction_count"] == 1
 
 
+def test_organic_posts_account_and_platform_isolation(db_session: Session, test_user: User, auth_headers: dict):
+    """
+    Verify strict SocialAccount and platform isolation for GET /social-comments/posts.
+    1. Selecting Instagram account returns ONLY Instagram posts (0 Facebook posts).
+    2. Selecting Facebook account returns ONLY Facebook posts (0 Instagram posts).
+    3. Identical account names on FB & IG are strictly separated by social_account_id.
+    4. Cross-posted Post models are correctly isolated to their respective platform representations.
+    5. Meta Ads are completely excluded from /social-comments/posts.
+    6. Comment counts remain strictly scoped to each individual post.
+    """
+    now = datetime.now(timezone.utc)
+
+    # 1. Create Facebook and Instagram accounts with identical names
+    fb_acc = SocialAccount(
+        user_id=test_user.id,
+        platform="facebook",
+        account_id="fb_page_isolation_101",
+        account_name="Sensationz Performing Arts",
+        status="CONNECTED",
+        access_token=encrypt_token("EAAB_test_fb_token")
+    )
+    ig_acc = SocialAccount(
+        user_id=test_user.id,
+        platform="instagram",
+        account_id="ig_acc_isolation_202",
+        account_name="Sensationz Performing Arts",
+        status="CONNECTED",
+        access_token=encrypt_token("EAAB_test_ig_token")
+    )
+    db_session.add_all([fb_acc, ig_acc])
+    db_session.commit()
+    db_session.refresh(fb_acc)
+    db_session.refresh(ig_acc)
+
+    # 2. Cross-published Post (exists on FB as 'fb_cross_999' and IG as 'ig_cross_888')
+    post_cross = Post(
+        user_id=test_user.id,
+        brand_id=1,
+        title="Cross Published Post",
+        caption="Dance rehearsals live session",
+        fb_post_id="fb_cross_999",
+        ig_media_id="ig_cross_888",
+        status="PUBLISHED"
+    )
+    # Standalone FB Post
+    post_fb_only = Post(
+        user_id=test_user.id,
+        brand_id=1,
+        title="FB Exclusive Post",
+        caption="Facebook workshop announcement",
+        fb_post_id="fb_standalone_777",
+        status="PUBLISHED"
+    )
+    # Standalone IG Post
+    post_ig_only = Post(
+        user_id=test_user.id,
+        brand_id=1,
+        title="IG Exclusive Reel",
+        caption="Instagram behind the scenes reel",
+        ig_media_id="ig_standalone_666",
+        status="PUBLISHED"
+    )
+    db_session.add_all([post_cross, post_fb_only, post_ig_only])
+    db_session.commit()
+
+    # 3. Create comments for FB cross-post (3 comments)
+    for i in range(3):
+        c = SocialComment(
+            user_id=test_user.id,
+            social_account_id=fb_acc.id,
+            platform="facebook",
+            external_comment_id=f"c_fb_cross_{i}",
+            external_post_id="fb_cross_999",
+            comment_text=f"FB comment {i}",
+            event_timestamp=now + timedelta(minutes=i),
+            webhook_object="page"
+        )
+        db_session.add(c)
+
+    # Create comments for IG cross-post (2 comments)
+    for i in range(2):
+        c = SocialComment(
+            user_id=test_user.id,
+            social_account_id=ig_acc.id,
+            platform="instagram",
+            external_comment_id=f"c_ig_cross_{i}",
+            external_post_id="ig_cross_888",
+            comment_text=f"IG comment {i}",
+            event_timestamp=now + timedelta(minutes=i),
+            webhook_object="instagram"
+        )
+        db_session.add(c)
+
+    # Create comments for Standalone FB Post (1 comment)
+    c_fb_solo = SocialComment(
+        user_id=test_user.id,
+        social_account_id=fb_acc.id,
+        platform="facebook",
+        external_comment_id="c_fb_solo_1",
+        external_post_id="fb_standalone_777",
+        comment_text="FB standalone comment",
+        event_timestamp=now,
+        webhook_object="page"
+    )
+    db_session.add(c_fb_solo)
+
+    # Create comments for Standalone IG Post (4 comments)
+    for i in range(4):
+        c = SocialComment(
+            user_id=test_user.id,
+            social_account_id=ig_acc.id,
+            platform="instagram",
+            external_comment_id=f"c_ig_solo_{i}",
+            external_post_id="ig_standalone_666",
+            comment_text=f"IG standalone comment {i}",
+            event_timestamp=now + timedelta(minutes=i),
+            webhook_object="instagram"
+        )
+        db_session.add(c)
+
+    # Create Meta Ad with comment
+    ad_item = MetaAd(
+        user_id=test_user.id,
+        meta_ad_account_id="act_iso_999",
+        meta_ad_id="ad_iso_555",
+        name="Iso Test Ad Campaign",
+        facebook_post_id="fb_ad_post_444",
+        effective_status="ACTIVE"
+    )
+    db_session.add(ad_item)
+    db_session.commit()
+    db_session.refresh(ad_item)
+
+    c_ad = SocialComment(
+        user_id=test_user.id,
+        social_account_id=fb_acc.id,
+        meta_ad_id=ad_item.id,
+        platform="facebook",
+        external_comment_id="c_ad_1",
+        external_post_id="fb_ad_post_444",
+        comment_text="Ad comment text",
+        event_timestamp=now,
+        webhook_object="page"
+    )
+    db_session.add(c_ad)
+    db_session.commit()
+
+    # TEST 1: Query with social_account_id = ig_acc.id (Instagram)
+    res_ig = client.get(f"/api/v1/social-comments/posts?social_account_id={ig_acc.id}", headers=auth_headers)
+    assert res_ig.status_code == 200
+    posts_ig = res_ig.json()
+    assert len(posts_ig) == 2
+    # Ensure ALL returned posts are Instagram and contain no Facebook posts
+    for p in posts_ig:
+        assert p["platform"] == "instagram"
+        assert p["social_account_id"] == ig_acc.id
+        assert p["external_post_id"] in ("ig_cross_888", "ig_standalone_666")
+        assert "fb" not in p["external_post_id"]
+    ig_pids = {p["external_post_id"]: p["top_level_comment_count"] for p in posts_ig}
+    assert ig_pids["ig_cross_888"] == 2
+    assert ig_pids["ig_standalone_666"] == 4
+
+    # TEST 2: Query with social_account_id = fb_acc.id (Facebook)
+    res_fb = client.get(f"/api/v1/social-comments/posts?social_account_id={fb_acc.id}", headers=auth_headers)
+    assert res_fb.status_code == 200
+    posts_fb = res_fb.json()
+    assert len(posts_fb) == 2
+    # Ensure ALL returned posts are Facebook and contain no Instagram posts
+    for p in posts_fb:
+        assert p["platform"] == "facebook"
+        assert p["social_account_id"] == fb_acc.id
+        assert p["external_post_id"] in ("fb_cross_999", "fb_standalone_777")
+        assert "ig" not in p["external_post_id"]
+    fb_pids = {p["external_post_id"]: p["top_level_comment_count"] for p in posts_fb}
+    assert fb_pids["fb_cross_999"] == 3
+    assert fb_pids["fb_standalone_777"] == 1
+
+    # TEST 3: Query without social_account_id (All Connected Accounts)
+    res_all = client.get("/api/v1/social-comments/posts", headers=auth_headers)
+    assert res_all.status_code == 200
+    posts_all = res_all.json()
+    # Should contain the 2 FB representations + 2 IG representations (plus previous fixture posts if any)
+    all_pids = {p["external_post_id"] for p in posts_all}
+    assert "fb_cross_999" in all_pids
+    assert "ig_cross_888" in all_pids
+    assert "fb_standalone_777" in all_pids
+    assert "ig_standalone_666" in all_pids
+    # Meta Ad post MUST NOT be returned in /posts
+    assert "fb_ad_post_444" not in all_pids
+
+
+
