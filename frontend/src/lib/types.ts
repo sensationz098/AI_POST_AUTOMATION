@@ -157,6 +157,7 @@ export interface SocialCommentReply {
   error_message?: string;
   external_reply_id?: string;
   created_at: string;
+  event_timestamp?: string;
   commenter_name?: string | null;
   commenter_id?: string | null;
   source?: 'owner' | 'meta' | string;
