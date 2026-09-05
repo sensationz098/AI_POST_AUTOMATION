@@ -11,8 +11,8 @@ export interface FacebookPostPreviewProps {
   cta?: string;
   imageUrl?: string;
   mediaType?: string;
-  accountName?: string;
-  accountAvatar?: string;
+  accountName?: string | null;
+  accountAvatar?: string | null;
   publishedAt?: string;
   permalink?: string;
   likeCount?: number;

@@ -31,6 +31,8 @@ interface PostDetails {
   platform?: string;
   published_at?: string;
   permalink?: string;
+  account_name?: string;
+  account_avatar?: string;
 }
 
 export default function PostCommentsPage() {
@@ -162,6 +164,11 @@ export default function PostCommentsPage() {
   const hasMoreComments = comments.length < effectiveTotalCount;
   const isIg = post?.platform?.toLowerCase().includes('instagram');
 
+  // Resolve real connected account identity from post metadata or comments account context
+  const accountFromComment = comments.find((c) => c.account && (c.account.account_name || c.account.username || c.account.display_name))?.account;
+  const resolvedAccountName = post?.account_name || accountFromComment?.account_name || accountFromComment?.username || accountFromComment?.display_name;
+  const resolvedAccountAvatar = post?.account_avatar || accountFromComment?.logo_url;
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 text-slate-100 font-sans">
       {/* Top Header & Breadcrumb Navigation */}
@@ -223,12 +230,12 @@ export default function PostCommentsPage() {
             <div className="lg:sticky lg:top-6 space-y-4">
               {/* Platform & Source Card Header */}
               <div className="flex items-center justify-between px-1">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex-shrink-0">
                     Published Post
                   </span>
                   <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                    className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase flex-shrink-0 ${
                       isIg
                         ? 'bg-pink-950/90 text-pink-300 border border-pink-800/80'
                         : 'bg-blue-950/90 text-blue-300 border border-blue-800/80'
@@ -242,7 +249,7 @@ export default function PostCommentsPage() {
                     href={post.permalink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center space-x-1"
+                    className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center space-x-1 flex-shrink-0"
                   >
                     <span>Open on {isIg ? 'Instagram' : 'Facebook'}</span>
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -253,6 +260,8 @@ export default function PostCommentsPage() {
               {/* Native Social Post Preview Component */}
               <SocialPostPreview
                 platform={post.platform || 'facebook'}
+                accountName={resolvedAccountName}
+                accountAvatar={resolvedAccountAvatar}
                 caption={post.caption || post.title}
                 imageUrl={post.image_url}
                 mediaType={post.media_type}
@@ -265,6 +274,14 @@ export default function PostCommentsPage() {
 
               {/* Post Metadata Summary */}
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-xs text-slate-400 space-y-2 shadow-sm">
+                {resolvedAccountName && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Account:</span>
+                    <span className="font-semibold text-slate-200 text-[11px] truncate max-w-[200px]">
+                      {resolvedAccountName}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500 font-medium">Post ID:</span>
                   <span className="font-mono text-slate-300 text-[11px] truncate max-w-[200px]">
