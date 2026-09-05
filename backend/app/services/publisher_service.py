@@ -178,6 +178,63 @@ class PublishingEngine:
                     raise Exception(f"Unsupported platform: {acc.platform}")
 
                 publishing_repo.update_job_status(thread_db, job_id, JobStatus.SUCCESS.value, external_post_id=ext_id)
+                
+                # Fetch and persist real canonical permalink
+                try:
+                    token = decrypt_token(acc.access_token) or acc.access_token
+                    if acc.platform == "instagram":
+                        media_info = meta_service.fetch_instagram_media_info(ext_id, token)
+                        if media_info and isinstance(media_info, dict) and media_info.get("permalink"):
+                            real_permalink = media_info.get("permalink")
+                            from app.models.external_post_context import ExternalPostContext
+                            ext_ctx = thread_db.query(ExternalPostContext).filter(
+                                ExternalPostContext.external_post_id == ext_id
+                            ).first()
+                            if not ext_ctx:
+                                ext_ctx = ExternalPostContext(
+                                    platform="instagram",
+                                    social_account_id=acc.id,
+                                    external_post_id=ext_id,
+                                    caption=caption,
+                                    media_type=resolved_media_type or ("VIDEO" if is_video else "IMAGE"),
+                                    media_url=public_media_url,
+                                    thumbnail_url=thumbnail_url or public_media_url,
+                                    permalink=real_permalink,
+                                    status="ACTIVE",
+                                    metadata_json=media_info
+                                )
+                                thread_db.add(ext_ctx)
+                            else:
+                                ext_ctx.permalink = real_permalink
+                            thread_db.commit()
+                    elif acc.platform == "facebook":
+                        post_info = meta_service.fetch_facebook_post_info(ext_id, token)
+                        if post_info and isinstance(post_info, dict) and post_info.get("permalink_url"):
+                            real_permalink = post_info.get("permalink_url")
+                            from app.models.external_post_context import ExternalPostContext
+                            ext_ctx = thread_db.query(ExternalPostContext).filter(
+                                ExternalPostContext.external_post_id == ext_id
+                            ).first()
+                            if not ext_ctx:
+                                ext_ctx = ExternalPostContext(
+                                    platform="facebook",
+                                    social_account_id=acc.id,
+                                    external_post_id=ext_id,
+                                    caption=caption,
+                                    media_type=resolved_media_type or ("VIDEO" if is_video else "IMAGE"),
+                                    media_url=public_media_url,
+                                    thumbnail_url=thumbnail_url or public_media_url,
+                                    permalink=real_permalink,
+                                    status="ACTIVE",
+                                    metadata_json=post_info
+                                )
+                                thread_db.add(ext_ctx)
+                            else:
+                                ext_ctx.permalink = real_permalink
+                            thread_db.commit()
+                except Exception as permalink_err:
+                    logger.warning(f"[PUBLISH_TRACE] Could not resolve permalink for {acc.platform} post {ext_id}: {permalink_err}")
+
                 elapsed = round(time.time() - start_time, 2)
                 logger.info(f"[PUBLISH_TRACE] PUBLISH_JOB_SUCCESS | batch_id={batch_id} | job_id={job_id} | platform={acc.platform} | external_id={ext_id} | elapsed={elapsed}s")
                 return {"job_id": job_id, "status": "SUCCESS", "external_id": ext_id}

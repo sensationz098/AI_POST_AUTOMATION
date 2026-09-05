@@ -37,10 +37,12 @@ function ViewPostButton({ post }: { post: SocialPost }) {
   }, []);
 
   const fbUrl = post.fb_post_url || (post.fb_post_id ? `https://www.facebook.com/${post.fb_post_id}` : null);
-  const igUrl = post.ig_media_url || (post.ig_media_id ? `https://www.instagram.com/p/${post.ig_media_id}` : null);
+  const igUrl = (post.ig_media_url && (post.ig_media_url.startsWith('http://') || post.ig_media_url.startsWith('https://')))
+    ? post.ig_media_url
+    : null;
 
   const hasFb = Boolean(fbUrl && post.fb_post_id);
-  const hasIg = Boolean(igUrl && post.ig_media_id);
+  const hasIg = Boolean(igUrl);
 
   if (!hasFb && !hasIg) {
     return null;

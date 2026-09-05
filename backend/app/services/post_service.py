@@ -208,13 +208,65 @@ class PostService:
             contexts = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id.in_(all_ids)).all()
             ctx_map = {c.external_post_id: c for c in contexts}
 
+        # Lazy resolve missing Instagram permalinks via Meta API if jobs / social accounts exist
+        unresolved_ig_ids = [ig_id for ig_id in ig_ids if not (ctx_map.get(ig_id) and ctx_map[ig_id].permalink)]
+        if unresolved_ig_ids:
+            from sqlalchemy.orm import joinedload
+            from app.core.security_encryption import decrypt_token
+            unresolved_jobs = (
+                db.query(PublishingJob)
+                .options(joinedload(PublishingJob.social_account))
+                .filter(
+                    PublishingJob.platform == "instagram",
+                    PublishingJob.external_post_id.in_(unresolved_ig_ids),
+                    PublishingJob.status == JobStatus.SUCCESS.value
+                )
+                .all()
+            )
+            has_new_contexts = False
+            for job in unresolved_jobs:
+                ig_id = job.external_post_id
+                if not ig_id or (ctx_map.get(ig_id) and ctx_map[ig_id].permalink):
+                    continue
+                social_acc = job.social_account
+                if not social_acc or not social_acc.access_token:
+                    continue
+                try:
+                    raw_token = decrypt_token(social_acc.access_token) or social_acc.access_token
+                    meta_info = meta_service.fetch_instagram_media_info(ig_id, raw_token)
+                    if meta_info and meta_info.get("permalink"):
+                        canonical_url = meta_info["permalink"]
+                        existing_ctx = ctx_map.get(ig_id)
+                        if existing_ctx:
+                            existing_ctx.permalink = canonical_url
+                            ctx_record = existing_ctx
+                        else:
+                            ctx_record = ExternalPostContext(
+                                external_post_id=ig_id,
+                                social_account_id=social_acc.id,
+                                platform="instagram",
+                                permalink=canonical_url
+                            )
+                            db.add(ctx_record)
+                        has_new_contexts = True
+                        ctx_map[ig_id] = ctx_record
+                except Exception as ex:
+                    logger.warning(f"[POST_ENRICHMENT] Lazy IG permalink resolution failed for media_id={ig_id}: {ex}")
+
+            if has_new_contexts:
+                try:
+                    db.commit()
+                except Exception as c_err:
+                    db.rollback()
+                    logger.warning(f"[POST_ENRICHMENT] DB commit failed after resolving IG permalinks: {c_err}")
+
         t2 = time.perf_counter()
 
         # 3. Resolve fb_post_url and ig_media_url in memory
         for p in posts:
             if p.fb_post_id:
                 ctx = ctx_map.get(p.fb_post_id)
-                if ctx and ctx.permalink:
+                if ctx and ctx.permalink and (ctx.permalink.startswith("http://") or ctx.permalink.startswith("https://")):
                     setattr(p, "fb_post_url", ctx.permalink)
                 else:
                     setattr(p, "fb_post_url", f"https://www.facebook.com/{p.fb_post_id}")
@@ -223,10 +275,11 @@ class PostService:
 
             if p.ig_media_id:
                 ctx = ctx_map.get(p.ig_media_id)
-                if ctx and ctx.permalink:
+                if ctx and ctx.permalink and (ctx.permalink.startswith("http://") or ctx.permalink.startswith("https://")):
                     setattr(p, "ig_media_url", ctx.permalink)
                 else:
-                    setattr(p, "ig_media_url", f"https://www.instagram.com/p/{p.ig_media_id}")
+                    # Never fabricate invalid /p/{ig_media_id} URLs from numeric media IDs
+                    setattr(p, "ig_media_url", None)
             else:
                 setattr(p, "ig_media_url", None)
 
