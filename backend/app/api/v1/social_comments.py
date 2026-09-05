@@ -91,14 +91,16 @@ def _resolve_post_permalink(ext_pid: Optional[str], platform: str, db: Session, 
             ig_mid = local_post.ig_media_id.strip()
             if ctx_map is not None:
                 ctx = ctx_map.get(ig_mid)
-                if ctx and ctx.permalink:
+                if ctx and ctx.permalink and (ctx.permalink.startswith("http://") or ctx.permalink.startswith("https://")):
                     return ctx.permalink
             else:
                 from app.models.external_post_context import ExternalPostContext
                 ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == ig_mid).first()
-                if ctx and ctx.permalink:
+                if ctx and ctx.permalink and (ctx.permalink.startswith("http://") or ctx.permalink.startswith("https://")):
                     return ctx.permalink
-            return f"https://www.instagram.com/p/{ig_mid}"
+            if ig_mid.startswith("http://") or ig_mid.startswith("https://"):
+                return ig_mid
+            return None
 
     if not ext_pid or not ext_pid.strip():
         return None
@@ -106,18 +108,22 @@ def _resolve_post_permalink(ext_pid: Optional[str], platform: str, db: Session, 
     clean_pid = ext_pid.strip()
     if ctx_map is not None:
         ctx = ctx_map.get(clean_pid)
-        if ctx and ctx.permalink:
+        if ctx and ctx.permalink and (ctx.permalink.startswith("http://") or ctx.permalink.startswith("https://")):
             return ctx.permalink
     else:
         from app.models.external_post_context import ExternalPostContext
         ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == clean_pid).first()
-        if ctx and ctx.permalink:
+        if ctx and ctx.permalink and (ctx.permalink.startswith("http://") or ctx.permalink.startswith("https://")):
             return ctx.permalink
 
     if "facebook" in c_platform:
+        if clean_pid.startswith("http://") or clean_pid.startswith("https://"):
+            return clean_pid
         return f"https://www.facebook.com/{clean_pid}"
     elif "instagram" in c_platform:
-        return f"https://www.instagram.com/p/{clean_pid}"
+        if clean_pid.startswith("http://") or clean_pid.startswith("https://"):
+            return clean_pid
+        return None
 
     return None
 
