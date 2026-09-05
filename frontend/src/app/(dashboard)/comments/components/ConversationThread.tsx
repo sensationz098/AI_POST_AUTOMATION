@@ -262,6 +262,8 @@ export default function ConversationThread({
         <div className="pt-2">
           <ReplyComposer
             commentId={comment.id}
+            authoritativeAccount={comment.account}
+            platform={comment.platform}
             onSuccess={(newReply) => {
               setIsReplying(false);
               if (onReplyAdded) onReplyAdded(comment.id, newReply);
