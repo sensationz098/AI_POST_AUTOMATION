@@ -9,6 +9,8 @@ interface MetricsProps {
   totalInteractions: number;
   unrepliedCount?: number;
   repliedCount?: number;
+  title?: string;
+  subtitle?: string;
   label?: string;
   loading?: boolean;
 }
@@ -19,6 +21,8 @@ export default function EngagementMetricsBar({
   totalInteractions,
   unrepliedCount,
   repliedCount,
+  title,
+  subtitle,
   label = 'Scoped Engagement Overview',
   loading = false,
 }: MetricsProps) {
@@ -32,14 +36,19 @@ export default function EngagementMetricsBar({
     );
   }
 
+  const displayTitle = title || label || 'Account-Level Engagement Metrics';
+  const displaySubtitle = subtitle !== undefined ? subtitle : (title ? undefined : 'Scoped by Account Selector');
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between text-xs text-slate-400 font-semibold px-0.5">
         <span className="uppercase tracking-wider text-[11px] text-slate-400 font-bold flex items-center space-x-1.5">
           <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-          <span>Account-Level Engagement Metrics</span>
+          <span>{displayTitle}</span>
         </span>
-        <span className="text-[10px] text-slate-500 font-mono">Scoped by Account Selector</span>
+        {displaySubtitle && (
+          <span className="text-[10px] text-slate-500 font-mono">{displaySubtitle}</span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

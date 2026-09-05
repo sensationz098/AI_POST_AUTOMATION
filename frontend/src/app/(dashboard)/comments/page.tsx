@@ -26,12 +26,30 @@ import ContextualEmptyState from './components/ContextualEmptyState';
 import { FeedLoadingView, PostSkeleton, MetricsSkeleton } from './components/LoadingSkeletons';
 
 interface OverviewMetrics {
+  scope?: string;
   top_level_comment_count: number;
   reply_count: number;
   total_interaction_count: number;
   total_comments: number;
   total_ad_comments: number;
   total_post_comments: number;
+  post_reply_count?: number;
+  ad_reply_count?: number;
+  posts_metrics?: {
+    top_level_comment_count: number;
+    reply_count: number;
+    total_interaction_count: number;
+  };
+  ads_metrics?: {
+    top_level_comment_count: number;
+    reply_count: number;
+    total_interaction_count: number;
+  };
+  all_metrics?: {
+    top_level_comment_count: number;
+    reply_count: number;
+    total_interaction_count: number;
+  };
   recent_ads: Array<{
     id: number;
     name: string;
@@ -387,12 +405,48 @@ export default function EngagementDashboardPage() {
       )}
 
       {/* 2. Contextual Engagement Metrics Bar */}
-      <EngagementMetricsBar
-        topLevelCount={overview?.top_level_comment_count ?? overview?.total_post_comments ?? 0}
-        replyCount={overview?.reply_count ?? 0}
-        totalInteractions={overview?.total_interaction_count ?? 0}
-        loading={loadingOverview}
-      />
+      {(() => {
+        const activeMetrics = activeTab === 'posts'
+          ? (overview?.posts_metrics ?? {
+              top_level_comment_count: overview?.total_post_comments ?? 0,
+              reply_count: overview?.post_reply_count ?? 0,
+              total_interaction_count: (overview?.total_post_comments ?? 0) + (overview?.post_reply_count ?? 0)
+            })
+          : activeTab === 'ads'
+          ? (overview?.ads_metrics ?? {
+              top_level_comment_count: overview?.total_ad_comments ?? 0,
+              reply_count: overview?.ad_reply_count ?? 0,
+              total_interaction_count: (overview?.total_ad_comments ?? 0) + (overview?.ad_reply_count ?? 0)
+            })
+          : (overview?.all_metrics ?? {
+              top_level_comment_count: overview?.top_level_comment_count ?? 0,
+              reply_count: overview?.reply_count ?? 0,
+              total_interaction_count: overview?.total_interaction_count ?? 0
+            });
+
+        const metricsTitle = activeTab === 'posts'
+          ? 'POST CONVERSATION METRICS'
+          : activeTab === 'ads'
+          ? 'AD CONVERSATION METRICS'
+          : 'ACCOUNT-LEVEL ENGAGEMENT METRICS';
+
+        const metricsSubtitle = activeTab === 'posts'
+          ? 'Scoped to Organic Posts'
+          : activeTab === 'ads'
+          ? 'Scoped to Meta Ads'
+          : 'Scoped by Account Selector';
+
+        return (
+          <EngagementMetricsBar
+            title={metricsTitle}
+            subtitle={metricsSubtitle}
+            topLevelCount={activeMetrics.top_level_comment_count}
+            replyCount={activeMetrics.reply_count}
+            totalInteractions={activeMetrics.total_interaction_count}
+            loading={loadingOverview}
+          />
+        );
+      })()}
 
       {/* 3. Engagement Filter & Navigation Bar */}
       <EngagementFilterBar

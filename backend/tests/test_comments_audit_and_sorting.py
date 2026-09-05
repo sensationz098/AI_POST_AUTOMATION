@@ -522,3 +522,161 @@ def test_ad_and_post_endpoints_sort_order(db_session: Session, test_user: User, 
     ad_comments_asc = res_ad_asc.json()["comments"]
     assert ad_comments_asc[0]["external_comment_id"] == "ad_c_early"
     assert ad_comments_asc[1]["external_comment_id"] == "ad_c_late"
+
+
+def test_engagement_metrics_scoping_posts_ads_and_all(db_session: Session, test_user: User, test_accounts, auth_headers):
+    """
+    Verify engagement overview metrics are accurately scoped for:
+    1. Organic posts (excludes ads)
+    2. Meta ads (excludes organic posts)
+    3. All (combines both)
+    4. Account filtering
+    5. Top-level vs replies distinction
+    """
+    acc1 = test_accounts["acc1"]
+    acc2 = test_accounts["acc2"]
+    now = datetime.now(timezone.utc)
+
+    # 1. Create 2 Organic Posts comments on acc1
+    post1_c1 = SocialComment(
+        user_id=test_user.id,
+        social_account_id=acc1.id,
+        platform="facebook",
+        external_comment_id="p1_c1",
+        external_post_id="post_1001",
+        comment_text="Organic post 1 comment 1",
+        event_timestamp=now,
+        webhook_object="page"
+    )
+    post1_c2 = SocialComment(
+        user_id=test_user.id,
+        social_account_id=acc1.id,
+        platform="facebook",
+        external_comment_id="p1_c2",
+        external_post_id="post_1001",
+        comment_text="Organic post 1 comment 2",
+        event_timestamp=now + timedelta(minutes=5),
+        webhook_object="page"
+    )
+    # 1 Organic Post comment on acc2
+    post2_c1 = SocialComment(
+        user_id=test_user.id,
+        social_account_id=acc2.id,
+        platform="facebook",
+        external_comment_id="p2_c1",
+        external_post_id="post_2001",
+        comment_text="Organic post 2 comment 1",
+        event_timestamp=now + timedelta(minutes=10),
+        webhook_object="page"
+    )
+    db_session.add_all([post1_c1, post1_c2, post2_c1])
+    db_session.commit()
+    db_session.refresh(post1_c1)
+    db_session.refresh(post1_c2)
+
+    # 1 Meta child reply to post1_c1
+    post1_r1 = SocialComment(
+        user_id=test_user.id,
+        social_account_id=acc1.id,
+        platform="facebook",
+        external_comment_id="p1_r1",
+        parent_comment_id="p1_c1",
+        external_post_id="post_1001",
+        comment_text="Customer reply on organic post",
+        event_timestamp=now + timedelta(minutes=15),
+        webhook_object="page"
+    )
+    # 1 Owner reply to post1_c2
+    post1_owner_reply = SocialCommentReply(
+        comment_id=post1_c2.id,
+        user_id=test_user.id,
+        platform="facebook",
+        external_reply_id="p1_own_r1",
+        message="Brand reply on organic post",
+        status="SUCCESS"
+    )
+    db_session.add_all([post1_r1, post1_owner_reply])
+    db_session.commit()
+
+    # 2. Create 1 Meta Ad on acc1 with 1 comment and 1 reply
+    ad1 = MetaAd(
+        user_id=test_user.id,
+        meta_ad_account_id="act_555",
+        meta_ad_id="ad_55501",
+        name="Summer Ad 1",
+        facebook_page_id=acc1.account_id
+    )
+    db_session.add(ad1)
+    db_session.commit()
+    db_session.refresh(ad1)
+
+    ad1_c1 = SocialComment(
+        user_id=test_user.id,
+        social_account_id=acc1.id,
+        meta_ad_id=ad1.id,
+        platform="facebook",
+        external_comment_id="ad1_c1",
+        comment_text="Ad 1 comment 1",
+        event_timestamp=now + timedelta(minutes=20),
+        webhook_object="ad_comment"
+    )
+    db_session.add(ad1_c1)
+    db_session.commit()
+    db_session.refresh(ad1_c1)
+
+    ad1_r1 = SocialComment(
+        user_id=test_user.id,
+        social_account_id=acc1.id,
+        meta_ad_id=ad1.id,
+        platform="facebook",
+        external_comment_id="ad1_r1",
+        parent_comment_id="ad1_c1",
+        comment_text="Ad 1 customer reply",
+        event_timestamp=now + timedelta(minutes=25),
+        webhook_object="ad_comment"
+    )
+    db_session.add(ad1_r1)
+    db_session.commit()
+
+    # Query 1: Overview with scope=posts (All Accounts)
+    # Expect: 3 top-level organic (2 on acc1 + 1 on acc2), 2 organic replies (1 meta + 1 owner)
+    res_posts = client.get("/api/v1/social-comments/overview?scope=posts", headers=auth_headers)
+    assert res_posts.status_code == 200
+    data_posts = res_posts.json()
+    assert data_posts["top_level_comment_count"] == 3
+    assert data_posts["reply_count"] == 2
+    assert data_posts["total_interaction_count"] == 5
+    assert data_posts["posts_metrics"]["top_level_comment_count"] == 3
+    assert data_posts["posts_metrics"]["reply_count"] == 2
+
+    # Query 2: Overview with scope=ads (All Accounts)
+    # Expect: 1 top-level ad comment, 1 ad reply
+    res_ads = client.get("/api/v1/social-comments/overview?scope=ads", headers=auth_headers)
+    assert res_ads.status_code == 200
+    data_ads = res_ads.json()
+    assert data_ads["top_level_comment_count"] == 1
+    assert data_ads["reply_count"] == 1
+    assert data_ads["total_interaction_count"] == 2
+    assert data_ads["ads_metrics"]["top_level_comment_count"] == 1
+    assert data_ads["ads_metrics"]["reply_count"] == 1
+
+    # Query 3: Overview with scope=all (All Accounts)
+    # Expect: 4 top-level comments (3 organic + 1 ad), 3 replies (2 organic + 1 ad), total = 7
+    res_all = client.get("/api/v1/social-comments/overview?scope=all", headers=auth_headers)
+    assert res_all.status_code == 200
+    data_all = res_all.json()
+    assert data_all["top_level_comment_count"] == 4
+    assert data_all["reply_count"] == 3
+    assert data_all["total_interaction_count"] == 7
+    assert data_all["all_metrics"]["top_level_comment_count"] == 4
+    assert data_all["all_metrics"]["reply_count"] == 3
+
+    # Query 4: Overview with account filter (acc1 only)
+    # On acc1: 2 organic posts + 1 ad = 3 top-level, 2 organic replies + 1 ad reply = 3 replies
+    res_acc1_posts = client.get(f"/api/v1/social-comments/overview?scope=posts&social_account_id={acc1.id}", headers=auth_headers)
+    assert res_acc1_posts.status_code == 200
+    data_acc1_posts = res_acc1_posts.json()
+    assert data_acc1_posts["top_level_comment_count"] == 2
+    assert data_acc1_posts["reply_count"] == 2
+    assert data_acc1_posts["total_interaction_count"] == 4
+

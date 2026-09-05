@@ -207,6 +207,8 @@ export default function AdCommentsPage() {
 
           {/* Scoped Metrics Bar */}
           <EngagementMetricsBar
+            title="AD CONVERSATION METRICS"
+            subtitle="Scoped to this Meta Ad"
             topLevelCount={topLevelCount}
             replyCount={replyCount}
             totalInteractions={totalInteractions}
