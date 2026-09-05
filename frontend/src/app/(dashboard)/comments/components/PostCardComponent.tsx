@@ -8,6 +8,8 @@ interface PostCardProps {
   post: {
     id: number | string;
     external_post_id: string;
+    social_account_id?: number;
+    account_name?: string;
     title: string;
     caption?: string;
     image_url?: string;
