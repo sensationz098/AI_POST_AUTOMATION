@@ -409,7 +409,7 @@ export default function OrganicCommentsPage() {
                 key={`${post.platform}_${post.external_post_id || post.id}`}
                 post={post}
                 selectedAccountId={selectedAccountId}
-                accountName={selectedAccountObj?.account_name || post.account_name}
+                accountName={post.account_name}
               />
             ))}
           </div>

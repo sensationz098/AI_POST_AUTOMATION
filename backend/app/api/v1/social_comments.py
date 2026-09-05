@@ -1031,6 +1031,200 @@ def get_comments_for_specific_ad(
     }
 
 
+def _resolve_authoritative_post_owner(
+    db: Session,
+    user_id: int,
+    ext_pid: Optional[str] = None,
+    platform_hint: Optional[str] = None,
+    local_post: Optional[Any] = None,
+    account_map_by_id: Optional[dict] = None,
+    account_map_by_meta_id: Optional[dict] = None,
+    job_map_by_ext_id: Optional[dict] = None,
+    job_map_by_post_and_plat: Optional[dict] = None,
+    ctx_map_by_ext_id: Optional[dict] = None,
+    comment_acc_id_map: Optional[dict] = None
+) -> dict:
+    """
+    Determines the authoritative SocialAccount and publishing platform that actually owns/published a post.
+    Strictly follows evidence priority:
+    1. Successful PublishingJob / PublishingBatch relationship to the local Post.
+    2. ExternalPostContext.social_account_id + platform.
+    3. SocialComment.social_account_id + platform for comments on that post.
+    4. Facebook compound external ID (<facebook_page_id>_<facebook_post_id>) matching SocialAccount.account_id.
+    5. Post/brand relationship ONLY when it unambiguously identifies the exact connected SocialAccount for the platform.
+    
+    Returns:
+    {
+        "social_account_id": Optional[int],
+        "account_name": Optional[str],
+        "account_avatar": Optional[str],
+        "platform": str  # "facebook" or "instagram"
+    }
+    """
+    from app.models.publishing_batch import PublishingBatch, PublishingJob, JobStatus
+    from app.models.external_post_context import ExternalPostContext
+    from app.models.social_comment import SocialComment
+    from app.models.social_account import SocialAccount
+
+    clean_pid = str(ext_pid).strip() if ext_pid else None
+    plat_hint = (platform_hint or "").lower().strip() if platform_hint else None
+
+    # Tier 1: Check PublishingJob for local_post or ext_pid
+    if local_post and plat_hint and job_map_by_post_and_plat and (local_post.id, plat_hint) in job_map_by_post_and_plat:
+        job = job_map_by_post_and_plat[(local_post.id, plat_hint)]
+        job_acc = account_map_by_id.get(job.social_account_id) if account_map_by_id else db.query(SocialAccount).filter(SocialAccount.id == job.social_account_id).first()
+        if job_acc:
+            return {
+                "social_account_id": job_acc.id,
+                "account_name": job_acc.account_name,
+                "account_avatar": job_acc.logo_url,
+                "platform": (job.platform or job_acc.platform or plat_hint or "facebook").lower()
+            }
+
+    if clean_pid and job_map_by_ext_id and clean_pid in job_map_by_ext_id:
+        job = job_map_by_ext_id[clean_pid]
+        job_acc = account_map_by_id.get(job.social_account_id) if account_map_by_id else db.query(SocialAccount).filter(SocialAccount.id == job.social_account_id).first()
+        if job_acc:
+            return {
+                "social_account_id": job_acc.id,
+                "account_name": job_acc.account_name,
+                "account_avatar": job_acc.logo_url,
+                "platform": (job.platform or job_acc.platform or "facebook").lower()
+            }
+
+    if local_post and not job_map_by_post_and_plat:
+        job_q = db.query(PublishingJob).join(
+            PublishingBatch, PublishingJob.batch_id == PublishingBatch.id
+        ).filter(
+            PublishingBatch.post_id == local_post.id,
+            PublishingJob.status == JobStatus.SUCCESS.value
+        )
+        if plat_hint:
+            job_q = job_q.filter(PublishingJob.platform == plat_hint)
+        if clean_pid:
+            job_q = job_q.filter(PublishingJob.external_post_id == clean_pid)
+        job = job_q.first()
+        if job:
+            job_acc = account_map_by_id.get(job.social_account_id) if account_map_by_id else db.query(SocialAccount).filter(SocialAccount.id == job.social_account_id).first()
+            if job_acc:
+                return {
+                    "social_account_id": job_acc.id,
+                    "account_name": job_acc.account_name,
+                    "account_avatar": job_acc.logo_url,
+                    "platform": (job.platform or job_acc.platform or "facebook").lower()
+                }
+
+    if clean_pid and not job_map_by_ext_id:
+        job = db.query(PublishingJob).filter(
+            PublishingJob.external_post_id == clean_pid,
+            PublishingJob.status == JobStatus.SUCCESS.value
+        ).first()
+        if job:
+            job_acc = account_map_by_id.get(job.social_account_id) if account_map_by_id else db.query(SocialAccount).filter(SocialAccount.id == job.social_account_id).first()
+            if job_acc:
+                return {
+                    "social_account_id": job_acc.id,
+                    "account_name": job_acc.account_name,
+                    "account_avatar": job_acc.logo_url,
+                    "platform": (job.platform or job_acc.platform or "facebook").lower()
+                }
+
+    # Tier 2: Check ExternalPostContext
+    if clean_pid:
+        ctx = None
+        if ctx_map_by_ext_id and clean_pid in ctx_map_by_ext_id:
+            ctx = ctx_map_by_ext_id[clean_pid]
+        elif not ctx_map_by_ext_id:
+            ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == clean_pid).first()
+            if not ctx and "_" in clean_pid:
+                ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == clean_pid.split("_", 1)[1]).first()
+        if ctx and ctx.social_account_id:
+            ctx_acc = account_map_by_id.get(ctx.social_account_id) if account_map_by_id else (ctx.social_account or db.query(SocialAccount).filter(SocialAccount.id == ctx.social_account_id).first())
+            if ctx_acc:
+                return {
+                    "social_account_id": ctx_acc.id,
+                    "account_name": ctx_acc.account_name,
+                    "account_avatar": ctx_acc.logo_url,
+                    "platform": (ctx.platform or ctx_acc.platform or "facebook").lower()
+                }
+
+    # Tier 3: Check SocialComment records
+    if clean_pid:
+        c_acc_id = None
+        if comment_acc_id_map and clean_pid in comment_acc_id_map:
+            c_acc_id = comment_acc_id_map[clean_pid]
+        elif not comment_acc_id_map:
+            c_sample = db.query(SocialComment).filter(
+                SocialComment.user_id == user_id,
+                SocialComment.external_post_id == clean_pid,
+                SocialComment.social_account_id.isnot(None),
+                SocialComment.is_deleted.isnot(True)
+            ).first()
+            if c_sample:
+                c_acc_id = c_sample.social_account_id
+        if c_acc_id:
+            c_acc = account_map_by_id.get(c_acc_id) if account_map_by_id else db.query(SocialAccount).filter(SocialAccount.id == c_acc_id).first()
+            if c_acc:
+                return {
+                    "social_account_id": c_acc.id,
+                    "account_name": c_acc.account_name,
+                    "account_avatar": c_acc.logo_url,
+                    "platform": (c_acc.platform or "facebook").lower()
+                }
+
+    # Tier 4: Facebook compound ID prefix match (<page_id>_<post_id>)
+    if clean_pid and "_" in clean_pid:
+        page_id = clean_pid.split("_", 1)[0]
+        if page_id.isdigit():
+            fb_acc = None
+            if account_map_by_meta_id and ("facebook", page_id) in account_map_by_meta_id:
+                fb_acc = account_map_by_meta_id[("facebook", page_id)]
+            elif not account_map_by_meta_id:
+                fb_acc = db.query(SocialAccount).filter(
+                    SocialAccount.user_id == user_id,
+                    SocialAccount.platform == "facebook",
+                    SocialAccount.account_id == page_id,
+                    SocialAccount.status == "CONNECTED"
+                ).first()
+            if fb_acc:
+                return {
+                    "social_account_id": fb_acc.id,
+                    "account_name": fb_acc.account_name,
+                    "account_avatar": fb_acc.logo_url,
+                    "platform": "facebook"
+                }
+
+    # Tier 5: Brand unambiguous match
+    if local_post and local_post.brand_id:
+        brand_accs = db.query(SocialAccount).filter(
+            SocialAccount.user_id == user_id,
+            SocialAccount.brand_id == local_post.brand_id,
+            SocialAccount.status == "CONNECTED"
+        ).all()
+        target_p = plat_hint or ("facebook" if local_post.fb_post_id else "instagram")
+        matching = [a for a in brand_accs if (a.platform or "").lower() == target_p]
+        if len(matching) == 1:
+            b_acc = matching[0]
+            return {
+                "social_account_id": b_acc.id,
+                "account_name": b_acc.account_name,
+                "account_avatar": b_acc.logo_url,
+                "platform": (b_acc.platform or target_p).lower()
+            }
+
+    # Unresolved fallback
+    resolved_plat = plat_hint or ("facebook" if (local_post and local_post.fb_post_id) else ("instagram" if (local_post and local_post.ig_media_id) else "facebook"))
+    fallback_name = (local_post.brand.name if (local_post and local_post.brand) else (f"{resolved_plat.capitalize()} Page" if resolved_plat == "facebook" else "Instagram Account"))
+    fallback_avatar = local_post.brand.logo_url if (local_post and local_post.brand) else None
+
+    return {
+        "social_account_id": None,
+        "account_name": fallback_name,
+        "account_avatar": fallback_avatar,
+        "platform": resolved_plat
+    }
+
+
 @router.get("/posts", response_model=List[dict])
 def get_posts_with_comments(
     q: Optional[str] = Query(None, description="Search post caption or title"),
@@ -1041,27 +1235,28 @@ def get_posts_with_comments(
 ):
     """
     Retrieve all organic posts with exact non-deleted comment counts for current user.
-    Strictly scoped to social_account_id and platform.
+    Strictly scoped to social_account_id and platform based on authoritative post ownership.
     """
-    account = None
+    filter_account = None
     if social_account_id is not None:
-        account = db.query(SocialAccount).filter(
+        filter_account = db.query(SocialAccount).filter(
             SocialAccount.id == social_account_id,
             SocialAccount.user_id == current_user.id
         ).first()
-        if not account:
+        if not filter_account:
             raise HTTPException(status_code=404, detail="Social account not found")
 
     from app.models.social_comment import SocialComment
     from app.models.post import Post
     from app.models.external_post_context import ExternalPostContext
     from app.models.meta_ad import MetaAd
+    from app.models.publishing_batch import PublishingBatch, PublishingJob, JobStatus
     from sqlalchemy import func, or_
 
-    # Determine effective target platform
+    # Determine effective target platform from filter
     target_platform = None
-    if account:
-        target_platform = (account.platform or "").lower()
+    if filter_account:
+        target_platform = (filter_account.platform or "").lower()
     elif platform and platform.strip() and platform.upper() != "ALL":
         target_platform = platform.strip().lower()
 
@@ -1082,10 +1277,11 @@ def get_posts_with_comments(
     )
     ad_post_ids = {row[0].strip() for row in ad_post_ids_q.all() if row[0] and row[0].strip()}
 
-    # Top-level organic comment counts per external_post_id and platform
+    # Top-level organic comment counts per external_post_id, platform, and social_account_id
     query_counts = db.query(
         SocialComment.external_post_id,
         SocialComment.platform,
+        SocialComment.social_account_id,
         func.count(SocialComment.id)
     ).filter(
         SocialComment.user_id == current_user.id,
@@ -1101,134 +1297,187 @@ def get_posts_with_comments(
     if social_account_id:
         query_counts = query_counts.filter(SocialComment.social_account_id == social_account_id)
 
-    post_counts_raw = query_counts.group_by(SocialComment.external_post_id, SocialComment.platform).all()
+    post_counts_raw = query_counts.group_by(
+        SocialComment.external_post_id, SocialComment.platform, SocialComment.social_account_id
+    ).all()
+
     post_count_map = {}
+    comment_acc_id_map = {}
     pid_platform_map = {}
     for row in post_counts_raw:
         if row[0]:
             ext_pid = str(row[0]).strip()
             p_plat = str(row[1]).lower() if row[1] else (target_platform or "facebook")
-            post_count_map[ext_pid] = row[2]
+            post_count_map[ext_pid] = post_count_map.get(ext_pid, 0) + row[3]
             pid_platform_map[ext_pid] = p_plat
+            if row[2]:
+                comment_acc_id_map[ext_pid] = row[2]
+
+    # Pre-fetch maps to avoid N+1 queries during owner resolution
+    pids = list(post_count_map.keys())
+
+    user_accounts = db.query(SocialAccount).filter(SocialAccount.user_id == current_user.id).all()
+    account_map_by_id = {a.id: a for a in user_accounts}
+    account_map_by_meta_id = {((a.platform or '').lower(), str(a.account_id)): a for a in user_accounts if a.platform and a.account_id}
+
+    local_posts = db.query(Post).filter(
+        Post.user_id == current_user.id,
+        (Post.fb_post_id.in_(pids)) | (Post.ig_media_id.in_(pids))
+    ).all() if pids else []
+    local_post_ids = [p.id for p in local_posts]
+
+    jobs = db.query(PublishingJob).join(
+        PublishingBatch, PublishingJob.batch_id == PublishingBatch.id
+    ).filter(
+        PublishingBatch.post_id.in_(local_post_ids),
+        PublishingJob.status == JobStatus.SUCCESS.value
+    ).all() if local_post_ids else []
+
+    job_map_by_post_and_plat = {(j.batch.post_id, (j.platform or '').lower()): j for j in jobs if j.batch}
+    job_map_by_ext_id = {j.external_post_id.strip(): j for j in jobs if j.external_post_id}
+
+    ext_ctxs = db.query(ExternalPostContext).filter(
+        ExternalPostContext.external_post_id.in_(pids)
+    ).all() if pids else []
+    ctx_map_by_ext_id = {c.external_post_id.strip(): c for c in ext_ctxs if c.external_post_id}
 
     res_posts = []
     added_ext_keys = set()  # (ext_pid, platform)
 
     if post_count_map:
-        pids = list(post_count_map.keys())
-
         # 1. Match local posts in Post model
-        local_posts = db.query(Post).filter(
-            Post.user_id == current_user.id,
-            (Post.fb_post_id.in_(pids)) | (Post.ig_media_id.in_(pids))
-        ).all()
-
         for p in local_posts:
             # Check Facebook representation
             if p.fb_post_id and p.fb_post_id.strip():
                 fb_pid = p.fb_post_id.strip()
-                if fb_pid in post_count_map and (not target_platform or target_platform == "facebook"):
-                    c_cnt = post_count_map.get(fb_pid, 0)
-                    if not (q and q.strip() and (q.strip().lower() not in (p.title or "").lower() and q.strip().lower() not in (p.caption or "").lower())):
-                        res_posts.append({
-                            "id": p.id,
-                            "external_post_id": fb_pid,
-                            "social_account_id": social_account_id if social_account_id else (account.id if account else None),
-                            "account_name": (account.account_name if account else (p.brand.name if p.brand else None)),
-                            "title": p.title or (p.caption[:60] if p.caption else "Organic Facebook Post"),
-                            "caption": p.caption,
-                            "image_url": p.image_url,
-                            "media_type": p.media_type,
-                            "platform": "facebook",
-                            "published_at": p.published_at.isoformat() if p.published_at else p.created_at.isoformat(),
-                            "top_level_comment_count": c_cnt,
-                            "comment_count": c_cnt,
-                            "permalink": _resolve_post_permalink(fb_pid, "facebook", db, local_post=p)
-                        })
-                        added_ext_keys.add((fb_pid, "facebook"))
+                if fb_pid in post_count_map:
+                    owner_info = _resolve_authoritative_post_owner(
+                        db, current_user.id, ext_pid=fb_pid, platform_hint="facebook", local_post=p,
+                        account_map_by_id=account_map_by_id, account_map_by_meta_id=account_map_by_meta_id,
+                        job_map_by_ext_id=job_map_by_ext_id, job_map_by_post_and_plat=job_map_by_post_and_plat,
+                        ctx_map_by_ext_id=ctx_map_by_ext_id, comment_acc_id_map=comment_acc_id_map
+                    )
+                    # Enforce filter criteria strictly against authoritative owner
+                    if (not target_platform or owner_info["platform"] == target_platform) and \
+                       (not social_account_id or owner_info["social_account_id"] == social_account_id):
+                        c_cnt = post_count_map.get(fb_pid, 0)
+                        if not (q and q.strip() and (q.strip().lower() not in (p.title or "").lower() and q.strip().lower() not in (p.caption or "").lower())):
+                            res_posts.append({
+                                "id": p.id,
+                                "external_post_id": fb_pid,
+                                "social_account_id": owner_info["social_account_id"],
+                                "account_name": owner_info["account_name"],
+                                "account_avatar": owner_info["account_avatar"],
+                                "title": p.title or (p.caption[:60] if p.caption else "Organic Facebook Post"),
+                                "caption": p.caption,
+                                "image_url": p.image_url,
+                                "media_type": p.media_type,
+                                "platform": "facebook",
+                                "published_at": p.published_at.isoformat() if p.published_at else p.created_at.isoformat(),
+                                "top_level_comment_count": c_cnt,
+                                "comment_count": c_cnt,
+                                "permalink": _resolve_post_permalink(fb_pid, "facebook", db, local_post=p)
+                            })
+                            added_ext_keys.add((fb_pid, "facebook"))
 
             # Check Instagram representation
             if p.ig_media_id and p.ig_media_id.strip():
                 ig_mid = p.ig_media_id.strip()
-                if ig_mid in post_count_map and (not target_platform or target_platform == "instagram"):
-                    c_cnt = post_count_map.get(ig_mid, 0)
-                    if not (q and q.strip() and (q.strip().lower() not in (p.title or "").lower() and q.strip().lower() not in (p.caption or "").lower())):
-                        res_posts.append({
-                            "id": p.id,
-                            "external_post_id": ig_mid,
-                            "social_account_id": social_account_id if social_account_id else (account.id if account else None),
-                            "account_name": (account.account_name if account else (p.brand.name if p.brand else None)),
-                            "title": p.title or (p.caption[:60] if p.caption else "Organic Instagram Post"),
-                            "caption": p.caption,
-                            "image_url": p.image_url,
-                            "media_type": p.media_type,
-                            "platform": "instagram",
-                            "published_at": p.published_at.isoformat() if p.published_at else p.created_at.isoformat(),
-                            "top_level_comment_count": c_cnt,
-                            "comment_count": c_cnt,
-                            "permalink": _resolve_post_permalink(ig_mid, "instagram", db, local_post=p)
-                        })
-                        added_ext_keys.add((ig_mid, "instagram"))
+                if ig_mid in post_count_map:
+                    owner_info = _resolve_authoritative_post_owner(
+                        db, current_user.id, ext_pid=ig_mid, platform_hint="instagram", local_post=p,
+                        account_map_by_id=account_map_by_id, account_map_by_meta_id=account_map_by_meta_id,
+                        job_map_by_ext_id=job_map_by_ext_id, job_map_by_post_and_plat=job_map_by_post_and_plat,
+                        ctx_map_by_ext_id=ctx_map_by_ext_id, comment_acc_id_map=comment_acc_id_map
+                    )
+                    # Enforce filter criteria strictly against authoritative owner
+                    if (not target_platform or owner_info["platform"] == target_platform) and \
+                       (not social_account_id or owner_info["social_account_id"] == social_account_id):
+                        c_cnt = post_count_map.get(ig_mid, 0)
+                        if not (q and q.strip() and (q.strip().lower() not in (p.title or "").lower() and q.strip().lower() not in (p.caption or "").lower())):
+                            res_posts.append({
+                                "id": p.id,
+                                "external_post_id": ig_mid,
+                                "social_account_id": owner_info["social_account_id"],
+                                "account_name": owner_info["account_name"],
+                                "account_avatar": owner_info["account_avatar"],
+                                "title": p.title or (p.caption[:60] if p.caption else "Organic Instagram Post"),
+                                "caption": p.caption,
+                                "image_url": p.image_url,
+                                "media_type": p.media_type,
+                                "platform": "instagram",
+                                "published_at": p.published_at.isoformat() if p.published_at else p.created_at.isoformat(),
+                                "top_level_comment_count": c_cnt,
+                                "comment_count": c_cnt,
+                                "permalink": _resolve_post_permalink(ig_mid, "instagram", db, local_post=p)
+                            })
+                            added_ext_keys.add((ig_mid, "instagram"))
 
         # 2. Match remaining from ExternalPostContext
         remaining_pids = [pid for pid in pids if not any(k[0] == pid for k in added_ext_keys)]
-        if remaining_pids:
-            ext_ctx_q = db.query(ExternalPostContext).filter(
-                ExternalPostContext.external_post_id.in_(remaining_pids)
-            )
-            if social_account_id:
-                ext_ctx_q = ext_ctx_q.filter(ExternalPostContext.social_account_id == social_account_id)
-            if target_platform:
-                ext_ctx_q = ext_ctx_q.filter(func.lower(ExternalPostContext.platform) == target_platform)
-
-            ext_ctxs = ext_ctx_q.all()
-            for ctx in ext_ctxs:
-                ctx_plat = (ctx.platform or "").lower()
-                c_cnt = post_count_map.get(ctx.external_post_id, 0)
-                if q and q.strip():
-                    term = q.strip().lower()
-                    if ctx.caption and term not in ctx.caption.lower():
-                        continue
-                res_posts.append({
-                    "id": ctx.external_post_id,
-                    "external_post_id": ctx.external_post_id,
-                    "social_account_id": ctx.social_account_id,
-                    "account_name": ctx.social_account.account_name if ctx.social_account else (account.account_name if account else None),
-                    "title": ctx.caption.split("\n")[0][:60] if ctx.caption else f"{ctx.platform.capitalize()} Post",
-                    "caption": ctx.caption,
-                    "image_url": ctx.media_url,
-                    "media_type": ctx.media_type,
-                    "platform": ctx_plat,
-                    "published_at": ctx.created_at.isoformat() if ctx.created_at else None,
-                    "top_level_comment_count": c_cnt,
-                    "comment_count": c_cnt,
-                    "permalink": ctx.permalink or _resolve_post_permalink(ctx.external_post_id, ctx_plat, db)
-                })
-                added_ext_keys.add((ctx.external_post_id, ctx_plat))
+        for pid in remaining_pids:
+            ctx = ctx_map_by_ext_id.get(pid)
+            if ctx:
+                owner_info = _resolve_authoritative_post_owner(
+                    db, current_user.id, ext_pid=ctx.external_post_id, platform_hint=ctx.platform,
+                    account_map_by_id=account_map_by_id, account_map_by_meta_id=account_map_by_meta_id,
+                    ctx_map_by_ext_id=ctx_map_by_ext_id, comment_acc_id_map=comment_acc_id_map
+                )
+                if (not target_platform or owner_info["platform"] == target_platform) and \
+                   (not social_account_id or owner_info["social_account_id"] == social_account_id):
+                    ctx_plat = owner_info["platform"]
+                    c_cnt = post_count_map.get(ctx.external_post_id, 0)
+                    if q and q.strip():
+                        term = q.strip().lower()
+                        if ctx.caption and term not in ctx.caption.lower():
+                            continue
+                    res_posts.append({
+                        "id": ctx.external_post_id,
+                        "external_post_id": ctx.external_post_id,
+                        "social_account_id": owner_info["social_account_id"],
+                        "account_name": owner_info["account_name"],
+                        "account_avatar": owner_info["account_avatar"],
+                        "title": ctx.caption.split("\n")[0][:60] if ctx.caption else f"{ctx_plat.capitalize()} Post",
+                        "caption": ctx.caption,
+                        "image_url": ctx.media_url,
+                        "media_type": ctx.media_type,
+                        "platform": ctx_plat,
+                        "published_at": ctx.created_at.isoformat() if ctx.created_at else None,
+                        "top_level_comment_count": c_cnt,
+                        "comment_count": c_cnt,
+                        "permalink": ctx.permalink or _resolve_post_permalink(ctx.external_post_id, ctx_plat, db)
+                    })
+                    added_ext_keys.add((ctx.external_post_id, ctx_plat))
 
         # 3. For any remaining pids directly from SocialComment
         for pid in remaining_pids:
             if not any(k[0] == pid for k in added_ext_keys):
-                c_plat = pid_platform_map.get(pid, target_platform or "facebook")
-                if target_platform and c_plat != target_platform:
-                    continue
-                c_cnt = post_count_map.get(pid, 0)
-                res_posts.append({
-                    "id": pid,
-                    "external_post_id": pid,
-                    "social_account_id": social_account_id,
-                    "account_name": account.account_name if account else None,
-                    "title": f"{c_plat.capitalize()} Post {pid}",
-                    "caption": None,
-                    "image_url": None,
-                    "media_type": "IMAGE",
-                    "platform": c_plat,
-                    "published_at": None,
-                    "top_level_comment_count": c_cnt,
-                    "comment_count": c_cnt,
-                    "permalink": _resolve_post_permalink(pid, c_plat, db)
-                })
-                added_ext_keys.add((pid, c_plat))
+                owner_info = _resolve_authoritative_post_owner(
+                    db, current_user.id, ext_pid=pid, platform_hint=pid_platform_map.get(pid),
+                    account_map_by_id=account_map_by_id, account_map_by_meta_id=account_map_by_meta_id,
+                    comment_acc_id_map=comment_acc_id_map
+                )
+                c_plat = owner_info["platform"]
+                if (not target_platform or c_plat == target_platform) and \
+                   (not social_account_id or owner_info["social_account_id"] == social_account_id):
+                    c_cnt = post_count_map.get(pid, 0)
+                    res_posts.append({
+                        "id": pid,
+                        "external_post_id": pid,
+                        "social_account_id": owner_info["social_account_id"],
+                        "account_name": owner_info["account_name"],
+                        "account_avatar": owner_info["account_avatar"],
+                        "title": f"{c_plat.capitalize()} Post {pid}",
+                        "caption": None,
+                        "image_url": None,
+                        "media_type": "IMAGE",
+                        "platform": c_plat,
+                        "published_at": None,
+                        "top_level_comment_count": c_cnt,
+                        "comment_count": c_cnt,
+                        "permalink": _resolve_post_permalink(pid, c_plat, db)
+                    })
+                    added_ext_keys.add((pid, c_plat))
 
     return res_posts
 
@@ -1246,6 +1495,7 @@ def get_comments_for_specific_post(
 ):
     """
     Retrieve single Organic Post details + paginated comments for THAT specific Post only.
+    Strictly derives post identity and platform from authoritative ownership.
     """
     if social_account_id is not None:
         account = db.query(SocialAccount).filter(
@@ -1289,44 +1539,30 @@ def get_comments_for_specific_post(
         ).first()
 
     if p_db:
-        if account and (account.platform or "").lower() == "instagram":
-            ext_pid = p_db.ig_media_id or ext_pid
-            p_platform = "instagram"
-        elif account and (account.platform or "").lower() == "facebook":
-            ext_pid = p_db.fb_post_id or ext_pid
-            p_platform = "facebook"
-        elif p_db.ig_media_id and (ext_pid == p_db.ig_media_id or not p_db.fb_post_id):
+        if p_db.ig_media_id and (ext_pid == p_db.ig_media_id or not p_db.fb_post_id):
             ext_pid = p_db.ig_media_id
-            p_platform = "instagram"
+            target_plat = "instagram"
         else:
             ext_pid = p_db.fb_post_id or p_db.ig_media_id or str(p_db.id)
-            p_platform = "facebook" if p_db.fb_post_id else "instagram"
+            target_plat = "facebook" if p_db.fb_post_id else "instagram"
 
-        p_acc = None
-        if social_account_id:
-            p_acc = db.query(SocialAccount).filter(SocialAccount.id == social_account_id, SocialAccount.user_id == current_user.id).first()
-        if not p_acc:
-            p_acc = db.query(SocialAccount).filter(
-                SocialAccount.user_id == current_user.id,
-                SocialAccount.platform == p_platform,
-                SocialAccount.status == "CONNECTED"
-            ).first()
-
-        acc_name = (p_acc.account_name if p_acc else None) or (p_db.brand.name if p_db.brand else None)
-        acc_avatar = (p_acc.logo_url if p_acc else None) or (p_db.brand.logo_url if p_db.brand else None)
+        owner_info = _resolve_authoritative_post_owner(
+            db, current_user.id, ext_pid=ext_pid, platform_hint=target_plat, local_post=p_db
+        )
 
         post_meta = {
             "id": p_db.id,
             "external_post_id": ext_pid,
-            "title": p_db.title or (p_db.caption[:60] if p_db.caption else "Organic Post"),
+            "social_account_id": owner_info["social_account_id"],
+            "account_name": owner_info["account_name"],
+            "account_avatar": owner_info["account_avatar"],
+            "title": p_db.title or (p_db.caption[:60] if p_db.caption else f"Organic {owner_info['platform'].capitalize()} Post"),
             "caption": p_db.caption,
             "image_url": p_db.image_url,
             "media_type": p_db.media_type,
-            "platform": p_platform,
+            "platform": owner_info["platform"],
             "published_at": p_db.published_at.isoformat() if p_db.published_at else (p_db.created_at.isoformat() if p_db.created_at else None),
-            "permalink": _resolve_post_permalink(ext_pid, p_platform, db, local_post=p_db),
-            "account_name": acc_name,
-            "account_avatar": acc_avatar
+            "permalink": _resolve_post_permalink(ext_pid, owner_info["platform"], db, local_post=p_db)
         }
 
     # 2. Check ExternalPostContext
@@ -1334,69 +1570,52 @@ def get_comments_for_specific_post(
         candidates = [ext_pid]
         if "_" in ext_pid:
             candidates.append(ext_pid.split("_", 1)[1])
-        ctx_q = db.query(ExternalPostContext).filter(
+        ctx = db.query(ExternalPostContext).filter(
             ExternalPostContext.external_post_id.in_(candidates)
-        )
-        if social_account_id:
-            ctx_q = ctx_q.filter(ExternalPostContext.social_account_id == social_account_id)
-        ctx = ctx_q.first()
+        ).first()
 
         if not ctx and "_" not in ext_pid:
-            ctx_q_like = db.query(ExternalPostContext).filter(
+            ctx = db.query(ExternalPostContext).filter(
                 ExternalPostContext.external_post_id.like(f"%_{ext_pid}")
-            )
-            if social_account_id:
-                ctx_q_like = ctx_q_like.filter(ExternalPostContext.social_account_id == social_account_id)
-            ctx = ctx_q_like.first()
+            ).first()
 
         if ctx:
             ext_pid = ctx.external_post_id
-            ctx_acc = None
-            if ctx.social_account_id:
-                ctx_acc = db.query(SocialAccount).filter(SocialAccount.id == ctx.social_account_id).first()
-            if not ctx_acc:
-                ctx_acc = db.query(SocialAccount).filter(
-                    SocialAccount.user_id == current_user.id,
-                    SocialAccount.platform == ctx.platform,
-                    SocialAccount.status == "CONNECTED"
-                ).first()
-
+            owner_info = _resolve_authoritative_post_owner(
+                db, current_user.id, ext_pid=ctx.external_post_id, platform_hint=ctx.platform
+            )
             post_meta = {
                 "id": ctx.external_post_id,
                 "external_post_id": ctx.external_post_id,
-                "title": ctx.caption.split("\n")[0][:60] if ctx.caption else f"{ctx.platform.capitalize()} Post",
+                "social_account_id": owner_info["social_account_id"],
+                "account_name": owner_info["account_name"],
+                "account_avatar": owner_info["account_avatar"],
+                "title": ctx.caption.split("\n")[0][:60] if ctx.caption else f"{owner_info['platform'].capitalize()} Post",
                 "caption": ctx.caption,
                 "image_url": ctx.media_url,
                 "media_type": ctx.media_type,
-                "platform": ctx.platform,
+                "platform": owner_info["platform"],
                 "published_at": ctx.created_at.isoformat() if ctx.created_at else None,
-                "permalink": ctx.permalink or _resolve_post_permalink(ctx.external_post_id, ctx.platform, db),
-                "account_name": ctx_acc.account_name if ctx_acc else None,
-                "account_avatar": ctx_acc.logo_url if ctx_acc else None
+                "permalink": ctx.permalink or _resolve_post_permalink(ctx.external_post_id, owner_info["platform"], db)
             }
 
+    # 3. Direct SocialComment resolution if not in Post or ExternalPostContext
     if not post_meta:
-        default_acc = None
-        if social_account_id:
-            default_acc = db.query(SocialAccount).filter(SocialAccount.id == social_account_id, SocialAccount.user_id == current_user.id).first()
-        if not default_acc:
-            default_acc = db.query(SocialAccount).filter(
-                SocialAccount.user_id == current_user.id,
-                SocialAccount.status == "CONNECTED"
-            ).first()
-
+        owner_info = _resolve_authoritative_post_owner(db, current_user.id, ext_pid=ext_pid)
+        c_plat = owner_info["platform"]
         post_meta = {
             "id": post_identifier,
             "external_post_id": post_identifier,
-            "title": f"Post {post_identifier}",
+            "social_account_id": owner_info["social_account_id"],
+            "account_name": owner_info["account_name"],
+            "account_avatar": owner_info["account_avatar"],
+            "title": f"{c_plat.capitalize()} Post {post_identifier}",
             "caption": None,
             "image_url": None,
             "media_type": "IMAGE",
-            "platform": default_acc.platform if default_acc else "facebook",
+            "platform": c_plat,
             "published_at": None,
-            "permalink": _resolve_post_permalink(post_identifier, default_acc.platform if default_acc else "facebook", db),
-            "account_name": default_acc.account_name if default_acc else None,
-            "account_avatar": default_acc.logo_url if default_acc else None
+            "permalink": _resolve_post_permalink(post_identifier, c_plat, db)
         }
 
     top_level_comment_count = social_comment_repo.count_by_user_id(
