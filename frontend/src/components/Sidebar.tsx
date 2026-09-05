@@ -10,6 +10,7 @@ import {
   Calendar, 
   Share2, 
   MessageSquare,
+  Megaphone,
   ShieldCheck, 
   Bot,
   Zap,
@@ -45,7 +46,8 @@ const navGroups: NavGroup[] = [
   {
     title: 'Social & Brands',
     items: [
-      { name: 'Engagement', href: '/comments', icon: MessageSquare },
+      { name: 'Organic Comments', href: '/comments/posts', icon: MessageSquare },
+      { name: 'Ad Comments', href: '/comments/ads', icon: Megaphone },
       { name: 'Brand Profiles', href: '/brands', icon: Layers },
       { name: 'Meta Accounts', href: '/meta-connect', icon: Share2, isMeta: true },
     ],
@@ -81,7 +83,7 @@ export const Sidebar = () => {
               </div>
               <nav className="space-y-0.5">
                 {group.items.map((item) => {
-                  const isActive = pathname === item.href;
+                  const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/'));
                   const Icon = item.icon;
                   return (
                     <Link

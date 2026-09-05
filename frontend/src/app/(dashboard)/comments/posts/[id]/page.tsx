@@ -175,7 +175,7 @@ export default function PostCommentsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Link
-            href={`/comments?tab=posts${socialAccountId ? `&social_account_id=${socialAccountId}` : ''}`}
+            href={`/comments/posts${socialAccountId ? `?social_account_id=${socialAccountId}` : ''}`}
             className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 transition"
             title="Back to Organic Posts"
           >
