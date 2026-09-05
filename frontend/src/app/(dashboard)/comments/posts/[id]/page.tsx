@@ -302,6 +302,8 @@ export default function PostCommentsPage() {
           <div className="lg:col-span-7 space-y-5 mt-6 lg:mt-0">
             {/* Scoped Metrics Bar */}
             <EngagementMetricsBar
+              title="POST CONVERSATION METRICS"
+              subtitle="Scoped to this Organic Post"
               topLevelCount={topLevelCount}
               replyCount={replyCount}
               totalInteractions={totalInteractions}

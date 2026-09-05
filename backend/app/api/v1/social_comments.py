@@ -466,13 +466,14 @@ def get_user_social_comments(
 
 @router.get("/overview", response_model=dict)
 def get_engagement_overview(
+    scope: Optional[str] = Query(None, description="Scope metrics: 'posts', 'ads', or 'all' (default)"),
     social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Retrieve high-level Engagement metrics and recent top Ads & Posts with clear comment counts.
-    Strictly scoped to social_account_id if provided.
+    Strictly scoped to social_account_id and content scope ('posts', 'ads', 'all') if provided.
     """
     if social_account_id is not None:
         account = db.query(SocialAccount).filter(
@@ -482,12 +483,34 @@ def get_engagement_overview(
         if not account:
             raise HTTPException(status_code=404, detail="Social account not found")
 
-    top_level_comment_count = social_comment_repo.count_by_user_id(db, current_user.id, social_account_id=social_account_id, top_level_only=True)
-    reply_count = social_comment_repo.count_replies_by_user_id(db, current_user.id, social_account_id=social_account_id)
-    total_interaction_count = top_level_comment_count + reply_count
+    # 1. Calculate All (combined) metrics
+    all_top_count = social_comment_repo.count_by_user_id(db, current_user.id, social_account_id=social_account_id, top_level_only=True)
+    all_reply_count = social_comment_repo.count_replies_by_user_id(db, current_user.id, social_account_id=social_account_id)
+    all_total_count = all_top_count + all_reply_count
 
-    total_ad_comments = social_comment_repo.count_by_user_id(db, current_user.id, social_account_id=social_account_id, is_ad=True, top_level_only=True)
-    total_post_comments = social_comment_repo.count_by_user_id(db, current_user.id, social_account_id=social_account_id, is_ad=False, top_level_only=True)
+    # 2. Calculate Organic Posts (is_ad=False) metrics
+    post_top_count = social_comment_repo.count_by_user_id(db, current_user.id, social_account_id=social_account_id, is_ad=False, top_level_only=True)
+    post_reply_count = social_comment_repo.count_replies_by_user_id(db, current_user.id, social_account_id=social_account_id, is_ad=False)
+    post_total_count = post_top_count + post_reply_count
+
+    # 3. Calculate Meta Ads (is_ad=True) metrics
+    ad_top_count = social_comment_repo.count_by_user_id(db, current_user.id, social_account_id=social_account_id, is_ad=True, top_level_only=True)
+    ad_reply_count = social_comment_repo.count_replies_by_user_id(db, current_user.id, social_account_id=social_account_id, is_ad=True)
+    ad_total_count = ad_top_count + ad_reply_count
+
+    norm_scope = (scope or "all").lower().strip()
+    if norm_scope == "posts":
+        active_top_count = post_top_count
+        active_reply_count = post_reply_count
+        active_total_count = post_total_count
+    elif norm_scope == "ads":
+        active_top_count = ad_top_count
+        active_reply_count = ad_reply_count
+        active_total_count = ad_total_count
+    else:
+        active_top_count = all_top_count
+        active_reply_count = all_reply_count
+        active_total_count = all_total_count
 
     from app.models.social_comment import SocialComment
     from app.models.social_comment_reply import SocialCommentReply
@@ -640,12 +663,30 @@ def get_engagement_overview(
                 })
 
     return {
-        "top_level_comment_count": top_level_comment_count,
-        "reply_count": reply_count,
-        "total_interaction_count": total_interaction_count,
-        "total_comments": top_level_comment_count,
-        "total_ad_comments": total_ad_comments,
-        "total_post_comments": total_post_comments,
+        "scope": norm_scope,
+        "top_level_comment_count": active_top_count,
+        "reply_count": active_reply_count,
+        "total_interaction_count": active_total_count,
+        "total_comments": active_top_count,
+        "total_ad_comments": ad_top_count,
+        "total_post_comments": post_top_count,
+        "post_reply_count": post_reply_count,
+        "ad_reply_count": ad_reply_count,
+        "posts_metrics": {
+            "top_level_comment_count": post_top_count,
+            "reply_count": post_reply_count,
+            "total_interaction_count": post_total_count
+        },
+        "ads_metrics": {
+            "top_level_comment_count": ad_top_count,
+            "reply_count": ad_reply_count,
+            "total_interaction_count": ad_total_count
+        },
+        "all_metrics": {
+            "top_level_comment_count": all_top_count,
+            "reply_count": all_reply_count,
+            "total_interaction_count": all_total_count
+        },
         "recent_ads": recent_ads,
         "recent_posts": recent_posts
     }
