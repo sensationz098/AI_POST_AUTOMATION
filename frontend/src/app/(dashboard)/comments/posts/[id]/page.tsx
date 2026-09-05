@@ -41,21 +41,42 @@ export default function PostCommentsPage() {
   const [post, setPost] = useState<PostDetails | null>(null);
   const [comments, setComments] = useState<SocialComment[]>([]);
   const [topLevelCount, setTopLevelCount] = useState(0);
+  const [filteredTopLevelCount, setFilteredTopLevelCount] = useState(0);
   const [replyCount, setReplyCount] = useState(0);
   const [totalInteractions, setTotalInteractions] = useState(0);
 
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [replyStatusFilter, setReplyStatusFilter] = useState<'all' | 'unreplied' | 'replied'>('all');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [notice, setNotice] = useState<string | null>(null);
 
-  const fetchPostComments = async () => {
+  const fetchPostComments = async (isManualSync = false) => {
     if (!postId) return;
+    if (isManualSync) {
+      setSyncing(true);
+      try {
+        await apiClient.post(`/social-comments/posts/${postId}/sync`, null, {
+          params: socialAccountId ? { social_account_id: socialAccountId } : {}
+        });
+      } catch (syncErr) {
+        console.warn('Sync attempt completed or skipped:', syncErr);
+      } finally {
+        setSyncing(false);
+      }
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const queryParams: any = { reply_status: replyStatusFilter, sort_order: sortOrder };
+      const queryParams: any = { 
+        skip: 0, 
+        limit: 50, 
+        reply_status: replyStatusFilter, 
+        sort_order: sortOrder 
+      };
       if (socialAccountId) queryParams.social_account_id = socialAccountId;
 
       const res = await apiClient.get(`/social-comments/posts/${postId}`, {
@@ -65,6 +86,7 @@ export default function PostCommentsPage() {
       setPost(res.data.post);
       setComments(res.data.comments || []);
       setTopLevelCount(res.data.top_level_comment_count ?? res.data.total_comments ?? 0);
+      setFilteredTopLevelCount(res.data.filtered_top_level_count ?? res.data.top_level_comment_count ?? 0);
       setReplyCount(res.data.reply_count ?? 0);
       setTotalInteractions(res.data.total_interaction_count ?? (res.data.top_level_comment_count + res.data.reply_count));
     } catch (e: any) {
@@ -75,8 +97,37 @@ export default function PostCommentsPage() {
     }
   };
 
+  const handleLoadMore = async () => {
+    if (loadingMore || !postId) return;
+    setLoadingMore(true);
+    try {
+      const queryParams: any = {
+        skip: comments.length,
+        limit: 50,
+        reply_status: replyStatusFilter,
+        sort_order: sortOrder
+      };
+      if (socialAccountId) queryParams.social_account_id = socialAccountId;
+
+      const res = await apiClient.get(`/social-comments/posts/${postId}`, {
+        params: queryParams
+      });
+
+      const newItems: SocialComment[] = res.data.comments || [];
+      setComments((prev) => {
+        const existingIds = new Set(prev.map((c) => c.id));
+        const uniqueNew = newItems.filter((c) => !existingIds.has(c.id));
+        return [...prev, ...uniqueNew];
+      });
+    } catch (e: any) {
+      console.error('Failed to load more comments:', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   useEffect(() => {
-    fetchPostComments();
+    fetchPostComments(false);
   }, [postId, replyStatusFilter, sortOrder, socialAccountId]);
 
   const handleReplyAdded = (commentId: number, newReply: SocialCommentReply) => {
@@ -99,10 +150,14 @@ export default function PostCommentsPage() {
     await apiClient.delete(`/social-comments/${commentId}`);
     setComments((prev) => prev.filter((c) => c.id !== commentId));
     setTopLevelCount((prev) => Math.max(0, prev - 1));
+    setFilteredTopLevelCount((prev) => Math.max(0, prev - 1));
     setTotalInteractions((prev) => Math.max(0, prev - 1));
     setNotice('Comment deleted successfully.');
     setTimeout(() => setNotice(null), 3000);
   };
+
+  const effectiveTotalCount = replyStatusFilter === 'all' ? topLevelCount : filteredTopLevelCount;
+  const hasMoreComments = comments.length < effectiveTotalCount;
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6 text-slate-100 font-sans">
@@ -128,11 +183,12 @@ export default function PostCommentsPage() {
         </div>
 
         <button
-          onClick={fetchPostComments}
-          className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-semibold transition flex items-center space-x-1.5"
+          onClick={() => fetchPostComments(true)}
+          disabled={loading || syncing}
+          className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-semibold transition flex items-center space-x-1.5 disabled:opacity-50"
         >
-          <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
-          <span>Refresh</span>
+          <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${syncing || loading ? 'animate-spin' : ''}`} />
+          <span>{syncing ? 'Syncing...' : 'Sync & Refresh'}</span>
         </button>
       </div>
 
@@ -257,6 +313,26 @@ export default function PostCommentsPage() {
                   onCommentDeleted={handleCommentDeleted}
                 />
               ))}
+
+              {/* Load More Pagination Button */}
+              {hasMoreComments && (
+                <div className="pt-2 text-center">
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-blue-300 hover:text-blue-200 text-xs font-bold transition flex items-center justify-center space-x-2 mx-auto disabled:opacity-50"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Loading more conversations...</span>
+                      </>
+                    ) : (
+                      <span>Load More Comments ({comments.length} of {effectiveTotalCount})</span>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

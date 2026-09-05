@@ -1130,31 +1130,69 @@ def get_comments_for_specific_post(
     from app.models.external_post_context import ExternalPostContext
 
     post_meta = None
-    ext_pid = post_identifier
+    ext_pid = str(post_identifier).strip()
 
+    # 1. Check local Post table by internal ID, fb_post_id, ig_media_id, or compound/short match
+    p_db = None
     if post_identifier.isdigit():
-        p_db = db.query(Post).filter(Post.id == int(post_identifier), Post.user_id == current_user.id).first()
-        if p_db:
-            ext_pid = p_db.fb_post_id or p_db.ig_media_id or str(p_db.id)
-            post_meta = {
-                "id": p_db.id,
-                "external_post_id": ext_pid,
-                "title": p_db.title or (p_db.caption[:60] if p_db.caption else "Organic Post"),
-                "caption": p_db.caption,
-                "image_url": p_db.image_url,
-                "media_type": p_db.media_type,
-                "platform": "facebook" if p_db.fb_post_id else "instagram",
-                "published_at": p_db.published_at.isoformat() if p_db.published_at else p_db.created_at.isoformat(),
-                "permalink": _resolve_post_permalink(ext_pid, "facebook" if p_db.fb_post_id else "instagram", db, local_post=p_db)
-            }
+        p_db = db.query(Post).filter(
+            Post.id == int(post_identifier),
+            Post.user_id == current_user.id
+        ).first()
 
+    if not p_db:
+        p_db = db.query(Post).filter(
+            Post.user_id == current_user.id,
+            (Post.fb_post_id == ext_pid) | (Post.ig_media_id == ext_pid)
+        ).first()
+
+    if not p_db and "_" in ext_pid:
+        short_id = ext_pid.split("_", 1)[1]
+        p_db = db.query(Post).filter(
+            Post.user_id == current_user.id,
+            (Post.fb_post_id == short_id) | (Post.ig_media_id == short_id)
+        ).first()
+
+    if not p_db and "_" not in ext_pid:
+        p_db = db.query(Post).filter(
+            Post.user_id == current_user.id,
+            Post.fb_post_id.like(f"%_{ext_pid}")
+        ).first()
+
+    if p_db:
+        ext_pid = p_db.fb_post_id or p_db.ig_media_id or str(p_db.id)
+        p_platform = "facebook" if p_db.fb_post_id else "instagram"
+        post_meta = {
+            "id": p_db.id,
+            "external_post_id": ext_pid,
+            "title": p_db.title or (p_db.caption[:60] if p_db.caption else "Organic Post"),
+            "caption": p_db.caption,
+            "image_url": p_db.image_url,
+            "media_type": p_db.media_type,
+            "platform": p_platform,
+            "published_at": p_db.published_at.isoformat() if p_db.published_at else (p_db.created_at.isoformat() if p_db.created_at else None),
+            "permalink": _resolve_post_permalink(ext_pid, p_platform, db, local_post=p_db)
+        }
+
+    # 2. Check ExternalPostContext
     if not post_meta:
+        candidates = [ext_pid]
+        if "_" in ext_pid:
+            candidates.append(ext_pid.split("_", 1)[1])
         ctx_q = db.query(ExternalPostContext).filter(
-            ExternalPostContext.external_post_id == str(post_identifier)
+            ExternalPostContext.external_post_id.in_(candidates)
         )
         if social_account_id:
             ctx_q = ctx_q.filter(ExternalPostContext.social_account_id == social_account_id)
         ctx = ctx_q.first()
+
+        if not ctx and "_" not in ext_pid:
+            ctx_q_like = db.query(ExternalPostContext).filter(
+                ExternalPostContext.external_post_id.like(f"%_{ext_pid}")
+            )
+            if social_account_id:
+                ctx_q_like = ctx_q_like.filter(ExternalPostContext.social_account_id == social_account_id)
+            ctx = ctx_q_like.first()
 
         if ctx:
             ext_pid = ctx.external_post_id
@@ -1211,6 +1249,62 @@ def get_comments_for_specific_post(
         "limit": limit,
         "comments": formatted_comments
     }
+
+
+@router.post("/posts/{post_identifier}/sync", response_model=dict)
+def sync_comments_for_specific_post(
+    post_identifier: str,
+    social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    On-demand sync of comments for a single organic Facebook or Instagram post.
+    """
+    from app.models.post import Post
+    from app.models.external_post_context import ExternalPostContext
+
+    ext_pid = str(post_identifier).strip()
+    p_platform = "facebook"
+
+    # Check local post
+    p_db = None
+    if post_identifier.isdigit():
+        p_db = db.query(Post).filter(Post.id == int(post_identifier), Post.user_id == current_user.id).first()
+    if not p_db:
+        p_db = db.query(Post).filter(
+            Post.user_id == current_user.id,
+            (Post.fb_post_id == ext_pid) | (Post.ig_media_id == ext_pid)
+        ).first()
+
+    if p_db:
+        if p_db.ig_media_id and (ext_pid == p_db.ig_media_id or not p_db.fb_post_id):
+            p_platform = "instagram"
+            ext_pid = p_db.ig_media_id
+        else:
+            p_platform = "facebook"
+            ext_pid = p_db.fb_post_id or str(p_db.id)
+    else:
+        ctx = db.query(ExternalPostContext).filter(ExternalPostContext.external_post_id == ext_pid).first()
+        if ctx:
+            p_platform = (ctx.platform or "").lower()
+
+    if p_platform == "instagram":
+        res = meta_service.sync_comments_for_instagram_post(
+            db=db,
+            user_id=current_user.id,
+            media_id=ext_pid,
+            social_account_id=social_account_id
+        )
+    else:
+        res = meta_service.sync_comments_for_single_post(
+            db=db,
+            user_id=current_user.id,
+            post_id=ext_pid
+        )
+
+    return res
+
 
 @router.post("/{comment_id}/reply", response_model=dict)
 def reply_to_social_comment(
