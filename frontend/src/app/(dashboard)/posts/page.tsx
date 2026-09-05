@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Calendar as CalendarIcon, 
-  Send, 
-  RefreshCw, 
-  CheckCircle, 
-  Clock, 
-  AlertTriangle, 
+import {
+  Calendar as CalendarIcon,
+  Send,
+  RefreshCw,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
   FileEdit,
   Plus,
   Filter,
@@ -132,7 +132,7 @@ export default function PostSchedulerPage() {
       // Clear legacy local storage queue if present
       try {
         localStorage.removeItem('local_posts_queue');
-      } catch {}
+      } catch { }
 
       const res = await apiClient.get('/posts/');
       const apiPosts = Array.isArray(res.data) ? res.data : [];
@@ -271,11 +271,10 @@ export default function PostSchedulerPage() {
           <button
             key={st}
             onClick={() => setFilterStatus(st)}
-            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition flex-shrink-0 ${
-              filterStatus === st
+            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition flex-shrink-0 ${filterStatus === st
                 ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
                 : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
-            }`}
+              }`}
           >
             {st}
           </button>
@@ -352,7 +351,9 @@ export default function PostSchedulerPage() {
                     </td>
                     <td className="p-3 max-w-sm">
                       <h4 className="font-semibold text-slate-100 text-xs truncate">
-                        {post.title && post.title.trim() ? post.title : (post.caption ? (post.caption.slice(0, 45) + (post.caption.length > 45 ? '...' : '')) : 'Untitled Post')}
+                        {post.caption && post.caption.trim()
+                          ? post.caption.slice(0, 45) + (post.caption.length > 45 ? '...' : '')
+                          : 'Untitled Post'}
                       </h4>
                       <p className="text-slate-400 text-[11px] truncate mt-0.5">{post.caption}</p>
                       {(post.fb_post_id || post.ig_media_id) && (

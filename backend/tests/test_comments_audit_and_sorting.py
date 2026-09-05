@@ -884,4 +884,181 @@ def test_organic_posts_account_and_platform_isolation(db_session: Session, test_
     assert "fb_ad_post_444" not in all_pids
 
 
+def test_authoritative_post_ownership_resolution(db_session: Session, test_user: User, auth_headers):
+    """
+    Verify authoritative post ownership resolution:
+    - Post ID 18335787277253296 owned by Facebook Page 'Sensationz Dance'
+    - Instagram post owned by 'Blameless1802'
+    - The selected AccountSelector filter NEVER overrides or leaks post identity.
+    """
+    from app.models.brand import BrandProfile
+    from app.models.publishing_batch import PublishingBatch, PublishingJob, JobStatus, BatchStatus
+
+    # Create Brand
+    brand = BrandProfile(user_id=test_user.id, name="Sensationz Brand Profile")
+    db_session.add(brand)
+    db_session.commit()
+    db_session.refresh(brand)
+
+    # Create Facebook SocialAccount: Sensationz Dance
+    fb_dance = SocialAccount(
+        user_id=test_user.id,
+        brand_id=brand.id,
+        platform="facebook",
+        account_id="page_sensationz_dance_123",
+        account_name="Sensationz Dance",
+        status="CONNECTED",
+        access_token=encrypt_token("EAAB_dance_token")
+    )
+
+    # Create Instagram SocialAccount: Blameless1802
+    ig_blameless = SocialAccount(
+        user_id=test_user.id,
+        brand_id=brand.id,
+        platform="instagram",
+        account_id="ig_blameless_456",
+        account_name="Blameless1802",
+        status="CONNECTED",
+        access_token=encrypt_token("EAAB_blameless_token")
+    )
+    db_session.add_all([fb_dance, ig_blameless])
+    db_session.commit()
+    db_session.refresh(fb_dance)
+    db_session.refresh(ig_blameless)
+
+    # Create Facebook Post (Post ID: 18335787277253296)
+    fb_post = Post(
+        user_id=test_user.id,
+        brand_id=brand.id,
+        title="Launching Next-Gen AI Social Automation Studio",
+        caption="Launching Next-Gen AI Social Automation Studio. Full automation live now!",
+        fb_post_id="18335787277253296",
+        status="PUBLISHED"
+    )
+    db_session.add(fb_post)
+    db_session.commit()
+    db_session.refresh(fb_post)
+
+    # Link fb_post to PublishingJob for fb_dance
+    batch_fb = PublishingBatch(post_id=fb_post.id, user_id=test_user.id, status=BatchStatus.SUCCESS.value)
+    db_session.add(batch_fb)
+    db_session.commit()
+    db_session.refresh(batch_fb)
+
+    job_fb = PublishingJob(
+        batch_id=batch_fb.id,
+        social_account_id=fb_dance.id,
+        platform="facebook",
+        status=JobStatus.SUCCESS.value,
+        external_post_id="18335787277253296"
+    )
+    db_session.add(job_fb)
+
+    # Create Instagram Post (Post ID: ig_media_998877)
+    ig_post = Post(
+        user_id=test_user.id,
+        brand_id=brand.id,
+        title="Instagram Studio Reels",
+        caption="Check out our new studio in action!",
+        ig_media_id="ig_media_998877",
+        status="PUBLISHED"
+    )
+    db_session.add(ig_post)
+    db_session.commit()
+    db_session.refresh(ig_post)
+
+    batch_ig = PublishingBatch(post_id=ig_post.id, user_id=test_user.id, status=BatchStatus.SUCCESS.value)
+    db_session.add(batch_ig)
+    db_session.commit()
+    db_session.refresh(batch_ig)
+
+    job_ig = PublishingJob(
+        batch_id=batch_ig.id,
+        social_account_id=ig_blameless.id,
+        platform="instagram",
+        status=JobStatus.SUCCESS.value,
+        external_post_id="ig_media_998877"
+    )
+    db_session.add(job_ig)
+
+    # Ingest comments for both posts
+    now = datetime.now(timezone.utc)
+    c_fb = SocialComment(
+        user_id=test_user.id,
+        social_account_id=fb_dance.id,
+        platform="facebook",
+        external_comment_id="c_fb_dance_1",
+        external_post_id="18335787277253296",
+        comment_text="Amazing studio launching!",
+        event_timestamp=now,
+        webhook_object="page"
+    )
+    c_ig = SocialComment(
+        user_id=test_user.id,
+        social_account_id=ig_blameless.id,
+        platform="instagram",
+        external_comment_id="c_ig_blameless_1",
+        external_post_id="ig_media_998877",
+        comment_text="Love this reel!",
+        event_timestamp=now,
+        webhook_object="instagram"
+    )
+    db_session.add_all([c_fb, c_ig])
+    db_session.commit()
+
+    # 1. TEST FILTER: Instagram Blameless1802 selected
+    # MUST NOT return Facebook post 18335787277253296
+    res_ig = client.get(f"/api/v1/social-comments/posts?social_account_id={ig_blameless.id}", headers=auth_headers)
+    assert res_ig.status_code == 200
+    posts_ig = res_ig.json()
+    post_ids_ig = [p["external_post_id"] for p in posts_ig]
+    assert "18335787277253296" not in post_ids_ig
+    assert "ig_media_998877" in post_ids_ig
+
+    ig_item = next(p for p in posts_ig if p["external_post_id"] == "ig_media_998877")
+    assert ig_item["platform"] == "instagram"
+    assert ig_item["account_name"] == "Blameless1802"
+    assert ig_item["social_account_id"] == ig_blameless.id
+
+    # 2. TEST FILTER: Facebook Sensationz Dance selected
+    # MUST return 18335787277253296 with platform=facebook, account_name=Sensationz Dance
+    res_fb = client.get(f"/api/v1/social-comments/posts?social_account_id={fb_dance.id}", headers=auth_headers)
+    assert res_fb.status_code == 200
+    posts_fb = res_fb.json()
+    post_ids_fb = [p["external_post_id"] for p in posts_fb]
+    assert "18335787277253296" in post_ids_fb
+    assert "ig_media_998877" not in post_ids_fb
+
+    fb_item = next(p for p in posts_fb if p["external_post_id"] == "18335787277253296")
+    assert fb_item["platform"] == "facebook"
+    assert fb_item["account_name"] == "Sensationz Dance"
+    assert fb_item["social_account_id"] == fb_dance.id
+
+    # 3. TEST ALL CONNECTED ACCOUNTS: Both posts returned, each retaining its authoritative owner
+    res_all = client.get("/api/v1/social-comments/posts", headers=auth_headers)
+    assert res_all.status_code == 200
+    posts_all = res_all.json()
+    fb_in_all = next((p for p in posts_all if p["external_post_id"] == "18335787277253296"), None)
+    ig_in_all = next((p for p in posts_all if p["external_post_id"] == "ig_media_998877"), None)
+
+    assert fb_in_all is not None
+    assert fb_in_all["platform"] == "facebook"
+    assert fb_in_all["account_name"] == "Sensationz Dance"
+    assert fb_in_all["social_account_id"] == fb_dance.id
+
+    assert ig_in_all is not None
+    assert ig_in_all["platform"] == "instagram"
+    assert ig_in_all["account_name"] == "Blameless1802"
+    assert ig_in_all["social_account_id"] == ig_blameless.id
+
+    # 4. TEST DETAIL ENDPOINT: Post ID 18335787277253296 detail page
+    res_detail = client.get("/api/v1/social-comments/posts/18335787277253296", headers=auth_headers)
+    assert res_detail.status_code == 200
+    detail_data = res_detail.json()
+    assert detail_data["post"]["platform"] == "facebook"
+    assert detail_data["post"]["account_name"] == "Sensationz Dance"
+    assert detail_data["post"]["social_account_id"] == fb_dance.id
+
+
+
 

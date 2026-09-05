@@ -60,7 +60,7 @@ export default function PostCardComponent({
           <div className="min-w-0">
             <div className="flex items-center space-x-2">
               <span className="font-bold text-xs text-slate-100 truncate">
-                {accountName || (isFb ? 'Facebook Post' : 'Instagram Media')}
+                {post.account_name || accountName || (isFb ? 'Facebook Page' : 'Instagram Account')}
               </span>
               <span
                 className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase flex items-center space-x-1 ${
