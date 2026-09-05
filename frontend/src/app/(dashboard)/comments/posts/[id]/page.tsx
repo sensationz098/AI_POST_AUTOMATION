@@ -9,15 +9,17 @@ import {
   Loader2, 
   AlertCircle, 
   CheckCircle2, 
-  FileText
+  FileText,
+  ExternalLink,
+  MessageSquare
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { SocialComment, SocialCommentReply } from '@/lib/types';
 
 import ConversationThread from '../../components/ConversationThread';
-import PostCardComponent from '../../components/PostCardComponent';
 import ContextualEmptyState from '../../components/ContextualEmptyState';
 import EngagementMetricsBar from '../../components/EngagementMetricsBar';
+import SocialPostPreview from '@/components/SocialPostPreview';
 
 interface PostDetails {
   id: number | string;
@@ -158,10 +160,11 @@ export default function PostCommentsPage() {
 
   const effectiveTotalCount = replyStatusFilter === 'all' ? topLevelCount : filteredTopLevelCount;
   const hasMoreComments = comments.length < effectiveTotalCount;
+  const isIg = post?.platform?.toLowerCase().includes('instagram');
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6 text-slate-100 font-sans">
-      {/* Top Header & Breadcrumb */}
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 text-slate-100 font-sans">
+      {/* Top Header & Breadcrumb Navigation */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Link
@@ -177,7 +180,7 @@ export default function PostCommentsPage() {
               <span>Organic Post Conversations</span>
             </h1>
             <p className="text-xs text-slate-400">
-              Inspect conversation threads and brand responses for this specific post.
+              Inspect live platform preview and native conversation threads for this post.
             </p>
           </div>
         </div>
@@ -207,136 +210,194 @@ export default function PostCommentsPage() {
       )}
 
       {loading ? (
-        <div className="py-16 text-center bg-slate-900/40 rounded-2xl border border-slate-800/80 space-y-3">
+        <div className="py-20 text-center bg-slate-900/40 rounded-2xl border border-slate-800/80 space-y-3">
           <Loader2 className="w-8 h-8 text-blue-400 animate-spin mx-auto" />
-          <p className="text-xs text-slate-400">Loading post content & conversation threads...</p>
+          <p className="text-xs text-slate-400">Loading published post preview & conversation threads...</p>
         </div>
       ) : !post ? (
         <ContextualEmptyState type="posts" title="Post Not Found" description="The requested organic post could not be loaded." />
       ) : (
-        <div className="space-y-6">
-          {/* Post Card Banner */}
-          <PostCardComponent
-            post={{
-              ...post,
-              platform: post.platform || 'facebook',
-              comment_count: topLevelCount,
-            }}
-            selectedAccountId={socialAccountId || 'ALL'}
-          />
+        <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-start">
+          {/* Left Column: Social Post Preview (Sticky on Desktop) */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="lg:sticky lg:top-6 space-y-4">
+              {/* Platform & Source Card Header */}
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Published Post
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                      isIg
+                        ? 'bg-pink-950/90 text-pink-300 border border-pink-800/80'
+                        : 'bg-blue-950/90 text-blue-300 border border-blue-800/80'
+                    }`}
+                  >
+                    {post.platform || 'Facebook'}
+                  </span>
+                </div>
+                {post.permalink && (
+                  <a
+                    href={post.permalink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center space-x-1"
+                  >
+                    <span>Open on {isIg ? 'Instagram' : 'Facebook'}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
 
-          {/* Scoped Metrics Bar */}
-          <EngagementMetricsBar
-            topLevelCount={topLevelCount}
-            replyCount={replyCount}
-            totalInteractions={totalInteractions}
-          />
+              {/* Native Social Post Preview Component */}
+              <SocialPostPreview
+                platform={post.platform || 'facebook'}
+                caption={post.caption || post.title}
+                imageUrl={post.image_url}
+                mediaType={post.media_type}
+                publishedAt={post.published_at}
+                permalink={post.permalink}
+                externalPostId={post.external_post_id}
+                commentCount={topLevelCount}
+                isPublished={true}
+              />
 
-          {/* Filter & Sort Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/90">
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-bold text-slate-400 uppercase">Filter:</span>
-              <button
-                onClick={() => setReplyStatusFilter('all')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                  replyStatusFilter === 'all'
-                    ? 'bg-blue-950 text-blue-200 border border-blue-800'
-                    : 'bg-slate-950 text-slate-400 border border-slate-800'
-                }`}
-              >
-                All Threads
-              </button>
-              <button
-                onClick={() => setReplyStatusFilter('unreplied')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                  replyStatusFilter === 'unreplied'
-                    ? 'bg-amber-950 text-amber-200 border border-amber-800'
-                    : 'bg-slate-950 text-slate-400 border border-slate-800'
-                }`}
-              >
-                Unreplied
-              </button>
-              <button
-                onClick={() => setReplyStatusFilter('replied')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                  replyStatusFilter === 'replied'
-                    ? 'bg-emerald-950 text-emerald-200 border border-emerald-800'
-                    : 'bg-slate-950 text-slate-400 border border-slate-800'
-                }`}
-              >
-                Replied
-              </button>
-            </div>
-
-            <div className="flex items-center space-x-2 border-t sm:border-t-0 sm:border-l border-slate-800/80 pt-2 sm:pt-0 sm:pl-3">
-              <span className="text-xs font-bold text-slate-400 uppercase">Sort:</span>
-              <button
-                onClick={() => setSortOrder('desc')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                  sortOrder === 'desc'
-                    ? 'bg-blue-950 text-blue-200 border border-blue-800 shadow-sm'
-                    : 'bg-slate-950 text-slate-400 border border-slate-800'
-                }`}
-              >
-                Newest First
-              </button>
-              <button
-                onClick={() => setSortOrder('asc')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                  sortOrder === 'asc'
-                    ? 'bg-blue-950 text-blue-200 border border-blue-800 shadow-sm'
-                    : 'bg-slate-950 text-slate-400 border border-slate-800'
-                }`}
-              >
-                Oldest First
-              </button>
+              {/* Post Metadata Summary */}
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-xs text-slate-400 space-y-2 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Post ID:</span>
+                  <span className="font-mono text-slate-300 text-[11px] truncate max-w-[200px]">
+                    {post.external_post_id}
+                  </span>
+                </div>
+                {post.published_at && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Published:</span>
+                    <span className="text-slate-300">{new Date(post.published_at).toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Conversation Threads List */}
-          {comments.length === 0 ? (
-            <ContextualEmptyState
-              type={replyStatusFilter === 'unreplied' ? 'unreplied' : 'general'}
-              description={
-                replyStatusFilter === 'unreplied'
-                  ? 'No unreplied threads exist for this post.'
-                  : 'No comments recorded for this post yet.'
-              }
+          {/* Right Column: Comments & Conversations Feed */}
+          <div className="lg:col-span-7 space-y-5 mt-6 lg:mt-0">
+            {/* Scoped Metrics Bar */}
+            <EngagementMetricsBar
+              topLevelCount={topLevelCount}
+              replyCount={replyCount}
+              totalInteractions={totalInteractions}
             />
-          ) : (
-            <div className="space-y-4">
-              {comments.map((comment) => (
-                <ConversationThread
-                  key={comment.id}
-                  comment={comment}
-                  onReplyAdded={handleReplyAdded}
-                  onCommentDeleted={handleCommentDeleted}
-                />
-              ))}
 
-              {/* Load More Pagination Button */}
-              {hasMoreComments && (
-                <div className="pt-2 text-center">
-                  <button
-                    onClick={handleLoadMore}
-                    disabled={loadingMore}
-                    className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-blue-300 hover:text-blue-200 text-xs font-bold transition flex items-center justify-center space-x-2 mx-auto disabled:opacity-50"
-                  >
-                    {loadingMore ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Loading more conversations...</span>
-                      </>
-                    ) : (
-                      <span>Load More Comments ({comments.length} of {effectiveTotalCount})</span>
-                    )}
-                  </button>
-                </div>
-              )}
+            {/* Filter & Sort Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800/90 shadow-sm">
+              <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                <span className="text-xs font-bold text-slate-400 uppercase mr-1">Filter:</span>
+                <button
+                  onClick={() => setReplyStatusFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                    replyStatusFilter === 'all'
+                      ? 'bg-blue-950 text-blue-200 border border-blue-800 shadow-sm'
+                      : 'bg-slate-950/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  All Threads ({topLevelCount})
+                </button>
+                <button
+                  onClick={() => setReplyStatusFilter('unreplied')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                    replyStatusFilter === 'unreplied'
+                      ? 'bg-amber-950 text-amber-200 border border-amber-800 shadow-sm'
+                      : 'bg-slate-950/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  Unreplied
+                </button>
+                <button
+                  onClick={() => setReplyStatusFilter('replied')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                    replyStatusFilter === 'replied'
+                      ? 'bg-emerald-950 text-emerald-200 border border-emerald-800 shadow-sm'
+                      : 'bg-slate-950/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  Replied
+                </button>
+              </div>
+
+              <div className="flex items-center space-x-2 border-t sm:border-t-0 sm:border-l border-slate-800/80 pt-2 sm:pt-0 sm:pl-3">
+                <span className="text-xs font-bold text-slate-400 uppercase mr-1">Sort:</span>
+                <button
+                  onClick={() => setSortOrder('desc')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                    sortOrder === 'desc'
+                      ? 'bg-blue-950 text-blue-200 border border-blue-800 shadow-sm'
+                      : 'bg-slate-950/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  Newest First
+                </button>
+                <button
+                  onClick={() => setSortOrder('asc')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                    sortOrder === 'asc'
+                      ? 'bg-blue-950 text-blue-200 border border-blue-800 shadow-sm'
+                      : 'bg-slate-950/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  Oldest First
+                </button>
+              </div>
             </div>
-          )}
+
+            {/* Conversation Threads List */}
+            {comments.length === 0 ? (
+              <ContextualEmptyState
+                type={replyStatusFilter === 'unreplied' ? 'unreplied' : 'general'}
+                description={
+                  replyStatusFilter === 'unreplied'
+                    ? 'No unreplied threads exist for this post.'
+                    : 'No comments recorded for this post yet.'
+                }
+              />
+            ) : (
+              <div className="space-y-4">
+                {comments.map((comment) => (
+                  <ConversationThread
+                    key={comment.id}
+                    comment={comment}
+                    onReplyAdded={handleReplyAdded}
+                    onCommentDeleted={handleCommentDeleted}
+                    showPostContext={false}
+                  />
+                ))}
+
+                {/* Load More Pagination Button */}
+                {hasMoreComments && (
+                  <div className="pt-2 text-center">
+                    <button
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                      className="px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-blue-300 hover:text-blue-200 text-xs font-bold transition flex items-center justify-center space-x-2 mx-auto disabled:opacity-50 shadow-md"
+                    >
+                      {loadingMore ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Loading more conversations...</span>
+                        </>
+                      ) : (
+                        <span>Load More Comments ({comments.length} of {effectiveTotalCount})</span>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 }
+

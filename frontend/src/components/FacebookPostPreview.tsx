@@ -1,64 +1,115 @@
 'use client';
 
 import React from 'react';
-import { ThumbsUp, MessageSquare, Share2, Globe, MoreHorizontal, CheckCircle2 } from 'lucide-react';
+import { ThumbsUp, MessageSquare, Share2, Globe, MoreHorizontal, CheckCircle2, ExternalLink } from 'lucide-react';
 import { BrandProfile } from '@/lib/types';
 
-interface Props {
+export interface FacebookPostPreviewProps {
   brand?: BrandProfile | null;
-  caption: string;
-  hashtags: string[];
+  caption?: string;
+  hashtags?: string[];
   cta?: string;
   imageUrl?: string;
+  mediaType?: string;
+  accountName?: string;
+  accountAvatar?: string;
+  publishedAt?: string;
+  permalink?: string;
+  likeCount?: number;
+  commentCount?: number;
+  shareCount?: number;
+  externalPostId?: string;
+  isPublished?: boolean;
 }
 
-export const FacebookPostPreview: React.FC<Props> = ({
+export const FacebookPostPreview: React.FC<FacebookPostPreviewProps> = ({
   brand,
   caption,
   hashtags,
   cta,
   imageUrl,
+  mediaType,
+  accountName,
+  accountAvatar,
+  publishedAt,
+  permalink,
+  likeCount,
+  commentCount,
+  shareCount,
+  externalPostId,
+  isPublished = false,
 }) => {
   const metaAcc = brand?.meta_account;
-  const brandName = metaAcc?.facebook_page_name
+  const brandName = accountName
+    || metaAcc?.facebook_page_name
     || brand?.name
-    || (brand === null ? 'No account connected' : 'Loading...');
+    || (isPublished ? 'Facebook Page' : brand === null ? 'No account connected' : 'Loading...');
+
   const logoUrl =
+    accountAvatar ||
     (metaAcc as any)?.logo_url ||
     (metaAcc?.facebook_page_id ? `https://graph.facebook.com/v19.0/${metaAcc.facebook_page_id}/picture?type=large` : null) ||
     brand?.logo_url ||
     'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80';
 
+  const timeLabel = publishedAt
+    ? new Date(publishedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : (isPublished ? 'Published Post' : 'Just now');
+
+  const likesDisplay = likeCount !== undefined ? likeCount.toLocaleString() : '142';
+  const commentsDisplay = commentCount !== undefined ? `${commentCount.toLocaleString()} Comments` : '28 Comments';
+  const sharesDisplay = shareCount !== undefined ? `${shareCount.toLocaleString()} Shares` : '19 Shares';
+
+  const isVideo = imageUrl ? (
+    imageUrl.endsWith('.mp4') ||
+    imageUrl.endsWith('.mov') ||
+    imageUrl.endsWith('.webm') ||
+    imageUrl.startsWith('data:video/')
+  ) : false;
+
   return (
     <div className="w-full max-w-lg bg-[#242526] text-[#E4E6EB] rounded-xl border border-[#3E4042] shadow-2xl overflow-hidden font-sans">
       {/* FB Post Header */}
       <div className="p-4 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 min-w-0">
           <img
             src={logoUrl}
             alt={brandName}
-            className="w-10 h-10 rounded-full object-cover border border-indigo-500/50"
+            className="w-10 h-10 rounded-full object-cover border border-indigo-500/50 flex-shrink-0"
           />
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center space-x-1.5 font-semibold text-sm text-white">
-              <span>{brandName}</span>
-              <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20" />
+              <span className="truncate">{brandName}</span>
+              <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20 flex-shrink-0" />
             </div>
-            <div className="flex items-center space-x-1 text-xs text-[#B0B3B8]">
-              <span>Just now</span>
+            <div className="flex items-center space-x-1 text-xs text-[#B0B3B8] truncate">
+              <span>{timeLabel}</span>
               <span>•</span>
-              <Globe className="w-3 h-3 text-[#B0B3B8]" />
+              <Globe className="w-3 h-3 text-[#B0B3B8] flex-shrink-0" />
             </div>
           </div>
         </div>
-        <button className="text-[#B0B3B8] hover:bg-[#3A3B3C] p-2 rounded-full transition">
-          <MoreHorizontal className="w-5 h-5" />
-        </button>
+
+        {permalink ? (
+          <a
+            href={permalink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#B0B3B8] hover:text-white hover:bg-[#3A3B3C] p-2 rounded-full transition flex-shrink-0"
+            title="View Live on Facebook"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        ) : (
+          <button className="text-[#B0B3B8] hover:bg-[#3A3B3C] p-2 rounded-full transition flex-shrink-0">
+            <MoreHorizontal className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Post Text & Body */}
       <div className="px-4 pb-3 text-sm space-y-2 leading-relaxed text-[#E4E6EB] whitespace-pre-wrap">
-        <p>{caption || 'Your AI generated Facebook caption will render live here...'}</p>
+        <p>{caption || (isPublished ? '' : 'Your AI generated Facebook caption will render live here...')}</p>
         {hashtags && hashtags.length > 0 && (
           <p className="text-blue-400 font-medium">{hashtags.join(' ')}</p>
         )}
@@ -72,7 +123,7 @@ export const FacebookPostPreview: React.FC<Props> = ({
       {/* Post Graphic / Image / Video */}
       {imageUrl ? (
         <div className="relative aspect-video w-full bg-black overflow-hidden group">
-          {(imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.endsWith('.webm') || imageUrl.startsWith('data:video/')) ? (
+          {isVideo ? (
             <video
               src={imageUrl}
               controls
@@ -90,15 +141,15 @@ export const FacebookPostPreview: React.FC<Props> = ({
             />
           )}
           <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded text-[10px] font-medium text-white/90">
-            {(imageUrl?.endsWith('.mp4') || imageUrl?.endsWith('.mov') || imageUrl?.startsWith('data:video/')) ? 'Facebook Video Post 🎥' : 'Facebook Post Preview'}
+            {isVideo ? 'Facebook Video 🎥' : (isPublished ? 'Facebook Post' : 'Facebook Post Preview')}
           </div>
         </div>
       ) : (
-        <div className="w-full h-56 bg-[#18191A] border-y border-[#3E4042] flex flex-col items-center justify-center text-[#B0B3B8] space-y-2 p-6 text-center">
-          <div className="w-12 h-12 rounded-full bg-[#3A3B3C] flex items-center justify-center text-indigo-400">
+        <div className="w-full h-48 bg-[#18191A] border-y border-[#3E4042] flex flex-col items-center justify-center text-[#B0B3B8] space-y-2 p-6 text-center">
+          <div className="w-10 h-10 rounded-full bg-[#3A3B3C] flex items-center justify-center text-indigo-400 text-sm">
             🖼️
           </div>
-          <p className="text-xs">No image generated yet. Click "Generate AI Visual" above.</p>
+          <p className="text-xs">{isPublished ? 'Organic Facebook Content' : 'No image generated yet. Click "Generate AI Visual" above.'}</p>
         </div>
       )}
 
@@ -108,11 +159,11 @@ export const FacebookPostPreview: React.FC<Props> = ({
           <div className="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-[10px] text-white font-bold">
             👍
           </div>
-          <span>142</span>
+          <span>{likesDisplay}</span>
         </div>
         <div className="flex space-x-3">
-          <span>28 Comments</span>
-          <span>19 Shares</span>
+          <span>{commentsDisplay}</span>
+          <span>{sharesDisplay}</span>
         </div>
       </div>
 
@@ -134,3 +185,4 @@ export const FacebookPostPreview: React.FC<Props> = ({
     </div>
   );
 };
+
