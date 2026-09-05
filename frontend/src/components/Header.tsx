@@ -153,9 +153,8 @@ export const Header: React.FC<Props> = ({
         {/* Functional Bell Icon with Red Dot & Notifications Dropdown */}
         <button
           onClick={handleBellClick}
-          className={`relative p-1.5 text-slate-400 hover:text-slate-200 rounded-lg transition focus-ring ${
-            isOpen ? 'bg-slate-800 text-slate-100' : 'hover:bg-slate-800/60'
-          }`}
+          className={`relative p-1.5 text-slate-400 hover:text-slate-200 rounded-lg transition focus-ring ${isOpen ? 'bg-slate-800 text-slate-100' : 'hover:bg-slate-800/60'
+            }`}
           title="Recent Activity Notifications"
         >
           <Bell className="w-4 h-4" />
@@ -223,9 +222,18 @@ export const Header: React.FC<Props> = ({
           </div>
         )}
 
-        <div className="flex items-center space-x-1.5 bg-slate-900/60 border border-slate-800/80 px-2 py-1 rounded text-[11px]">
-          <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
-          <span className="font-semibold text-slate-200 text-[10px]">{displayRole}</span>
+        <div className="flex items-center space-x-2 bg-slate-900/60 border border-slate-800/80 px-2.5 py-1 rounded">
+          <UserCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+
+          <div className="flex flex-col leading-tight min-w-0">
+            <span className="font-semibold text-slate-100 text-[10px] truncate max-w-[120px]">
+              {user?.full_name || user?.email || 'User'}
+            </span>
+
+            <span className="text-[9px] text-slate-400">
+              {displayRole}
+            </span>
+          </div>
         </div>
 
         <button

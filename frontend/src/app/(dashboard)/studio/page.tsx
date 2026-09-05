@@ -2,15 +2,15 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import { 
-  Sparkles, 
-  Image as ImageIcon, 
-  Send, 
-  Calendar, 
-  FileText, 
-  CheckCircle2, 
-  Facebook, 
-  Instagram, 
+import {
+  Sparkles,
+  Image as ImageIcon,
+  Send,
+  Calendar,
+  FileText,
+  CheckCircle2,
+  Facebook,
+  Instagram,
   Layers,
   Wand2,
   RefreshCw,
@@ -31,12 +31,12 @@ import { FacebookPostPreview } from '@/components/FacebookPostPreview';
 import { InstagramPostPreview } from '@/components/InstagramPostPreview';
 import axios from 'axios';
 import { apiClient, PUBLISHING_TIMEOUT_MS, MEDIA_UPLOAD_TIMEOUT_MS } from '@/lib/api';
-import { 
-  BrandProfile, 
-  MetaAccount, 
-  SocialAccount, 
-  PublishingBatch, 
-  PublishingJob 
+import {
+  BrandProfile,
+  MetaAccount,
+  SocialAccount,
+  PublishingBatch,
+  PublishingJob
 } from '@/lib/types';
 
 
@@ -185,7 +185,7 @@ export default function AIStudioPage() {
         if (storedMeta) {
           metaAccountLocal = JSON.parse(storedMeta);
         }
-      } catch {}
+      } catch { }
 
       try {
         const res = await apiClient.get('/brands/');
@@ -203,7 +203,7 @@ export default function AIStudioPage() {
           setSelectedBrand(uniqueBrands[0]);
           return;
         }
-      } catch {}
+      } catch { }
 
       if (metaAccountLocal && metaAccountLocal.is_connected) {
         const defaultMeta = metaAccountLocal;
@@ -276,7 +276,7 @@ export default function AIStudioPage() {
   }, [isBatchModalOpen, activeBatch?.id, activeBatch?.status]);
 
   const handleToggleAccountSelect = (id: number) => {
-    setSelectedAccountIds(prev => 
+    setSelectedAccountIds(prev =>
       prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
     );
   };
@@ -487,13 +487,13 @@ export default function AIStudioPage() {
   const [topic, setTopic] = useState('Launching Next-Gen AI Social Automation Studio');
   const [campaignGoal, setCampaignGoal] = useState('Lead Generation & Brand Awareness');
   const [customInstructions, setCustomInstructions] = useState('');
-  
+
   // Generated content state
   const [caption, setCaption] = useState(
-    '🚀 Say goodbye to manual scheduling! Introducing Apex AI Social Studio—the ultimate AI engine for Facebook and Instagram publishing.\n\nAutomate high-converting copy, viral hashtags, and photorealistic AI graphics in one unified workflow.'
+    ''
   );
-  const [hashtags, setHashtags] = useState(['#ApexAI', '#SocialMediaAutomation', '#GrowthHacking', '#MetaGraphAPI', '#AIPublishing']);
-  const [cta, setCta] = useState('👉 Claim your 14-day free trial link in bio now!');
+  const [hashtags, setHashtags] = useState<string[]>([]);
+  const [cta, setCta] = useState('');
   const [seoKeywords, setSeoKeywords] = useState(['ai social media', 'facebook automation', 'instagram scheduler', 'meta graph api']);
   const [imagePrompt, setImagePrompt] = useState('A sleek photorealistic digital workstation with glowing neon purple and blue holographic UI displaying social analytics, 8k render.');
   const [imageUrl, setImageUrl] = useState('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1080&q=80');
@@ -879,13 +879,12 @@ export default function AIStudioPage() {
           </div>
 
           {statusNotification && (
-            <div className={`flex items-center space-x-1.5 px-3 py-1 rounded text-[11px] border ${
-              statusNotification.startsWith('❌')
+            <div className={`flex items-center space-x-1.5 px-3 py-1 rounded text-[11px] border ${statusNotification.startsWith('❌')
                 ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
                 : statusNotification.startsWith('⚠️')
-                ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
-                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-            }`}>
+                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+              }`}>
               {statusNotification.startsWith('❌') || statusNotification.startsWith('⚠️') ? (
                 <AlertTriangle className={`w-3.5 h-3.5 flex-shrink-0 ${statusNotification.startsWith('❌') ? 'text-rose-400' : 'text-amber-400'}`} />
               ) : (
@@ -904,413 +903,410 @@ export default function AIStudioPage() {
         <div className="lg:col-span-7 space-y-6">
           {/* Custom Post Upload Card */}
           <div className="glass-panel p-6 rounded-2xl space-y-5 border-l-4 border-indigo-500">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h2 className="text-sm font-bold text-white flex items-center space-x-2">
-                  <ImageIcon className="w-4 h-4 text-indigo-400" />
-                  <span>Upload Custom Graphic & Post Copy</span>
-                </h2>
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h2 className="text-sm font-bold text-white flex items-center space-x-2">
+                <ImageIcon className="w-4 h-4 text-indigo-400" />
+                <span>Upload Custom Graphic & Post Copy</span>
+              </h2>
+            </div>
+
+            {/* Photo & Video Media Upload Box */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-200">
+                  Post Media (Upload Photo or Video Reel)
+                </label>
+                {imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.startsWith('data:video/')) && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-mono">
+                    🎥 Video Reel Attached
+                  </span>
+                )}
               </div>
 
-              {/* Photo & Video Media Upload Box */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-200">
-                    Post Media (Upload Photo or Video Reel)
-                  </label>
-                  {imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.startsWith('data:video/')) && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-mono">
-                      🎥 Video Reel Attached
-                    </span>
-                  )}
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {/* Photo Upload Button */}
-                  <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
-                    <ImageIcon className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 mb-1" />
-                    <span className="text-xs font-bold text-slate-200">Upload Photo</span>
-                    <span className="text-[9px] text-slate-400">PNG, JPG, WEBP</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageFileUpload}
-                      className="hidden"
-                    />
-                  </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Photo Upload Button */}
+                <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
+                  <ImageIcon className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 mb-1" />
+                  <span className="text-xs font-bold text-slate-200">Upload Photo</span>
+                  <span className="text-[9px] text-slate-400">PNG, JPG, WEBP</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageFileUpload}
+                    className="hidden"
+                  />
+                </label>
 
-                  {/* Video Reel Upload Button */}
-                  <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
-                    <Play className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 mb-1" />
-                    <span className="text-xs font-bold text-slate-200">Upload Video Reel</span>
-                    <span className="text-[9px] text-slate-400">MP4, MOV, WEBM</span>
-                    <input
-                      type="file"
-                      accept="video/*"
-                      onChange={handleVideoFileUpload}
-                      className="hidden"
-                    />
-                  </label>
+                {/* Video Reel Upload Button */}
+                <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
+                  <Play className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 mb-1" />
+                  <span className="text-xs font-bold text-slate-200">Upload Video Reel</span>
+                  <span className="text-[9px] text-slate-400">MP4, MOV, WEBM</span>
+                  <input
+                    type="file"
+                    accept="video/*"
+                    onChange={handleVideoFileUpload}
+                    className="hidden"
+                  />
+                </label>
 
-                  {/* Media URL Input */}
-                  <div className="flex flex-col justify-center space-y-1 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
-                    <span className="text-[10px] font-bold text-slate-400">Or Paste Media URL:</span>
-                    <input
-                      type="url"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="https://example.com/clip.mp4"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-[11px] text-white focus:outline-none focus:border-pink-500 font-mono"
-                    />
-                  </div>
+                {/* Media URL Input */}
+                <div className="flex flex-col justify-center space-y-1 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+                  <span className="text-[10px] font-bold text-slate-400">Or Paste Media URL:</span>
+                  <input
+                    type="url"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="https://example.com/clip.mp4"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-[11px] text-white focus:outline-none focus:border-pink-500 font-mono"
+                  />
                 </div>
               </div>
+            </div>
 
-              {/* 🎬 Optional Video Thumbnail Control Card */}
-              {(uploadState.mediaType === 'video' || (imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.endsWith('.webm') || imageUrl.endsWith('.m4v') || imageUrl.startsWith('data:video/')))) && (
-                <div className="p-4 rounded-2xl border border-indigo-500/30 bg-slate-900/80 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <h3 className="text-xs font-bold text-white flex items-center space-x-2">
-                      <Film className="w-4 h-4 text-indigo-400" />
-                      <span>🎬 Video Thumbnail (Reel Cover)</span>
-                    </h3>
-                    <span className="text-[10px] text-slate-400 font-medium">Optional</span>
-                  </div>
-
-                  {/* Radio choices */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setThumbnailType('NONE');
-                        setThumbnailUrl(null);
-                        setThumbnailOffsetMs(null);
-                      }}
-                      className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${
-                        thumbnailType === 'NONE'
-                          ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
-                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <span>○ Automatic</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setThumbnailType('FRAME')}
-                      className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${
-                        thumbnailType === 'FRAME'
-                          ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
-                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <span>○ Choose frame</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setThumbnailType('CUSTOM')}
-                      className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${
-                        thumbnailType === 'CUSTOM'
-                          ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
-                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <span>○ Upload custom</span>
-                    </button>
-                  </div>
-
-                  {/* OPTION 1: NO THUMBNAIL */}
-                  {thumbnailType === 'NONE' && (
-                    <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-center space-x-2">
-                      <span className="w-2 h-2 rounded-full bg-slate-500 flex-shrink-0" />
-                      <span>Default video frame will be automatically generated by Meta upon publishing.</span>
-                    </div>
-                  )}
-
-                  {/* OPTION 2: CHOOSE FRAME */}
-                  {thumbnailType === 'FRAME' && (
-                    <div className="space-y-3 p-3 bg-slate-950/60 rounded-xl border border-indigo-900/50">
-                      <div className="text-xs font-bold text-slate-200">Scrub video to select cover timestamp:</div>
-                      <div className="relative rounded-xl overflow-hidden bg-black border border-slate-800 aspect-video flex items-center justify-center">
-                        <video
-                          ref={videoRef}
-                          src={imageUrl}
-                          crossOrigin="anonymous"
-                          controls
-                          onTimeUpdate={() => {
-                            if (videoRef.current) {
-                              setThumbnailOffsetMs(Math.round(videoRef.current.currentTime * 1000));
-                            }
-                          }}
-                          className="max-h-56 w-full object-contain"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <button
-                          type="button"
-                          onClick={captureFrameFromVideo}
-                          disabled={isCapturingFrame}
-                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow transition flex items-center space-x-1.5 disabled:opacity-50"
-                        >
-                          <Camera className="w-3.5 h-3.5" />
-                          <span>{isCapturingFrame ? 'Extracting & Uploading Frame...' : '📷 Capture Selected Frame'}</span>
-                        </button>
-                        {thumbnailOffsetMs !== null && (
-                          <span className="text-[11px] font-mono text-indigo-300 bg-indigo-950/80 border border-indigo-800/60 px-2.5 py-1 rounded-lg">
-                            Timestamp: {(thumbnailOffsetMs / 1000).toFixed(1)}s
-                          </span>
-                        )}
-                      </div>
-
-                      {thumbnailUrl && (
-                        <div className="pt-2 border-t border-slate-800 space-y-2">
-                          <span className="text-[11px] font-bold text-emerald-400 flex items-center space-x-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Selected Frame Image Preview:</span>
-                          </span>
-                          <div className="relative w-36 aspect-video rounded-xl overflow-hidden border border-emerald-500/40 shadow-lg">
-                            <img src={thumbnailUrl} alt="Frame Thumbnail Preview" className="w-full h-full object-cover" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* OPTION 3: UPLOAD CUSTOM THUMBNAIL */}
-                  {thumbnailType === 'CUSTOM' && (
-                    <div className="space-y-3 p-3 bg-slate-950/60 rounded-xl border border-indigo-900/50">
-                      <label className="flex items-center justify-center p-3 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl bg-slate-900/60 cursor-pointer transition text-center group">
-                        <Upload className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 mr-2" />
-                        <span className="text-xs font-bold text-slate-200">Select Custom Thumbnail Cover Image</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleThumbnailImageUpload}
-                          className="hidden"
-                        />
-                      </label>
-
-                      {thumbnailUrl && (
-                        <div className="space-y-2">
-                          <span className="text-[11px] font-bold text-emerald-400 flex items-center space-x-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Custom Thumbnail Cover Preview:</span>
-                          </span>
-                          <div className="relative w-36 aspect-video rounded-xl overflow-hidden border border-emerald-500/40 shadow-lg">
-                            <img src={thumbnailUrl} alt="Custom Thumbnail Preview" className="w-full h-full object-cover" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+            {/* 🎬 Optional Video Thumbnail Control Card */}
+            {(uploadState.mediaType === 'video' || (imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.endsWith('.webm') || imageUrl.endsWith('.m4v') || imageUrl.startsWith('data:video/')))) && (
+              <div className="p-4 rounded-2xl border border-indigo-500/30 bg-slate-900/80 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h3 className="text-xs font-bold text-white flex items-center space-x-2">
+                    <Film className="w-4 h-4 text-indigo-400" />
+                    <span>🎬 Video Thumbnail (Reel Cover)</span>
+                  </h3>
+                  <span className="text-[10px] text-slate-400 font-medium">Optional</span>
                 </div>
-              )}
 
-              {/* Media Upload Progress UI Card */}
-              {uploadState.stage !== 'IDLE' && (
-                <div className="p-4 rounded-2xl border border-slate-700/80 bg-slate-900/90 shadow-xl space-y-3 font-sans">
-                  {/* Stage 1: UPLOADING from device */}
-                  {uploadState.stage === 'UPLOADING' && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <UploadCloud className="w-4 h-4 text-indigo-400 animate-bounce" />
-                          <div>
-                            <span className="text-xs font-bold text-slate-100 block">
-                              {uploadState.mediaType === 'video' ? '📹 Uploading video from device' : '🖼️ Uploading photo from device'}
-                            </span>
-                            <span className="text-[10px] text-indigo-300">STAGE 1: Device → AI Post Automation Storage</span>
-                          </div>
+                {/* Radio choices */}
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setThumbnailType('NONE');
+                      setThumbnailUrl(null);
+                      setThumbnailOffsetMs(null);
+                    }}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${thumbnailType === 'NONE'
+                        ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                  >
+                    <span>○ Automatic</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setThumbnailType('FRAME')}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${thumbnailType === 'FRAME'
+                        ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                  >
+                    <span>○ Choose frame</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setThumbnailType('CUSTOM')}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${thumbnailType === 'CUSTOM'
+                        ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                  >
+                    <span>○ Upload custom</span>
+                  </button>
+                </div>
+
+                {/* OPTION 1: NO THUMBNAIL */}
+                {thumbnailType === 'NONE' && (
+                  <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-center space-x-2">
+                    <span className="w-2 h-2 rounded-full bg-slate-500 flex-shrink-0" />
+                    <span>Default video frame will be automatically generated by Meta upon publishing.</span>
+                  </div>
+                )}
+
+                {/* OPTION 2: CHOOSE FRAME */}
+                {thumbnailType === 'FRAME' && (
+                  <div className="space-y-3 p-3 bg-slate-950/60 rounded-xl border border-indigo-900/50">
+                    <div className="text-xs font-bold text-slate-200">Scrub video to select cover timestamp:</div>
+                    <div className="relative rounded-xl overflow-hidden bg-black border border-slate-800 aspect-video flex items-center justify-center">
+                      <video
+                        ref={videoRef}
+                        src={imageUrl}
+                        crossOrigin="anonymous"
+                        controls
+                        onTimeUpdate={() => {
+                          if (videoRef.current) {
+                            setThumbnailOffsetMs(Math.round(videoRef.current.currentTime * 1000));
+                          }
+                        }}
+                        className="max-h-56 w-full object-contain"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={captureFrameFromVideo}
+                        disabled={isCapturingFrame}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow transition flex items-center space-x-1.5 disabled:opacity-50"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>{isCapturingFrame ? 'Extracting & Uploading Frame...' : '📷 Capture Selected Frame'}</span>
+                      </button>
+                      {thumbnailOffsetMs !== null && (
+                        <span className="text-[11px] font-mono text-indigo-300 bg-indigo-950/80 border border-indigo-800/60 px-2.5 py-1 rounded-lg">
+                          Timestamp: {(thumbnailOffsetMs / 1000).toFixed(1)}s
+                        </span>
+                      )}
+                    </div>
+
+                    {thumbnailUrl && (
+                      <div className="pt-2 border-t border-slate-800 space-y-2">
+                        <span className="text-[11px] font-bold text-emerald-400 flex items-center space-x-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Selected Frame Image Preview:</span>
+                        </span>
+                        <div className="relative w-36 aspect-video rounded-xl overflow-hidden border border-emerald-500/40 shadow-lg">
+                          <img src={thumbnailUrl} alt="Frame Thumbnail Preview" className="w-full h-full object-cover" />
                         </div>
-                        <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/60">
-                          {uploadState.progressPercent}%
-                        </span>
                       </div>
+                    )}
+                  </div>
+                )}
 
-                      {/* Real Progress Bar */}
-                      <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
-                        <div
-                          className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full transition-all duration-150"
-                          style={{ width: `${uploadState.progressPercent}%` }}
-                        />
-                      </div>
+                {/* OPTION 3: UPLOAD CUSTOM THUMBNAIL */}
+                {thumbnailType === 'CUSTOM' && (
+                  <div className="space-y-3 p-3 bg-slate-950/60 rounded-xl border border-indigo-900/50">
+                    <label className="flex items-center justify-center p-3 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl bg-slate-900/60 cursor-pointer transition text-center group">
+                      <Upload className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 mr-2" />
+                      <span className="text-xs font-bold text-slate-200">Select Custom Thumbnail Cover Image</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleThumbnailImageUpload}
+                        className="hidden"
+                      />
+                    </label>
 
-                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-0.5">
-                        <span className="truncate max-w-[200px] text-slate-300 font-semibold">{uploadState.fileName}</span>
-                        <span className="text-indigo-300 font-bold">
-                          {(uploadState.loadedBytes / (1024 * 1024)).toFixed(1)} MB / {(uploadState.totalBytes / (1024 * 1024)).toFixed(1)} MB
+                    {thumbnailUrl && (
+                      <div className="space-y-2">
+                        <span className="text-[11px] font-bold text-emerald-400 flex items-center space-x-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Custom Thumbnail Cover Preview:</span>
                         </span>
+                        <div className="relative w-36 aspect-video rounded-xl overflow-hidden border border-emerald-500/40 shadow-lg">
+                          <img src={thumbnailUrl} alt="Custom Thumbnail Preview" className="w-full h-full object-cover" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Media Upload Progress UI Card */}
+            {uploadState.stage !== 'IDLE' && (
+              <div className="p-4 rounded-2xl border border-slate-700/80 bg-slate-900/90 shadow-xl space-y-3 font-sans">
+                {/* Stage 1: UPLOADING from device */}
+                {uploadState.stage === 'UPLOADING' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <UploadCloud className="w-4 h-4 text-indigo-400 animate-bounce" />
+                        <div>
+                          <span className="text-xs font-bold text-slate-100 block">
+                            {uploadState.mediaType === 'video' ? '📹 Uploading video from device' : '🖼️ Uploading photo from device'}
+                          </span>
+                          <span className="text-[10px] text-indigo-300">STAGE 1: Device → AI Post Automation Storage</span>
+                        </div>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/60">
+                        {uploadState.progressPercent}%
+                      </span>
+                    </div>
+
+                    {/* Real Progress Bar */}
+                    <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                      <div
+                        className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full transition-all duration-150"
+                        style={{ width: `${uploadState.progressPercent}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-0.5">
+                      <span className="truncate max-w-[200px] text-slate-300 font-semibold">{uploadState.fileName}</span>
+                      <span className="text-indigo-300 font-bold">
+                        {(uploadState.loadedBytes / (1024 * 1024)).toFixed(1)} MB / {(uploadState.totalBytes / (1024 * 1024)).toFixed(1)} MB
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Stage 2: PROCESSING upload */}
+                {uploadState.stage === 'PROCESSING' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <RefreshCw className="w-4 h-4 text-amber-400 animate-spin" />
+                        <div>
+                          <span className="text-xs font-bold text-slate-100 block">
+                            ⏳ Processing upload...
+                          </span>
+                          <span className="text-[10px] text-amber-300">STAGE 2: Preparing video for publishing CDN</span>
+                        </div>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/60">
+                        100%
+                      </span>
+                    </div>
+
+                    {/* Pulsing Progress Bar at 100% */}
+                    <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                      <div className="h-full bg-gradient-to-r from-amber-500 via-indigo-500 to-emerald-500 rounded-full animate-pulse w-full" />
+                    </div>
+
+                    <p className="text-[11px] text-amber-300/90 font-medium">
+                      Transfer complete! Processing video and transferring to secure CDN storage...
+                    </p>
+                  </div>
+                )}
+
+                {/* Stage 3: READY for publishing */}
+                {uploadState.stage === 'READY' && (
+                  <div className="flex items-center justify-between p-3 bg-emerald-950/50 border border-emerald-500/30 rounded-xl text-emerald-300">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-emerald-100">
+                          ✅ {uploadState.mediaType === 'video' ? 'Video' : 'Photo'} uploaded successfully
+                        </p>
+                        <p className="text-[11px] text-emerald-300/90 truncate">
+                          {uploadState.fileName} ({(uploadState.totalBytes / (1024 * 1024)).toFixed(1)} MB) — Ready for publishing.
+                        </p>
                       </div>
                     </div>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => setUploadState({ stage: 'IDLE', progressPercent: 0, loadedBytes: 0, totalBytes: 0, fileName: '', mediaType: 'image' })}
+                      className="text-xs font-bold text-emerald-400 hover:text-emerald-200 px-2 py-1 bg-emerald-900/60 rounded border border-emerald-700/50 transition ml-2 flex-shrink-0"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
 
-                  {/* Stage 2: PROCESSING upload */}
-                  {uploadState.stage === 'PROCESSING' && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <RefreshCw className="w-4 h-4 text-amber-400 animate-spin" />
-                          <div>
-                            <span className="text-xs font-bold text-slate-100 block">
-                              ⏳ Processing upload...
-                            </span>
-                            <span className="text-[10px] text-amber-300">STAGE 2: Preparing video for publishing CDN</span>
-                          </div>
-                        </div>
-                        <span className="text-xs font-mono font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/60">
-                          100%
+                {/* Stage ERROR */}
+                {uploadState.stage === 'ERROR' && (
+                  <div className="p-3 bg-rose-950/50 border border-rose-500/30 rounded-xl space-y-2 text-rose-300">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                        <span className="text-xs font-bold text-rose-200">
+                          ❌ {uploadState.mediaType === 'video' ? 'Video' : 'Photo'} upload failed
                         </span>
-                      </div>
-
-                      {/* Pulsing Progress Bar at 100% */}
-                      <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
-                        <div className="h-full bg-gradient-to-r from-amber-500 via-indigo-500 to-emerald-500 rounded-full animate-pulse w-full" />
-                      </div>
-
-                      <p className="text-[11px] text-amber-300/90 font-medium">
-                        Transfer complete! Processing video and transferring to secure CDN storage...
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Stage 3: READY for publishing */}
-                  {uploadState.stage === 'READY' && (
-                    <div className="flex items-center justify-between p-3 bg-emerald-950/50 border border-emerald-500/30 rounded-xl text-emerald-300">
-                      <div className="flex items-center space-x-3 min-w-0">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-emerald-100">
-                            ✅ {uploadState.mediaType === 'video' ? 'Video' : 'Photo'} uploaded successfully
-                          </p>
-                          <p className="text-[11px] text-emerald-300/90 truncate">
-                            {uploadState.fileName} ({(uploadState.totalBytes / (1024 * 1024)).toFixed(1)} MB) — Ready for publishing.
-                          </p>
-                        </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => setUploadState({ stage: 'IDLE', progressPercent: 0, loadedBytes: 0, totalBytes: 0, fileName: '', mediaType: 'image' })}
-                        className="text-xs font-bold text-emerald-400 hover:text-emerald-200 px-2 py-1 bg-emerald-900/60 rounded border border-emerald-700/50 transition ml-2 flex-shrink-0"
+                        className="text-rose-400 hover:text-rose-200 text-xs font-bold"
                       >
-                        Dismiss
+                        ✕
                       </button>
                     </div>
-                  )}
-
-                  {/* Stage ERROR */}
-                  {uploadState.stage === 'ERROR' && (
-                    <div className="p-3 bg-rose-950/50 border border-rose-500/30 rounded-xl space-y-2 text-rose-300">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                          <span className="text-xs font-bold text-rose-200">
-                            ❌ {uploadState.mediaType === 'video' ? 'Video' : 'Photo'} upload failed
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setUploadState({ stage: 'IDLE', progressPercent: 0, loadedBytes: 0, totalBytes: 0, fileName: '', mediaType: 'image' })}
-                          className="text-rose-400 hover:text-rose-200 text-xs font-bold"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      <p className="text-[11px] text-rose-300/90">
-                        {uploadState.errorMessage || 'Please check your connection and try again.'}
-                      </p>
-                      {uploadState.currentFile && (
-                        <button
-                          type="button"
-                          onClick={() => handleFileUploadWithProgress(uploadState.currentFile!, uploadState.mediaType === 'video')}
-                          className="px-3 py-1.5 bg-rose-800 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 transition"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Retry Upload</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* AI Caption Generator (inside Pre-Made Mode) */}
-              <div className="bg-indigo-950/30 border border-indigo-500/25 rounded-xl p-4 space-y-3">
-                <div className="flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-indigo-400" />
-                  <span className="text-xs font-bold text-indigo-300">AI Caption Generator</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">Optional</span>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  Describe what you want to create and let AI write a high-converting caption, hashtags & CTA for your post.
-                </p>
-
-                {/* Single Multiline Prompt Input */}
-                <div>
-                  <textarea
-                    rows={4}
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    placeholder="Tell AI what you want to create — describe your post, product, audience, tone, key points, or anything else you want it to focus on..."
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500 transition resize-y"
-                  />
-                </div>
-
-                {/* Campaign Goal Dropdown */}
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                    Campaign Goal
-                  </label>
-                  <select
-                    value={campaignGoal}
-                    onChange={(e) => setCampaignGoal(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
-                  >
-                    <option>Lead Generation & Brand Awareness</option>
-                    <option>Product Launch & Direct Sales</option>
-                    <option>Community Engagement & Growth</option>
-                    <option>Educational / Thought Leadership</option>
-                  </select>
-                </div>
-
-                <button
-                  onClick={handleGenerateContent}
-                  disabled={isGeneratingContent || !topic.trim()}
-                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center justify-center space-x-2 transition disabled:opacity-40 shadow-sm cursor-pointer"
-                >
-                  {isGeneratingContent ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Generating AI Caption...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 className="w-3.5 h-3.5" />
-                      <span>Generate Caption, Hashtags & CTA with AI</span>
-                    </>
-                  )}
-                </button>
+                    <p className="text-[11px] text-rose-300/90">
+                      {uploadState.errorMessage || 'Please check your connection and try again.'}
+                    </p>
+                    {uploadState.currentFile && (
+                      <button
+                        type="button"
+                        onClick={() => handleFileUploadWithProgress(uploadState.currentFile!, uploadState.mediaType === 'video')}
+                        className="px-3 py-1.5 bg-rose-800 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 transition"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Retry Upload</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
+            )}
 
-              {/* Caption Editor */}
+            {/* AI Caption Generator (inside Pre-Made Mode) */}
+            <div className="bg-indigo-950/30 border border-indigo-500/25 rounded-xl p-4 space-y-3">
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+                <span className="text-xs font-bold text-indigo-300">AI Caption Generator</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">Optional</span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Describe what you want to create and let AI write a high-converting caption, hashtags & CTA for your post.
+              </p>
+
+              {/* Single Multiline Prompt Input */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-slate-300">
-                    Post Caption
-                  </label>
-                  {caption && (
-                    <span className="text-[10px] text-emerald-400 font-semibold">✓ Ready</span>
-                  )}
-                </div>
                 <textarea
                   rows={4}
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  placeholder="Write your custom caption here, or click 'Generate Caption with AI' above..."
-                  className="w-full bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-pink-500 transition resize-none"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="Tell AI what you want to create — describe your post, product, audience, tone, key points, or anything else you want it to focus on..."
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500 transition resize-y"
                 />
               </div>
 
-              {/* Hashtags & CTA */}
+              {/* Campaign Goal Dropdown */}
+              <div>
+                <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                  Campaign Goal
+                </label>
+                <select
+                  value={campaignGoal}
+                  onChange={(e) => setCampaignGoal(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option>Lead Generation & Brand Awareness</option>
+                  <option>Product Launch & Direct Sales</option>
+                  <option>Community Engagement & Growth</option>
+                  <option>Educational / Thought Leadership</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleGenerateContent}
+                disabled={isGeneratingContent || !topic.trim()}
+                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center justify-center space-x-2 transition disabled:opacity-40 shadow-sm cursor-pointer"
+              >
+                {isGeneratingContent ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Generating AI Caption...</span>
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-3.5 h-3.5" />
+                    <span>Generate Caption, Hashtags & CTA with AI</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Caption Editor */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-slate-300">
+                  Post Caption
+                </label>
+                {caption && (
+                  <span className="text-[10px] text-emerald-400 font-semibold">✓ Ready</span>
+                )}
+              </div>
+              <textarea
+                rows={4}
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="Write your custom caption here, or click 'Generate Caption with AI' above..."
+                className="w-full bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-pink-500 transition resize-none"
+              />
+            </div>
+
+            {/* Hashtags & CTA
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">Hashtags</label>
@@ -1332,21 +1328,21 @@ export default function AIStudioPage() {
                     className="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-pink-500"
                   />
                 </div>
-              </div>
+              </div> */}
 
-              {/* Music / Audio Attachment */}
-              <MusicCard
-                musicUrl={musicUrl}
-                setMusicUrl={setMusicUrl}
-                musicTitle={musicTitle}
-                setMusicTitle={setMusicTitle}
-                musicArtist={musicArtist}
-                setMusicArtist={setMusicArtist}
-                isOpen={isMusicSectionOpen}
-                setIsOpen={setIsMusicSectionOpen}
-                onFileUpload={handleMusicFileUpload}
-              />
-            </div>
+            {/* Music / Audio Attachment */}
+            <MusicCard
+              musicUrl={musicUrl}
+              setMusicUrl={setMusicUrl}
+              musicTitle={musicTitle}
+              setMusicTitle={setMusicTitle}
+              musicArtist={musicArtist}
+              setMusicArtist={setMusicArtist}
+              isOpen={isMusicSectionOpen}
+              setIsOpen={setIsMusicSectionOpen}
+              onFileUpload={handleMusicFileUpload}
+            />
+          </div>
 
           {/* Section: Multi-Account Destination Selector (Visible in both AI Generator and Custom Premade Upload modes) */}
           <div className="linear-panel p-4 rounded-lg space-y-3 border border-slate-800/80">
@@ -1403,11 +1399,10 @@ export default function AIStudioPage() {
                             key={acc.id}
                             type="button"
                             onClick={() => handleToggleAccountSelect(acc.id)}
-                            className={`flex items-center justify-between p-2 rounded border text-left transition ${
-                              isSelected
+                            className={`flex items-center justify-between p-2 rounded border text-left transition ${isSelected
                                 ? 'bg-indigo-950/40 border-indigo-500/50 text-slate-100'
                                 : 'bg-slate-900/40 border-slate-800/80 text-slate-400'
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center space-x-2 min-w-0">
                               {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />}
@@ -1438,11 +1433,10 @@ export default function AIStudioPage() {
                             key={acc.id}
                             type="button"
                             onClick={() => handleToggleAccountSelect(acc.id)}
-                            className={`flex items-center justify-between p-2 rounded border text-left transition ${
-                              isSelected
+                            className={`flex items-center justify-between p-2 rounded border text-left transition ${isSelected
                                 ? 'bg-indigo-950/40 border-indigo-500/50 text-slate-100'
                                 : 'bg-slate-900/40 border-slate-800/80 text-slate-400'
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center space-x-2 min-w-0">
                               {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />}
@@ -1554,22 +1548,20 @@ export default function AIStudioPage() {
               <div className="flex items-center space-x-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
                 <button
                   onClick={() => setPreviewPlatform('instagram')}
-                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${
-                    previewPlatform === 'instagram'
+                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${previewPlatform === 'instagram'
                       ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow'
                       : 'text-slate-400 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <Instagram className="w-3.5 h-3.5" />
                   <span>Instagram</span>
                 </button>
                 <button
                   onClick={() => setPreviewPlatform('facebook')}
-                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${
-                    previewPlatform === 'facebook'
+                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${previewPlatform === 'facebook'
                       ? 'bg-blue-600 text-white shadow'
                       : 'text-slate-400 hover:text-white'
-                  }`}
+                    }`}
                 >
                   <Facebook className="w-3.5 h-3.5" />
                   <span>Facebook</span>
