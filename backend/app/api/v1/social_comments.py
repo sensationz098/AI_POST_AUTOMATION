@@ -20,6 +20,7 @@ router = APIRouter(prefix="/social-comments", tags=["Social Comments"])
 
 class CommentReplyRequest(BaseModel):
     message: str = Field(..., description="Manual reply text message")
+    social_account_id: Optional[int] = Field(None, description="Optional account ID for consistency validation")
 
 MAX_REPLY_LENGTH = 2000
 
@@ -1747,7 +1748,21 @@ def reply_to_social_comment(
             detail="Comment not found or access denied."
         )
 
-    # 2. Associated SocialAccount Ownership & Status Verification
+    # 2. Reject if comment is deleted / inactive
+    if comment.is_deleted or comment.processing_status == "DELETED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot reply to a deleted comment."
+        )
+
+    # 3. Client social_account_id validation (Consistency check, NEVER overrides comment.social_account_id)
+    if payload.social_account_id is not None and payload.social_account_id != comment.social_account_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Account ownership mismatch. The comment belongs to SocialAccount {comment.social_account_id}, not {payload.social_account_id}."
+        )
+
+    # 4. Associated SocialAccount Ownership & Status Verification
     social_account = db.query(SocialAccount).filter(
         SocialAccount.id == comment.social_account_id,
         SocialAccount.user_id == current_user.id
@@ -1765,15 +1780,60 @@ def reply_to_social_comment(
             detail=f"Social account is not active (status: {social_account.status}). Please reconnect your account."
         )
 
-    # 3. Decrypt Token Server-Side
-    decrypted_access_token = decrypt_token(social_account.access_token)
+    # 5. Platform Ownership Verification (Comment platform MUST match SocialAccount platform)
+    c_platform = (comment.platform or "").lower()
+    sa_platform = (social_account.platform or "").lower()
+    if c_platform != sa_platform:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Platform mismatch: comment is on '{c_platform}' but associated SocialAccount is on '{sa_platform}'."
+        )
+
+    if c_platform not in ["facebook", "instagram"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported platform '{comment.platform}' for comment replies."
+        )
+
+    # 6. Meta Ad Comment Ownership Verification
+    if comment.meta_ad_id:
+        from app.models.meta_ad import MetaAd
+        ad = db.query(MetaAd).filter(
+            MetaAd.id == comment.meta_ad_id,
+            MetaAd.user_id == current_user.id
+        ).first()
+        if not ad:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Associated Meta Ad not found or access denied."
+            )
+        if c_platform == "facebook" and ad.facebook_page_id and social_account.account_id != ad.facebook_page_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Meta Ad Facebook Page mismatch: Ad belongs to Page '{ad.facebook_page_id}' but SocialAccount is '{social_account.account_id}'."
+            )
+        elif c_platform == "instagram" and ad.instagram_account_id and social_account.account_id != ad.instagram_account_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Meta Ad Instagram Account mismatch: Ad belongs to Instagram ID '{ad.instagram_account_id}' but SocialAccount is '{social_account.account_id}'."
+            )
+
+    # 7. Diagnostic Logging (Non-sensitive, never logs access tokens or secrets)
+    logger.info(
+        f"[REPLY_OWNERSHIP_RESOLVED] comment_id={comment.id} | platform={c_platform} | "
+        f"social_account_id={social_account.id} | account_name={social_account.account_name} | "
+        f"account_id={social_account.account_id} | meta_ad_id={comment.meta_ad_id}"
+    )
+
+    # 8. Decrypt Token Server-Side
+    decrypted_access_token = decrypt_token(social_account.access_token) or social_account.access_token
     if not decrypted_access_token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No valid access token available for social account."
         )
 
-    # 4. Idempotency / Duplicate Protection Check
+    # 9. Idempotency / Duplicate Protection Check
     now = datetime.now(timezone.utc)
     ten_seconds_ago = now - timedelta(seconds=10)
     existing_recent_reply = db.query(SocialCommentReply).filter(
@@ -1787,22 +1847,30 @@ def reply_to_social_comment(
     if existing_recent_reply:
         return {
             "status": "success",
-            "platform": comment.platform,
+            "platform": c_platform,
             "comment_id": comment.id,
             "external_reply_id": existing_recent_reply.external_reply_id,
-            "message": "Duplicate reply detected and prevented."
+            "message": "Duplicate reply detected and prevented.",
+            "reply": {
+                "id": existing_recent_reply.id,
+                "message": existing_recent_reply.message,
+                "status": existing_recent_reply.status,
+                "external_reply_id": existing_recent_reply.external_reply_id,
+                "created_at": existing_recent_reply.created_at.isoformat() if existing_recent_reply.created_at else None,
+                "commenter_name": None,
+                "source": "owner"
+            }
         }
 
-    # 5. Send Reply via Meta Graph API Service
-    platform = (comment.platform or "").lower()
+    # 10. Send Reply via Meta Graph API Service
     try:
-        if platform == "facebook":
+        if c_platform == "facebook":
             res = meta_service.reply_to_facebook_comment(
                 comment_id=comment.external_comment_id,
                 access_token=decrypted_access_token,
                 message=message
             )
-        elif platform == "instagram":
+        elif c_platform == "instagram":
             res = meta_service.reply_to_instagram_comment(
                 comment_id=comment.external_comment_id,
                 access_token=decrypted_access_token,
@@ -1817,11 +1885,11 @@ def reply_to_social_comment(
         external_reply_id = str(res.get("id", ""))
 
         # Record Successful Audit Entry
-        social_comment_repo.create_reply_audit(
+        reply_record = social_comment_repo.create_reply_audit(
             db=db,
             comment_id=comment.id,
             user_id=current_user.id,
-            platform=platform,
+            platform=c_platform,
             message=message,
             external_reply_id=external_reply_id,
             status="SUCCESS"
@@ -1829,10 +1897,19 @@ def reply_to_social_comment(
 
         return {
             "status": "success",
-            "platform": platform,
+            "platform": c_platform,
             "comment_id": comment.id,
             "external_reply_id": external_reply_id,
-            "message": "Reply published successfully."
+            "message": "Reply published successfully.",
+            "reply": {
+                "id": reply_record.id,
+                "message": reply_record.message,
+                "status": reply_record.status,
+                "external_reply_id": reply_record.external_reply_id,
+                "created_at": reply_record.created_at.isoformat() if reply_record.created_at else None,
+                "commenter_name": None,
+                "source": "owner"
+            }
         }
 
     except Exception as e:
@@ -1842,7 +1919,7 @@ def reply_to_social_comment(
             db=db,
             comment_id=comment.id,
             user_id=current_user.id,
-            platform=platform,
+            platform=c_platform,
             message=message,
             status="FAILED",
             error_message=safe_error_msg

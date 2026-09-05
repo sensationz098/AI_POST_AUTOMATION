@@ -988,4 +988,335 @@ def test_social_account_filtering_excludes_deleted_and_reply_echoes(client: Test
     assert fb_comment.id not in ids
 
 
+# =====================================================================
+# COMMENT REPLY OWNERSHIP & PLATFORM INTEGRITY AUDIT TEST SUITE
+# =====================================================================
+
+def test_reply_ownership_facebook_uses_owning_page_token_and_id(
+    client: TestClient, auth_headers: dict, test_user: User, db_session: Session
+):
+    """TEST 1: Facebook comment owned by Sensationz Dance Page uses Sensationz Dance's SocialAccount and token."""
+    page_a = SocialAccount(
+        user_id=test_user.id, platform="facebook", account_id="fb_page_sensationz_dance",
+        account_name="Sensationz Dance", access_token=encrypt_token("tok_sensationz_dance"), status="CONNECTED"
+    )
+    page_b = SocialAccount(
+        user_id=test_user.id, platform="facebook", account_id="fb_page_other_dance",
+        account_name="Other Dance", access_token=encrypt_token("tok_other_dance"), status="CONNECTED"
+    )
+    db_session.add_all([page_a, page_b])
+    db_session.commit()
+
+    comment = SocialComment(
+        user_id=test_user.id, social_account_id=page_a.id, platform="facebook",
+        external_comment_id="fb_c_12345", comment_text="Love this dance!", webhook_object="page"
+    )
+    db_session.add(comment)
+    db_session.commit()
+
+    with patch("app.services.meta_service.meta_service.reply_to_facebook_comment", return_value={"id": "fb_rep_999"}) as mock_reply:
+        res = client.post(
+            f"/api/v1/social-comments/{comment.id}/reply",
+            json={"message": "Thank you for supporting Sensationz Dance!"},
+            headers=auth_headers
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "success"
+        assert data["external_reply_id"] == "fb_rep_999"
+
+        # Assert correct token and comment ID were dispatched
+        mock_reply.assert_called_once_with(
+            comment_id="fb_c_12345",
+            access_token="tok_sensationz_dance",
+            message="Thank you for supporting Sensationz Dance!"
+        )
+
+
+def test_reply_ownership_instagram_uses_owning_ig_account_token_and_id(
+    client: TestClient, auth_headers: dict, test_user: User, db_session: Session
+):
+    """TEST 2: Instagram comment owned by @blameless1802 uses @blameless1802's SocialAccount and token."""
+    ig_a = SocialAccount(
+        user_id=test_user.id, platform="instagram", account_id="ig_blameless_1802",
+        account_name="@blameless1802", access_token=encrypt_token("tok_blameless1802"), status="CONNECTED"
+    )
+    ig_b = SocialAccount(
+        user_id=test_user.id, platform="instagram", account_id="ig_other_acc",
+        account_name="@other_business", access_token=encrypt_token("tok_other_biz"), status="CONNECTED"
+    )
+    db_session.add_all([ig_a, ig_b])
+    db_session.commit()
+
+    comment = SocialComment(
+        user_id=test_user.id, social_account_id=ig_a.id, platform="instagram",
+        external_comment_id="ig_c_55555", comment_text="Awesome reel!", webhook_object="instagram"
+    )
+    db_session.add(comment)
+    db_session.commit()
+
+    with patch("app.services.meta_service.meta_service.reply_to_instagram_comment", return_value={"id": "ig_rep_777"}) as mock_reply:
+        res = client.post(
+            f"/api/v1/social-comments/{comment.id}/reply",
+            json={"message": "Thanks from @blameless1802!"},
+            headers=auth_headers
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "success"
+        assert data["external_reply_id"] == "ig_rep_777"
+
+        # Assert correct token and comment ID were dispatched
+        mock_reply.assert_called_once_with(
+            comment_id="ig_c_55555",
+            access_token="tok_blameless1802",
+            message="Thanks from @blameless1802!"
+        )
+
+
+def test_reply_mismatched_client_social_account_id_rejected(
+    client: TestClient, auth_headers: dict, test_user: User, db_session: Session
+):
+    """TEST 3: Client attempts to send social_account_id of a different account -> rejected with HTTP 400."""
+    acc_a = SocialAccount(
+        user_id=test_user.id, platform="facebook", account_id="fb_a",
+        account_name="Account A", access_token=encrypt_token("tok_a"), status="CONNECTED"
+    )
+    acc_b = SocialAccount(
+        user_id=test_user.id, platform="facebook", account_id="fb_b",
+        account_name="Account B", access_token=encrypt_token("tok_b"), status="CONNECTED"
+    )
+    db_session.add_all([acc_a, acc_b])
+    db_session.commit()
+
+    comment = SocialComment(
+        user_id=test_user.id, social_account_id=acc_a.id, platform="facebook",
+        external_comment_id="fb_c_mismatch", comment_text="Test mismatch", webhook_object="page"
+    )
+    db_session.add(comment)
+    db_session.commit()
+
+    # Client tries to force reply through acc_b.id
+    res = client.post(
+        f"/api/v1/social-comments/{comment.id}/reply",
+        json={"message": "Sneaky reply attempt", "social_account_id": acc_b.id},
+        headers=auth_headers
+    )
+    assert res.status_code == 400
+    assert "Account ownership mismatch" in res.json()["detail"]
+
+
+def test_reply_facebook_comment_with_instagram_account_rejected(
+    client: TestClient, auth_headers: dict, test_user: User, db_session: Session
+):
+    """TEST 4: Platform mismatch (Facebook comment associated with Instagram SocialAccount) -> rejected with HTTP 400."""
+    ig_acc = SocialAccount(
+        user_id=test_user.id, platform="instagram", account_id="ig_wrong_plat",
+        account_name="@wrong_platform", access_token=encrypt_token("tok_ig_wrong"), status="CONNECTED"
+    )
+    db_session.add(ig_acc)
+    db_session.commit()
+
+    # Inconsistent DB record: platform='facebook', but social_account_id points to an instagram account
+    comment = SocialComment(
+        user_id=test_user.id, social_account_id=ig_acc.id, platform="facebook",
+        external_comment_id="fb_corrupt_123", comment_text="Corrupt test", webhook_object="page"
+    )
+    db_session.add(comment)
+    db_session.commit()
+
+    res = client.post(
+        f"/api/v1/social-comments/{comment.id}/reply",
+        json={"message": "Cross-platform attempt"},
+        headers=auth_headers
+    )
+    assert res.status_code == 400
+    assert "Platform mismatch" in res.json()["detail"]
+
+
+def test_reply_instagram_comment_with_facebook_account_rejected(
+    client: TestClient, auth_headers: dict, test_user: User, db_session: Session
+):
+    """TEST 5: Platform mismatch (Instagram comment associated with Facebook SocialAccount) -> rejected with HTTP 400."""
+    fb_acc = SocialAccount(
+        user_id=test_user.id, platform="facebook", account_id="fb_wrong_plat",
+        account_name="Wrong FB Page", access_token=encrypt_token("tok_fb_wrong"), status="CONNECTED"
+    )
+    db_session.add(fb_acc)
+    db_session.commit()
+
+    comment = SocialComment(
+        user_id=test_user.id, social_account_id=fb_acc.id, platform="instagram",
+        external_comment_id="ig_corrupt_456", comment_text="Corrupt test IG", webhook_object="instagram"
+    )
+    db_session.add(comment)
+    db_session.commit()
+
+    res = client.post(
+        f"/api/v1/social-comments/{comment.id}/reply",
+        json={"message": "Cross-platform IG attempt"},
+        headers=auth_headers
+    )
+    assert res.status_code == 400
+    assert "Platform mismatch" in res.json()["detail"]
+
+
+def test_reply_meta_ad_comment_ownership_validation(
+    client: TestClient, auth_headers: dict, test_user: User, db_session: Session
+):
+    """TEST 6: Meta Ad comment reply uses the SocialAccount associated with the ad's owning Page."""
+    from app.models.meta_ad import MetaAd
+
+    page_ad_owner = SocialAccount(
+        user_id=test_user.id, platform="facebook", account_id="1122334455",
+        account_name="Ad Sensationz Page", access_token=encrypt_token("tok_ad_page_valid"), status="CONNECTED"
+    )
+    db_session.add(page_ad_owner)
+    db_session.commit()
+
+    ad = MetaAd(
+        user_id=test_user.id, meta_ad_account_id="act_9999", meta_ad_id="ad_998877",
+        name="Summer Campaign Ad", facebook_page_id="1122334455"
+    )
+    db_session.add(ad)
+    db_session.commit()
+
+    ad_comment = SocialComment(
+        user_id=test_user.id, social_account_id=page_ad_owner.id, meta_ad_id=ad.id,
+        platform="facebook", external_comment_id="fb_ad_c_111",
+        comment_text="How much is the course?", webhook_object="page"
+    )
+    db_session.add(ad_comment)
+    db_session.commit()
+
+    with patch("app.services.meta_service.meta_service.reply_to_facebook_comment", return_value={"id": "fb_ad_rep_222"}) as mock_reply:
+        res = client.post(
+            f"/api/v1/social-comments/{ad_comment.id}/reply",
+            json={"message": "Course fee is $99 with special discount!"},
+            headers=auth_headers
+        )
+        assert res.status_code == 200
+        assert res.json()["external_reply_id"] == "fb_ad_rep_222"
+        mock_reply.assert_called_once_with(
+            comment_id="fb_ad_c_111",
+            access_token="tok_ad_page_valid",
+            message="Course fee is $99 with special discount!"
+        )
+
+
+def test_reply_cross_user_comment_rejected(
+    client: TestClient, auth_headers: dict, other_user: User, db_session: Session
+):
+    """TEST 7: User cannot reply to another user's comment (rejected with HTTP 404)."""
+    other_acc = SocialAccount(
+        user_id=other_user.id, platform="facebook", account_id="other_fb_acc",
+        account_name="Other User Page", access_token=encrypt_token("tok_other"), status="CONNECTED"
+    )
+    db_session.add(other_acc)
+    db_session.commit()
+
+    other_comment = SocialComment(
+        user_id=other_user.id, social_account_id=other_acc.id, platform="facebook",
+        external_comment_id="other_c_999", comment_text="Other user's comment", webhook_object="page"
+    )
+    db_session.add(other_comment)
+    db_session.commit()
+
+    res = client.post(
+        f"/api/v1/social-comments/{other_comment.id}/reply",
+        json={"message": "Unauthorized reply attempt"},
+        headers=auth_headers
+    )
+    assert res.status_code == 404
+    assert res.json()["detail"] == "Comment not found or access denied."
+
+
+def test_reply_deleted_comment_rejected(
+    client: TestClient, auth_headers: dict, test_user: User, fb_account: SocialAccount, db_session: Session
+):
+    """TEST 8: Cannot reply to a deleted comment (rejected with HTTP 400)."""
+    deleted_comment = SocialComment(
+        user_id=test_user.id, social_account_id=fb_account.id, platform="facebook",
+        external_comment_id="fb_del_c_333", comment_text="Deleted comment",
+        webhook_object="page", is_deleted=True
+    )
+    db_session.add(deleted_comment)
+    db_session.commit()
+
+    res = client.post(
+        f"/api/v1/social-comments/{deleted_comment.id}/reply",
+        json={"message": "Replying to deleted comment"},
+        headers=auth_headers
+    )
+    assert res.status_code == 400
+    assert "Cannot reply to a deleted comment" in res.json()["detail"]
+
+
+def test_reply_audit_stored_and_returned_with_authoritative_data(
+    client: TestClient, auth_headers: dict, test_user: User, fb_account: SocialAccount, db_session: Session
+):
+    """TEST 9: Brand reply audit record is persisted and returns reply object for immediate frontend rendering."""
+    comment = SocialComment(
+        user_id=test_user.id, social_account_id=fb_account.id, platform="facebook",
+        external_comment_id="fb_c_audit_test", comment_text="Audit test comment", webhook_object="page"
+    )
+    db_session.add(comment)
+    db_session.commit()
+
+    with patch("app.services.meta_service.meta_service.reply_to_facebook_comment", return_value={"id": "fb_rep_audit_1"}):
+        res = client.post(
+            f"/api/v1/social-comments/{comment.id}/reply",
+            json={"message": "Official brand response"},
+            headers=auth_headers
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert "reply" in data
+        assert data["reply"]["message"] == "Official brand response"
+        assert data["reply"]["status"] == "SUCCESS"
+        assert data["reply"]["external_reply_id"] == "fb_rep_audit_1"
+        assert data["reply"]["source"] == "owner"
+
+        # Verify DB record
+        db_reply = db_session.query(SocialCommentReply).filter(SocialCommentReply.external_reply_id == "fb_rep_audit_1").first()
+        assert db_reply is not None
+        assert db_reply.user_id == test_user.id
+        assert db_reply.comment_id == comment.id
+        assert db_reply.platform == "facebook"
+
+
+def test_reply_diagnostic_logging_does_not_leak_secrets(
+    client: TestClient, auth_headers: dict, test_user: User, fb_account: SocialAccount, db_session: Session, caplog
+):
+    """TEST 10: Verify ownership diagnostic logs contain account/platform metadata without leaking access tokens."""
+    import logging
+
+    comment = SocialComment(
+        user_id=test_user.id, social_account_id=fb_account.id, platform="facebook",
+        external_comment_id="fb_c_log_test", comment_text="Log test comment", webhook_object="page"
+    )
+    db_session.add(comment)
+    db_session.commit()
+
+    with caplog.at_level(logging.INFO), patch("app.services.meta_service.meta_service.reply_to_facebook_comment", return_value={"id": "fb_rep_log_1"}):
+        res = client.post(
+            f"/api/v1/social-comments/{comment.id}/reply",
+            json={"message": "Log test message"},
+            headers=auth_headers
+        )
+        assert res.status_code == 200
+
+        # Verify log output
+        log_text = caplog.text
+        assert "[REPLY_OWNERSHIP_RESOLVED]" in log_text
+        assert f"comment_id={comment.id}" in log_text
+        assert f"social_account_id={fb_account.id}" in log_text
+        assert "platform=facebook" in log_text
+        assert f"account_name={fb_account.account_name}" in log_text
+        # Ensure secret token is NOT leaked
+        assert "EAANNCr_test_fb_page_token" not in log_text
+        assert "enc_gAAAA" not in log_text
+
+
+
 

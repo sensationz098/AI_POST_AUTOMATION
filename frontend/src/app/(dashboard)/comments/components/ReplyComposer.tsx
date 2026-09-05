@@ -4,16 +4,31 @@ import React, { useState } from 'react';
 import { Send, Loader2, AlertCircle, CheckCircle2, CornerDownRight } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 
+import { SocialCommentAccountContext } from '@/lib/types';
+
 interface ReplyComposerProps {
   commentId: number;
+  authoritativeAccount?: SocialCommentAccountContext | null;
+  platform?: 'facebook' | 'instagram' | string;
   onSuccess: (newReply: any) => void;
   onCancel: () => void;
 }
 
-export default function ReplyComposer({ commentId, onSuccess, onCancel }: ReplyComposerProps) {
+export default function ReplyComposer({ 
+  commentId, 
+  authoritativeAccount, 
+  platform = 'facebook', 
+  onSuccess, 
+  onCancel 
+}: ReplyComposerProps) {
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isInstagram = (platform || '').toLowerCase() === 'instagram';
+  const displayName = authoritativeAccount?.account_name || 
+    authoritativeAccount?.display_name || 
+    (isInstagram ? '@business_account' : 'Facebook Page');
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -38,6 +53,30 @@ export default function ReplyComposer({ commentId, onSuccess, onCancel }: ReplyC
 
   return (
     <form onSubmit={handleSubmit} className="space-y-2 pt-2 border-t border-slate-800/80">
+      {/* Authoritative Sender Indicator */}
+      <div className="flex items-center justify-between text-[11px] text-slate-400 pb-0.5 px-1">
+        <div className="flex items-center space-x-1.5 min-w-0">
+          <span className="text-slate-500 font-medium flex-shrink-0">Replying as:</span>
+          <div className="flex items-center space-x-1.5 font-semibold text-slate-200 truncate">
+            {isInstagram ? (
+              <span className="text-pink-400 truncate">
+                @{displayName.replace(/^@/, '')}
+              </span>
+            ) : (
+              <span className="text-blue-400 truncate">
+                {displayName}
+              </span>
+            )}
+            <span className="text-slate-500 font-normal">·</span>
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${isInstagram ? 'text-pink-400' : 'text-blue-400'}`}>
+              {isInstagram ? 'Instagram' : 'Facebook'}
+            </span>
+          </div>
+        </div>
+        <span className="text-[10px] text-slate-500 hidden sm:inline-block font-mono">
+          Authoritative Owner
+        </span>
+      </div>
       {error && (
         <div className="p-2 rounded-lg bg-rose-950/40 border border-rose-800/60 text-xs text-rose-300 flex items-center space-x-1.5">
           <AlertCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
