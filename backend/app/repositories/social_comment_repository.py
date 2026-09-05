@@ -157,6 +157,19 @@ class SocialCommentRepository:
 
         return query
 
+    def _build_post_id_filter(self, external_post_id: str):
+        from sqlalchemy import or_
+        clean_id = (external_post_id or "").strip()
+        if not clean_id:
+            return None
+        if "_" in clean_id:
+            short_id = clean_id.split("_", 1)[1]
+            return SocialComment.external_post_id.in_([clean_id, short_id])
+        return or_(
+            SocialComment.external_post_id == clean_id,
+            SocialComment.external_post_id.like(f"%_{clean_id}")
+        )
+
     def get_by_user_id(
         self,
         db: Session,
@@ -203,7 +216,9 @@ class SocialCommentRepository:
         if meta_ad_id is not None:
             query = query.filter(SocialComment.meta_ad_id == meta_ad_id)
         if external_post_id:
-            query = query.filter(SocialComment.external_post_id == external_post_id)
+            post_filter = self._build_post_id_filter(external_post_id)
+            if post_filter is not None:
+                query = query.filter(post_filter)
         if is_ad is True:
             query = query.filter(SocialComment.meta_ad_id.isnot(None))
         elif is_ad is False:
@@ -259,7 +274,9 @@ class SocialCommentRepository:
         if meta_ad_id is not None:
             query = query.filter(SocialComment.meta_ad_id == meta_ad_id)
         if external_post_id:
-            query = query.filter(SocialComment.external_post_id == external_post_id)
+            post_filter = self._build_post_id_filter(external_post_id)
+            if post_filter is not None:
+                query = query.filter(post_filter)
         if is_ad is True:
             query = query.filter(SocialComment.meta_ad_id.isnot(None))
         elif is_ad is False:
@@ -306,7 +323,9 @@ class SocialCommentRepository:
         if meta_ad_id is not None:
             meta_replies_query = meta_replies_query.filter(SocialComment.meta_ad_id == meta_ad_id)
         if external_post_id:
-            meta_replies_query = meta_replies_query.filter(SocialComment.external_post_id == external_post_id)
+            post_filter = self._build_post_id_filter(external_post_id)
+            if post_filter is not None:
+                meta_replies_query = meta_replies_query.filter(post_filter)
         if is_ad is True:
             meta_replies_query = meta_replies_query.filter(SocialComment.meta_ad_id.isnot(None))
         elif is_ad is False:
@@ -329,7 +348,9 @@ class SocialCommentRepository:
         if meta_ad_id is not None:
             manual_replies_query = manual_replies_query.filter(SocialComment.meta_ad_id == meta_ad_id)
         if external_post_id:
-            manual_replies_query = manual_replies_query.filter(SocialComment.external_post_id == external_post_id)
+            post_filter = self._build_post_id_filter(external_post_id)
+            if post_filter is not None:
+                manual_replies_query = manual_replies_query.filter(post_filter)
         if is_ad is True:
             manual_replies_query = manual_replies_query.filter(SocialComment.meta_ad_id.isnot(None))
         elif is_ad is False:

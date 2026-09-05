@@ -3432,6 +3432,237 @@ class MetaGraphService:
             "api_queryable_comments": api_queryable_count
         }
 
+    def fetch_comments_for_instagram_media(
+        self,
+        media_id: str,
+        access_token: str,
+        limit: int = 100,
+        return_details: bool = False
+    ) -> Union[List[Dict[str, Any]], Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
+        """
+        Fetch comments and nested replies for an Instagram Media Object via GET /{media_id}/comments.
+        Supports pagination with safety limits.
+        """
+        empty_err_details = {
+            "status_code": 200,
+            "error_code": None,
+            "error_subcode": None,
+            "error_message": None,
+            "error_type": None,
+            "is_permission_error": False,
+            "missing_permission": None
+        }
+
+        if not media_id or not access_token:
+            return ([], empty_err_details) if return_details else []
+
+        raw_token = decrypt_token(access_token) or access_token
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            mock_comments = [
+                {
+                    "id": f"{media_id}_mock_ig_c1",
+                    "text": "Love this product! Is shipping available?",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "username": "ig_shopper_1",
+                    "from": {"id": "ig_user_101", "username": "ig_shopper_1"},
+                    "replies": {
+                        "data": [
+                            {
+                                "id": f"{media_id}_mock_ig_reply1",
+                                "text": "Yes, we ship nationwide!",
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                "username": "brand_official",
+                                "from": {"id": "ig_brand_1", "username": "brand_official"},
+                                "parent_id": f"{media_id}_mock_ig_c1"
+                            }
+                        ]
+                    }
+                }
+            ]
+            return (mock_comments, empty_err_details) if return_details else mock_comments
+
+        comments_acc = []
+        next_url = f"{self.BASE_URL}/{media_id}/comments"
+        params = {
+            "fields": "id,text,timestamp,username,from{id,username},parent_id,replies.limit(100){id,text,timestamp,username,from{id,username},parent_id}",
+            "limit": limit,
+            "access_token": raw_token
+        }
+        page_count = 0
+        max_pages = 50
+        visited_urls = set()
+        err_details = dict(empty_err_details)
+
+        try:
+            while next_url and page_count < max_pages:
+                if next_url in visited_urls:
+                    break
+                visited_urls.add(next_url)
+
+                if page_count > 0:
+                    res = requests.get(next_url, timeout=15)
+                else:
+                    res = requests.get(next_url, params=params, timeout=15)
+
+                page_count += 1
+                if res.status_code != 200:
+                    err_details["status_code"] = res.status_code
+                    if res.headers.get("content-type", "").startswith("application/json"):
+                        err_json = res.json().get("error", {})
+                        err_details["error_code"] = err_json.get("code")
+                        err_details["error_subcode"] = err_json.get("error_subcode")
+                        err_details["error_message"] = err_json.get("message", "Instagram Graph API Error")
+                    break
+
+                res_data = res.json()
+                data_page = res_data.get("data", [])
+                if isinstance(data_page, list):
+                    comments_acc.extend(data_page)
+
+                paging = res_data.get("paging", {})
+                next_url = paging.get("next")
+        except Exception as e:
+            err_details["error_message"] = str(e)
+            logger.warning(f"[IG_COMMENTS_FETCH] Error fetching comments for IG media {media_id}: {e}")
+
+        return (comments_acc, err_details) if return_details else comments_acc
+
+    def sync_comments_for_instagram_post(
+        self,
+        db: Any,
+        user_id: int,
+        media_id: str,
+        social_account_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Focused single-post Instagram organic comment synchronization.
+        1. Find matching connected Instagram SocialAccount.
+        2. Fetch comments & nested replies from Meta Graph API.
+        3. Save comments to database using idempotent repository.
+        4. Return summary.
+        """
+        from app.models.social_account import SocialAccount
+        from app.repositories.social_comment_repository import social_comment_repo
+        from app.models.social_comment import SocialComment
+
+        sa_q = db.query(SocialAccount).filter(
+            SocialAccount.user_id == user_id,
+            SocialAccount.platform == "instagram",
+            SocialAccount.status == "CONNECTED"
+        )
+        if social_account_id:
+            sa_q = sa_q.filter(SocialAccount.id == social_account_id)
+        matched_sa = sa_q.first()
+
+        if not matched_sa:
+            return {"success": False, "reason": "ACCOUNT_NOT_CONNECTED", "media_id": media_id}
+
+        access_token = decrypt_token(matched_sa.access_token) if matched_sa.access_token else None
+        if not access_token:
+            return {"success": False, "reason": "INVALID_TOKEN", "media_id": media_id, "social_account_id": matched_sa.id}
+
+        raw_comments_res = self.fetch_comments_for_instagram_media(
+            media_id=media_id,
+            access_token=access_token,
+            return_details=True
+        )
+
+        comments_data, err_details = raw_comments_res if isinstance(raw_comments_res, tuple) else (raw_comments_res, {})
+        saved_count = 0
+
+        for raw_c in (comments_data or []):
+            ext_c_id = raw_c.get("id")
+            if not ext_c_id:
+                continue
+
+            # Resurrection Protection
+            existing_c = db.query(SocialComment).filter(
+                SocialComment.platform == "instagram",
+                SocialComment.external_comment_id == ext_c_id
+            ).first()
+            if existing_c and existing_c.is_deleted:
+                continue
+
+            raw_time = raw_c.get("timestamp") or raw_c.get("created_time")
+            event_ts = None
+            if raw_time:
+                try:
+                    if isinstance(raw_time, (int, float)):
+                        event_ts = datetime.fromtimestamp(int(raw_time), tz=timezone.utc)
+                    else:
+                        event_ts = datetime.fromisoformat(str(raw_time).replace("Z", "+00:00"))
+                except Exception:
+                    event_ts = datetime.now(timezone.utc)
+
+            sender = raw_c.get("from") or {}
+            c_name = raw_c.get("username") or sender.get("username") or sender.get("name")
+            c_id = sender.get("id") or str(raw_c.get("user_id") or "") or None
+
+            rec = social_comment_repo.create_or_get_existing(
+                db=db,
+                user_id=user_id,
+                social_account_id=matched_sa.id,
+                platform="instagram",
+                external_comment_id=ext_c_id,
+                external_post_id=media_id,
+                parent_comment_id=raw_c.get("parent_id"),
+                comment_text=raw_c.get("text") or raw_c.get("message"),
+                commenter_id=c_id,
+                commenter_name=c_name,
+                event_timestamp=event_ts,
+                webhook_object="instagram"
+            )
+            if rec and getattr(rec, "id", None):
+                saved_count += 1
+
+            # Ingest nested replies if present in replies.data
+            replies_data = (raw_c.get("replies") or {}).get("data", [])
+            for rep in replies_data:
+                rep_id = rep.get("id")
+                if not rep_id:
+                    continue
+                rep_time = rep.get("timestamp") or rep.get("created_time")
+                rep_event_ts = None
+                if rep_time:
+                    try:
+                        if isinstance(rep_time, (int, float)):
+                            rep_event_ts = datetime.fromtimestamp(int(rep_time), tz=timezone.utc)
+                        else:
+                            rep_event_ts = datetime.fromisoformat(str(rep_time).replace("Z", "+00:00"))
+                    except Exception:
+                        rep_event_ts = datetime.now(timezone.utc)
+
+                rep_sender = rep.get("from") or {}
+                rep_name = rep.get("username") or rep_sender.get("username") or rep_sender.get("name")
+                rep_uid = rep_sender.get("id") or str(rep.get("user_id") or "") or None
+
+                rep_rec = social_comment_repo.create_or_get_existing(
+                    db=db,
+                    user_id=user_id,
+                    social_account_id=matched_sa.id,
+                    platform="instagram",
+                    external_comment_id=rep_id,
+                    external_post_id=media_id,
+                    parent_comment_id=ext_c_id,
+                    comment_text=rep.get("text") or rep.get("message"),
+                    commenter_id=rep_uid,
+                    commenter_name=rep_name,
+                    event_timestamp=rep_event_ts,
+                    webhook_object="instagram"
+                )
+                if rep_rec and getattr(rep_rec, "id", None):
+                    saved_count += 1
+
+        return {
+            "success": True,
+            "media_id": media_id,
+            "social_account_id": matched_sa.id,
+            "http_status": err_details.get("status_code", 200),
+            "comments_fetched": len(comments_data or []),
+            "comments_saved": saved_count
+        }
+
 
 meta_service = MetaGraphService()
 
