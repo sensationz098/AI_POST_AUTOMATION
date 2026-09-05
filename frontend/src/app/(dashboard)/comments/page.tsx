@@ -8,7 +8,9 @@ import {
   AlertCircle, 
   CheckCircle2, 
   Sparkles,
-  Layers
+  Layers,
+  ChevronDown,
+  Loader2
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { SocialAccount, SocialComment, SocialCommentReply } from '@/lib/types';
@@ -93,6 +95,7 @@ export default function EngagementDashboardPage() {
   // Content Feed state
   const [activeTab, setActiveTab] = useState<'posts' | 'ads' | 'stream'>(tabParam);
   const [replyStatusFilter, setReplyStatusFilter] = useState<'all' | 'unreplied' | 'replied'>('all');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [adStatusFilter, setAdStatusFilter] = useState<'all' | 'active' | 'paused'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [platformFilter, setPlatformFilter] = useState('ALL');
@@ -107,7 +110,10 @@ export default function EngagementDashboardPage() {
 
   // Unified Stream state
   const [comments, setComments] = useState<SocialComment[]>([]);
+  const [streamSkip, setStreamSkip] = useState(0);
+  const [hasMoreComments, setHasMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [loadingMoreComments, setLoadingMoreComments] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [globalNotice, setGlobalNotice] = useState<string | null>(null);
 
@@ -185,22 +191,51 @@ export default function EngagementDashboardPage() {
   };
 
   // 5. Fetch Unified Comments Feed Stream
-  const fetchCommentsFeed = async () => {
-    setLoadingComments(true);
+  const fetchCommentsFeed = async (skip = 0, append = false) => {
+    if (append) {
+      setLoadingMoreComments(true);
+    } else {
+      setLoadingComments(true);
+    }
     setCommentsError(null);
     try {
-      let endpoint = '/social-comments/?skip=0&limit=50';
-      if (selectedAccountId !== 'ALL') {
-        endpoint += `&social_account_id=${selectedAccountId}`;
+      const params = new URLSearchParams();
+      params.append('skip', String(skip));
+      params.append('limit', '50');
+      params.append('sort_order', sortOrder);
+      if (replyStatusFilter !== 'all') {
+        params.append('reply_status', replyStatusFilter);
       }
-      const res = await apiClient.get(endpoint);
-      setComments(res.data || []);
+      if (selectedAccountId !== 'ALL') {
+        params.append('social_account_id', selectedAccountId);
+      }
+      if (platformFilter && platformFilter !== 'ALL') {
+        params.append('platform', platformFilter.toLowerCase());
+      }
+
+      const res = await apiClient.get(`/social-comments/?${params.toString()}`);
+      const newComments = res.data || [];
+      setHasMoreComments(newComments.length === 50);
+      setStreamSkip(skip);
+
+      if (append) {
+        setComments((prev) => [...prev, ...newComments]);
+      } else {
+        setComments(newComments);
+      }
     } catch (e: any) {
       console.error('Failed to fetch comments feed:', e);
       setCommentsError(e?.response?.data?.detail || 'Failed to load comments feed.');
     } finally {
       setLoadingComments(false);
+      setLoadingMoreComments(false);
     }
+  };
+
+  const handleLoadMoreStream = () => {
+    if (loadingMoreComments || !hasMoreComments) return;
+    const nextSkip = streamSkip + 50;
+    fetchCommentsFeed(nextSkip, true);
   };
 
   // Initial Load
@@ -211,6 +246,7 @@ export default function EngagementDashboardPage() {
   // Handle Account Selection Change -> Clear Stale State & Fetch New Account Data Immediately
   const handleSelectAccount = (accountId: string) => {
     setSelectedAccountId(accountId);
+    setStreamSkip(0);
     // Clear feed states to prevent displaying stale data from previous account
     setPosts([]);
     setAds([]);
@@ -218,13 +254,13 @@ export default function EngagementDashboardPage() {
     setOverview(null);
   };
 
-  // Trigger Data Fetch on Tab, Account ID, Platform, or Ad Status Change
+  // Trigger Data Fetch on Tab, Account ID, Platform, Reply Status, Sort Order, or Ad Status Change
   useEffect(() => {
     fetchOverview();
     if (activeTab === 'posts') fetchPosts();
     if (activeTab === 'ads') fetchAds();
-    if (activeTab === 'stream') fetchCommentsFeed();
-  }, [activeTab, selectedAccountId, platformFilter, adStatusFilter]);
+    if (activeTab === 'stream') fetchCommentsFeed(0, false);
+  }, [activeTab, selectedAccountId, platformFilter, adStatusFilter, replyStatusFilter, sortOrder]);
 
   // Reply Addition Handler (Updates Thread local state & metrics)
   const handleReplyAdded = (commentId: number, newReply: SocialCommentReply) => {
@@ -326,7 +362,7 @@ export default function EngagementDashboardPage() {
             fetchOverview();
             if (activeTab === 'posts') fetchPosts();
             if (activeTab === 'ads') fetchAds();
-            if (activeTab === 'stream') fetchCommentsFeed();
+            if (activeTab === 'stream') fetchCommentsFeed(0, false);
           }}
           className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-bold transition flex items-center space-x-2 self-start md:self-auto"
         >
@@ -364,6 +400,8 @@ export default function EngagementDashboardPage() {
         onTabChange={handleTabChange}
         replyStatusFilter={replyStatusFilter}
         onReplyStatusChange={setReplyStatusFilter}
+        sortOrder={sortOrder}
+        onSortOrderChange={setSortOrder}
         adStatusFilter={adStatusFilter}
         onAdStatusChange={setAdStatusFilter}
         searchQuery={searchQuery}
@@ -471,9 +509,11 @@ export default function EngagementDashboardPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between text-xs text-slate-400 font-medium px-1 pb-1 border-b border-slate-800/60">
               <span className="flex items-center space-x-2 text-emerald-300 font-bold">
-                <span>All Conversations Stream ({filteredComments.length})</span>
+                <span>All Conversations Stream ({comments.length})</span>
                 <span className="text-slate-600">•</span>
-                <span className="text-slate-400 font-normal">Full Scoped Feed</span>
+                <span className="text-slate-400 font-normal">
+                  {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
+                </span>
               </span>
               <span className="text-[11px] text-slate-500 font-mono">Parent Context Enabled</span>
             </div>
@@ -487,7 +527,7 @@ export default function EngagementDashboardPage() {
 
             {loadingComments ? (
               <FeedLoadingView label="Loading conversation threads..." />
-            ) : filteredComments.length === 0 ? (
+            ) : comments.length === 0 ? (
               <ContextualEmptyState
                 type={replyStatusFilter === 'unreplied' ? 'unreplied' : 'general'}
                 description={
@@ -497,12 +537,13 @@ export default function EngagementDashboardPage() {
                 }
                 onResetFilters={() => {
                   setReplyStatusFilter('all');
-                  fetchCommentsFeed();
+                  setSortOrder('desc');
+                  fetchCommentsFeed(0, false);
                 }}
               />
             ) : (
               <div className="space-y-4 max-w-4xl mx-auto">
-                {filteredComments.map((comment) => (
+                {comments.map((comment) => (
                   <ConversationThread
                     key={comment.id}
                     comment={comment}
@@ -510,6 +551,23 @@ export default function EngagementDashboardPage() {
                     onCommentDeleted={handleCommentDeleted}
                   />
                 ))}
+
+                {hasMoreComments && (
+                  <div className="pt-4 text-center">
+                    <button
+                      onClick={handleLoadMoreStream}
+                      disabled={loadingMoreComments}
+                      className="px-4 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 text-emerald-200 border border-emerald-800 text-xs font-semibold transition flex items-center space-x-2 mx-auto disabled:opacity-50"
+                    >
+                      {loadingMoreComments ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-emerald-400" />
+                      )}
+                      <span>{loadingMoreComments ? 'Loading older comments...' : 'Load More Comments'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

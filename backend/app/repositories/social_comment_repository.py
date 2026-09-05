@@ -169,12 +169,13 @@ class SocialCommentRepository:
         external_post_id: Optional[str] = None,
         is_ad: Optional[bool] = None,
         top_level_only: bool = True,
-        reply_status: Optional[str] = "all"
+        reply_status: Optional[str] = "all",
+        sort_order: str = "desc"
     ) -> List[SocialComment]:
-        """Fetch comments belonging to a specific user with pagination, excluding owner reply echoes."""
+        """Fetch comments belonging to a specific user with pagination, ordered by event_timestamp/created_at, excluding owner reply echoes."""
         from app.models.social_comment_reply import SocialCommentReply
         from sqlalchemy.orm import joinedload, selectinload
-        from sqlalchemy import or_
+        from sqlalchemy import or_, func
 
         reply_subquery = db.query(SocialCommentReply.external_reply_id).filter(
             SocialCommentReply.user_id == user_id,
@@ -208,7 +209,17 @@ class SocialCommentRepository:
         elif is_ad is False:
             query = query.filter(SocialComment.meta_ad_id.is_(None))
 
-        return query.order_by(SocialComment.created_at.desc()).offset(skip).limit(limit).all()
+        norm_sort = (sort_order or "desc").lower().strip()
+        if norm_sort not in ("asc", "desc"):
+            norm_sort = "desc"
+
+        order_col = func.coalesce(SocialComment.event_timestamp, SocialComment.created_at)
+        if norm_sort == "asc":
+            query = query.order_by(order_col.asc(), SocialComment.id.asc())
+        else:
+            query = query.order_by(order_col.desc(), SocialComment.id.desc())
+
+        return query.offset(skip).limit(limit).all()
 
     def count_by_user_id(
         self,

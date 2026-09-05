@@ -369,13 +369,14 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
 
         meta_child_comments = child_comments_map.get(c.external_comment_id, []) + child_comments_map.get(str(c.id), [])
         for child in meta_child_comments:
+            child_ts = child.event_timestamp.isoformat() if child.event_timestamp else (child.created_at.isoformat() if child.created_at else None)
             formatted_replies.append({
                 "id": child.id,
                 "message": child.comment_text,
                 "status": "SUCCESS",
                 "error_message": None,
                 "external_reply_id": child.external_comment_id,
-                "created_at": child.created_at.isoformat() if child.created_at else None,
+                "created_at": child_ts,
                 "commenter_name": child.commenter_name,
                 "commenter_id": child.commenter_id,
                 "source": "meta"
@@ -429,6 +430,7 @@ def get_user_social_comments(
     external_post_id: Optional[str] = Query(None, description="Filter by external post ID"),
     is_ad: Optional[bool] = Query(None, description="Filter ad vs organic comments"),
     reply_status: Optional[str] = Query(None, description="Filter by reply status: 'all', 'replied', or 'unreplied'"),
+    sort_order: Optional[str] = Query("desc", description="Sort order: 'desc' (Newest first) or 'asc' (Oldest first)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -455,7 +457,8 @@ def get_user_social_comments(
         external_post_id=external_post_id,
         is_ad=is_ad,
         top_level_only=True,
-        reply_status=reply_status
+        reply_status=reply_status,
+        sort_order=sort_order or "desc"
     )
 
     return _format_comments_response_list(comments, current_user, db)
@@ -852,6 +855,7 @@ def get_comments_for_specific_ad(
     limit: int = Query(50, ge=1, le=100),
     social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
     reply_status: Optional[str] = Query(None, description="Filter by reply status ('all', 'replied', 'unreplied')"),
+    sort_order: Optional[str] = Query("desc", description="Sort order: 'desc' (Newest first) or 'asc' (Oldest first)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -902,7 +906,7 @@ def get_comments_for_specific_ad(
         db, current_user.id, social_account_id=social_account_id, meta_ad_id=ad.id, top_level_only=True, reply_status=reply_status
     )
     raw_comments = social_comment_repo.get_by_user_id(
-        db, current_user.id, skip=skip, limit=limit, social_account_id=social_account_id, meta_ad_id=ad.id, top_level_only=True, reply_status=reply_status
+        db, current_user.id, skip=skip, limit=limit, social_account_id=social_account_id, meta_ad_id=ad.id, top_level_only=True, reply_status=reply_status, sort_order=sort_order or "desc"
     )
 
     formatted_comments = _format_comments_response_list(raw_comments, current_user, db)
@@ -1107,6 +1111,7 @@ def get_comments_for_specific_post(
     limit: int = Query(50, ge=1, le=100),
     social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
     reply_status: Optional[str] = Query(None, description="Filter by reply status ('all', 'replied', 'unreplied')"),
+    sort_order: Optional[str] = Query("desc", description="Sort order: 'desc' (Newest first) or 'asc' (Oldest first)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -1190,7 +1195,7 @@ def get_comments_for_specific_post(
         db, current_user.id, social_account_id=social_account_id, external_post_id=ext_pid, is_ad=False, top_level_only=True, reply_status=reply_status
     )
     raw_comments = social_comment_repo.get_by_user_id(
-        db, current_user.id, skip=skip, limit=limit, social_account_id=social_account_id, external_post_id=ext_pid, is_ad=False, top_level_only=True, reply_status=reply_status
+        db, current_user.id, skip=skip, limit=limit, social_account_id=social_account_id, external_post_id=ext_pid, is_ad=False, top_level_only=True, reply_status=reply_status, sort_order=sort_order or "desc"
     )
 
     formatted_comments = _format_comments_response_list(raw_comments, current_user, db)

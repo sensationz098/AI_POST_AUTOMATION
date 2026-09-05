@@ -47,6 +47,7 @@ export default function PostCommentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [replyStatusFilter, setReplyStatusFilter] = useState<'all' | 'unreplied' | 'replied'>('all');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [notice, setNotice] = useState<string | null>(null);
 
   const fetchPostComments = async () => {
@@ -54,7 +55,7 @@ export default function PostCommentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const queryParams: any = { reply_status: replyStatusFilter };
+      const queryParams: any = { reply_status: replyStatusFilter, sort_order: sortOrder };
       if (socialAccountId) queryParams.social_account_id = socialAccountId;
 
       const res = await apiClient.get(`/social-comments/posts/${postId}`, {
@@ -76,7 +77,7 @@ export default function PostCommentsPage() {
 
   useEffect(() => {
     fetchPostComments();
-  }, [postId, replyStatusFilter, socialAccountId]);
+  }, [postId, replyStatusFilter, sortOrder, socialAccountId]);
 
   const handleReplyAdded = (commentId: number, newReply: SocialCommentReply) => {
     setComments((prevComments) =>
@@ -175,8 +176,8 @@ export default function PostCommentsPage() {
             totalInteractions={totalInteractions}
           />
 
-          {/* Filter Bar */}
-          <div className="flex items-center justify-between bg-slate-900/60 p-3 rounded-2xl border border-slate-800/90">
+          {/* Filter & Sort Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/90">
             <div className="flex items-center space-x-2">
               <span className="text-xs font-bold text-slate-400 uppercase">Filter:</span>
               <button
@@ -208,6 +209,30 @@ export default function PostCommentsPage() {
                 }`}
               >
                 Replied
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-2 border-t sm:border-t-0 sm:border-l border-slate-800/80 pt-2 sm:pt-0 sm:pl-3">
+              <span className="text-xs font-bold text-slate-400 uppercase">Sort:</span>
+              <button
+                onClick={() => setSortOrder('desc')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  sortOrder === 'desc'
+                    ? 'bg-blue-950 text-blue-200 border border-blue-800 shadow-sm'
+                    : 'bg-slate-950 text-slate-400 border border-slate-800'
+                }`}
+              >
+                Newest First
+              </button>
+              <button
+                onClick={() => setSortOrder('asc')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                  sortOrder === 'asc'
+                    ? 'bg-blue-950 text-blue-200 border border-blue-800 shadow-sm'
+                    : 'bg-slate-950 text-slate-400 border border-slate-800'
+                }`}
+              >
+                Oldest First
               </button>
             </div>
           </div>
