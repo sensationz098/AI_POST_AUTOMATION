@@ -42,7 +42,7 @@ export default function PostPickerModal({
           params: { limit: 50 },
         }
       );
-      setPosts(res.data?.items || []);
+      setPosts(res.data?.items || (res.data as any)?.data || []);
     } catch (err: any) {
       console.error('Failed to load platform posts from Meta:', err);
       const detail = err.response?.data?.detail;

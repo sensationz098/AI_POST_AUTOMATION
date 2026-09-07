@@ -3820,33 +3820,35 @@ class MetaGraphService:
         )
         if is_mock:
             logger.info(f"[META_POSTS] Returning mock Instagram media for account {instagram_account_id}")
+            mock_items = [
+                {
+                    "id": "18026466023684307",
+                    "caption": "Excited to introduce our new automation workflow! Comment 'price' for details. 🚀",
+                    "media_type": "IMAGE",
+                    "media_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800",
+                    "thumbnail_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400",
+                    "permalink": "https://www.instagram.com/p/C_mock_ig_1/",
+                    "created_time": datetime.now(timezone.utc).isoformat(),
+                    "platform": "instagram",
+                    "like_count": 42,
+                    "comments_count": 8
+                },
+                {
+                    "id": "17998345129084712",
+                    "caption": "Behind the scenes at our creative studio. What feature do you want next?",
+                    "media_type": "VIDEO",
+                    "media_url": "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
+                    "thumbnail_url": "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=400",
+                    "permalink": "https://www.instagram.com/p/C_mock_ig_2/",
+                    "created_time": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
+                    "platform": "instagram",
+                    "like_count": 128,
+                    "comments_count": 19
+                }
+            ]
             return {
-                "data": [
-                    {
-                        "id": "18026466023684307",
-                        "caption": "Excited to introduce our new automation workflow! Comment 'price' for details. 🚀",
-                        "media_type": "IMAGE",
-                        "media_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800",
-                        "thumbnail_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400",
-                        "permalink": "https://www.instagram.com/p/C_mock_ig_1/",
-                        "created_time": datetime.now(timezone.utc).isoformat(),
-                        "platform": "instagram",
-                        "like_count": 42,
-                        "comments_count": 8
-                    },
-                    {
-                        "id": "17998345129084712",
-                        "caption": "Behind the scenes at our creative studio. What feature do you want next?",
-                        "media_type": "VIDEO",
-                        "media_url": "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
-                        "thumbnail_url": "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=400",
-                        "permalink": "https://www.instagram.com/p/C_mock_ig_2/",
-                        "created_time": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
-                        "platform": "instagram",
-                        "like_count": 128,
-                        "comments_count": 19
-                    }
-                ],
+                "items": mock_items,
+                "data": mock_items,
                 "paging": {
                     "cursors": {"after": None},
                     "has_next": False
@@ -3854,68 +3856,97 @@ class MetaGraphService:
             }
 
         url = f"{self.BASE_URL}/{instagram_account_id}/media"
-        params = {
-            "fields": "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count",
-            "limit": min(max(limit, 1), 50),
-            "access_token": access_token
-        }
-        if after:
-            params["after"] = after
+        field_sets = [
+            "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count,children{id,media_type,media_url,thumbnail_url}",
+            "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,children{id,media_type,media_url,thumbnail_url}",
+            "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp",
+            "id,caption,timestamp,permalink"
+        ]
 
-        try:
-            resp = requests.get(url, params=params, timeout=15)
-            data = resp.json()
-            if resp.status_code != 200:
-                err = data.get("error", {})
-                logger.error(
-                    f"[META_POSTS] Failed to fetch Instagram posts: status={resp.status_code} "
-                    f"code={err.get('code')} message={err.get('message')}"
-                )
-                raise MetaPublishException(
-                    message=err.get("message", "Failed to fetch Instagram posts from Meta API"),
-                    status_code=resp.status_code,
-                    error_code=err.get("code"),
-                    error_subcode=err.get("error_subcode"),
-                    raw_response=data
-                )
-
-            raw_items = data.get("data", [])
-            normalized = []
-            for item in raw_items:
-                media_id = str(item.get("id"))
-                m_type = item.get("media_type")
-                m_url = item.get("media_url")
-                thumb_url = item.get("thumbnail_url") or m_url
-
-                normalized.append({
-                    "id": media_id,
-                    "caption": item.get("caption") or "",
-                    "media_type": m_type or "IMAGE",
-                    "media_url": m_url,
-                    "thumbnail_url": thumb_url,
-                    "permalink": item.get("permalink"),
-                    "created_time": item.get("timestamp"),
-                    "platform": "instagram",
-                    "like_count": item.get("like_count", 0),
-                    "comments_count": item.get("comments_count", 0)
-                })
-
-            paging = data.get("paging", {})
-            cursors = paging.get("cursors", {})
-            has_next = bool(paging.get("next")) or bool(cursors.get("after"))
-
-            return {
-                "data": normalized,
-                "paging": {
-                    "cursors": {"after": cursors.get("after")},
-                    "has_next": has_next
-                }
+        last_err = None
+        for fields_str in field_sets:
+            params = {
+                "fields": fields_str,
+                "limit": min(max(limit, 1), 50),
+                "access_token": access_token
             }
-        except MetaPublishException:
-            raise
-        except Exception as e:
-            logger.error(f"[META_POSTS] Unexpected error fetching Instagram media: {e}")
-            raise Exception(f"Failed to fetch Instagram media from Meta: {e}")
+            if after:
+                params["after"] = after
+
+            try:
+                resp = requests.get(url, params=params, timeout=15)
+                data = resp.json()
+                if resp.status_code == 200:
+                    raw_items = data.get("data", [])
+                    normalized = []
+                    for item in raw_items:
+                        media_id = str(item.get("id"))
+                        m_type = item.get("media_type") or "IMAGE"
+                        m_url = item.get("media_url")
+                        thumb_url = item.get("thumbnail_url")
+                        
+                        # Handle carousel album children if top-level media_url is absent
+                        children_data = item.get("children", {}).get("data", []) if isinstance(item.get("children"), dict) else []
+                        if children_data and (not m_url or not thumb_url):
+                            child0 = children_data[0]
+                            m_url = m_url or child0.get("media_url") or child0.get("thumbnail_url")
+                            thumb_url = thumb_url or child0.get("thumbnail_url") or child0.get("media_url")
+
+                        thumb_url = thumb_url or m_url
+
+                        normalized.append({
+                            "id": media_id,
+                            "caption": item.get("caption") or "",
+                            "media_type": m_type,
+                            "media_url": m_url,
+                            "thumbnail_url": thumb_url,
+                            "permalink": item.get("permalink"),
+                            "created_time": item.get("timestamp"),
+                            "platform": "instagram",
+                            "like_count": item.get("like_count", 0),
+                            "comments_count": item.get("comments_count", 0)
+                        })
+
+                    paging = data.get("paging", {})
+                    cursors = paging.get("cursors", {})
+                    has_next = bool(paging.get("next")) or bool(cursors.get("after"))
+
+                    return {
+                        "items": normalized,
+                        "data": normalized,
+                        "paging": {
+                            "cursors": {"after": cursors.get("after")},
+                            "has_next": has_next
+                        }
+                    }
+
+                err = data.get("error", {})
+                last_err = err
+                err_code = err.get("code")
+                # If error is field-related (code 100 or 200), try fallback field set
+                if err_code in [100, 200]:
+                    logger.warning(
+                        f"[META_POSTS] Field set '{fields_str[:40]}...' returned code {err_code}. Trying fallback fields."
+                    )
+                    continue
+                else:
+                    # Non-field error (e.g. invalid token, permissions, rate limit), break immediately
+                    break
+
+            except Exception as e:
+                logger.error(f"[META_POSTS] Error making request to Instagram /media: {e}")
+                raise Exception(f"Failed to fetch Instagram media from Meta: {e}")
+
+        # If all field sets failed or non-field error occurred
+        err_msg = last_err.get("message", "Failed to fetch Instagram posts from Meta API") if last_err else "Failed to fetch Instagram posts"
+        logger.error(f"[META_POSTS] Meta Graph API error fetching Instagram posts: {err_msg}")
+        raise MetaPublishException(
+            message=err_msg,
+            status_code=400,
+            error_code=last_err.get("code") if last_err else None,
+            error_subcode=last_err.get("error_subcode") if last_err else None,
+            raw_response=last_err or {}
+        )
 
     def fetch_facebook_page_posts(
         self,
@@ -3939,33 +3970,35 @@ class MetaGraphService:
         )
         if is_mock:
             logger.info(f"[META_POSTS] Returning mock Facebook posts for page {page_id}")
+            mock_items = [
+                {
+                    "id": f"{page_id}_102938475619283",
+                    "caption": "Welcome to our Facebook community! Comment 'info' for our full guide.",
+                    "media_type": "IMAGE",
+                    "media_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800",
+                    "thumbnail_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400",
+                    "permalink": f"https://www.facebook.com/{page_id}/posts/102938475619283",
+                    "created_time": datetime.now(timezone.utc).isoformat(),
+                    "platform": "facebook",
+                    "like_count": 35,
+                    "comments_count": 12
+                },
+                {
+                    "id": f"{page_id}_102938475619284",
+                    "caption": "Our latest product breakdown and walkthrough video.",
+                    "media_type": "VIDEO",
+                    "media_url": "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
+                    "thumbnail_url": "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=400",
+                    "permalink": f"https://www.facebook.com/{page_id}/posts/102938475619284",
+                    "created_time": (datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
+                    "platform": "facebook",
+                    "like_count": 89,
+                    "comments_count": 24
+                }
+            ]
             return {
-                "data": [
-                    {
-                        "id": f"{page_id}_102938475619283",
-                        "caption": "Welcome to our Facebook community! Comment 'info' for our full guide.",
-                        "media_type": "IMAGE",
-                        "media_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800",
-                        "thumbnail_url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400",
-                        "permalink": f"https://www.facebook.com/{page_id}/posts/102938475619283",
-                        "created_time": datetime.now(timezone.utc).isoformat(),
-                        "platform": "facebook",
-                        "like_count": 35,
-                        "comments_count": 12
-                    },
-                    {
-                        "id": f"{page_id}_102938475619284",
-                        "caption": "Our latest product breakdown and walkthrough video.",
-                        "media_type": "VIDEO",
-                        "media_url": "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
-                        "thumbnail_url": "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=400",
-                        "permalink": f"https://www.facebook.com/{page_id}/posts/102938475619284",
-                        "created_time": (datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
-                        "platform": "facebook",
-                        "like_count": 89,
-                        "comments_count": 24
-                    }
-                ],
+                "items": mock_items,
+                "data": mock_items,
                 "paging": {
                     "cursors": {"after": None},
                     "has_next": False
@@ -3973,66 +4006,82 @@ class MetaGraphService:
             }
 
         url = f"{self.BASE_URL}/{page_id}/posts"
-        params = {
-            "fields": "id,message,created_time,full_picture,permalink_url,shares",
-            "limit": min(max(limit, 1), 50),
-            "access_token": access_token
-        }
-        if after:
-            params["after"] = after
+        field_sets = [
+            "id,message,created_time,full_picture,permalink_url,shares",
+            "id,message,created_time,full_picture,permalink_url",
+            "id,message,created_time,permalink_url"
+        ]
 
-        try:
-            resp = requests.get(url, params=params, timeout=15)
-            data = resp.json()
-            if resp.status_code != 200:
-                err = data.get("error", {})
-                logger.error(
-                    f"[META_POSTS] Failed to fetch Facebook posts: status={resp.status_code} "
-                    f"code={err.get('code')} message={err.get('message')}"
-                )
-                raise MetaPublishException(
-                    message=err.get("message", "Failed to fetch Facebook posts from Meta API"),
-                    status_code=resp.status_code,
-                    error_code=err.get("code"),
-                    error_subcode=err.get("error_subcode"),
-                    raw_response=data
-                )
-
-            raw_items = data.get("data", [])
-            normalized = []
-            for item in raw_items:
-                post_id = str(item.get("id"))
-                pic_url = item.get("full_picture")
-
-                normalized.append({
-                    "id": post_id,
-                    "caption": item.get("message") or "",
-                    "media_type": "IMAGE" if pic_url else "STATUS",
-                    "media_url": pic_url,
-                    "thumbnail_url": pic_url,
-                    "permalink": item.get("permalink_url"),
-                    "created_time": item.get("created_time"),
-                    "platform": "facebook",
-                    "like_count": 0,
-                    "comments_count": 0
-                })
-
-            paging = data.get("paging", {})
-            cursors = paging.get("cursors", {})
-            has_next = bool(paging.get("next")) or bool(cursors.get("after"))
-
-            return {
-                "data": normalized,
-                "paging": {
-                    "cursors": {"after": cursors.get("after")},
-                    "has_next": has_next
-                }
+        last_err = None
+        for fields_str in field_sets:
+            params = {
+                "fields": fields_str,
+                "limit": min(max(limit, 1), 50),
+                "access_token": access_token
             }
-        except MetaPublishException:
-            raise
-        except Exception as e:
-            logger.error(f"[META_POSTS] Unexpected error fetching Facebook page posts: {e}")
-            raise Exception(f"Failed to fetch Facebook page posts from Meta: {e}")
+            if after:
+                params["after"] = after
+
+            try:
+                resp = requests.get(url, params=params, timeout=15)
+                data = resp.json()
+                if resp.status_code == 200:
+                    raw_items = data.get("data", [])
+                    normalized = []
+                    for item in raw_items:
+                        post_id = str(item.get("id"))
+                        pic_url = item.get("full_picture")
+
+                        normalized.append({
+                            "id": post_id,
+                            "caption": item.get("message") or "",
+                            "media_type": "IMAGE" if pic_url else "STATUS",
+                            "media_url": pic_url,
+                            "thumbnail_url": pic_url,
+                            "permalink": item.get("permalink_url"),
+                            "created_time": item.get("created_time"),
+                            "platform": "facebook",
+                            "like_count": 0,
+                            "comments_count": 0
+                        })
+
+                    paging = data.get("paging", {})
+                    cursors = paging.get("cursors", {})
+                    has_next = bool(paging.get("next")) or bool(cursors.get("after"))
+
+                    return {
+                        "items": normalized,
+                        "data": normalized,
+                        "paging": {
+                            "cursors": {"after": cursors.get("after")},
+                            "has_next": has_next
+                        }
+                    }
+
+                err = data.get("error", {})
+                last_err = err
+                err_code = err.get("code")
+                if err_code in [100, 200]:
+                    logger.warning(
+                        f"[META_POSTS] Field set '{fields_str}' returned code {err_code}. Trying fallback fields."
+                    )
+                    continue
+                else:
+                    break
+
+            except Exception as e:
+                logger.error(f"[META_POSTS] Error making request to Facebook /posts: {e}")
+                raise Exception(f"Failed to fetch Facebook page posts from Meta: {e}")
+
+        err_msg = last_err.get("message", "Failed to fetch Facebook posts from Meta API") if last_err else "Failed to fetch Facebook posts"
+        logger.error(f"[META_POSTS] Meta Graph API error fetching Facebook posts: {err_msg}")
+        raise MetaPublishException(
+            message=err_msg,
+            status_code=400,
+            error_code=last_err.get("code") if last_err else None,
+            error_subcode=last_err.get("error_subcode") if last_err else None,
+            raw_response=last_err or {}
+        )
 
 
 meta_service = MetaGraphService()
