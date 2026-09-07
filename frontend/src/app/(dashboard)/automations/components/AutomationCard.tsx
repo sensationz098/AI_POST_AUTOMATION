@@ -131,11 +131,21 @@ export default function AutomationCard({
             Target Post
           </span>
           <p className="text-xs text-slate-300 truncate font-mono">
-            {automation.external_post_id
-              ? `External ID: ${automation.external_post_id}`
-              : automation.internal_post_id
-              ? `Post #${automation.internal_post_id}`
-              : 'Specific Post'}
+            {automation.external_post_id ? (
+              <span>
+                <span className="text-slate-400 font-normal">{isFb ? 'FB Post: ' : 'IG Media: '}</span>
+                <span className="text-indigo-300 font-semibold">{automation.external_post_id}</span>
+                {automation.internal_post_id ? (
+                  <span className="text-[10px] text-slate-500 ml-1.5 font-normal">
+                    (Local #{automation.internal_post_id})
+                  </span>
+                ) : null}
+              </span>
+            ) : automation.internal_post_id ? (
+              `Local Post #${automation.internal_post_id}`
+            ) : (
+              'Specific Post'
+            )}
           </p>
         </div>
       </div>

@@ -29,7 +29,7 @@ import {
   AutomationPlatform,
   TriggerType,
   SocialAccount,
-  SocialPost,
+  PlatformPost,
   AutomationCreateInput,
   AutomationUpdateInput,
 } from '@/lib/types';
@@ -61,8 +61,8 @@ export default function AutomationWizardModal({
   const [platform, setPlatform] = useState<AutomationPlatform>('instagram');
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 
-  // Target Post State
-  const [selectedPost, setSelectedPost] = useState<SocialPost | null>(null);
+  // Target Post State (Real Platform Post)
+  const [selectedPost, setSelectedPost] = useState<PlatformPost | null>(null);
   const [internalPostId, setInternalPostId] = useState<number | null>(null);
   const [externalPostId, setExternalPostId] = useState<string | null>(null);
   const [isPostPickerOpen, setIsPostPickerOpen] = useState(false);
@@ -110,15 +110,29 @@ export default function AutomationWizardModal({
       setPrivateMessageEnabled(privMsg?.enabled ?? false);
       setPrivateMessage(privMsg?.message || '');
 
-      // Load post preview if internal_post_id is present
-      if (editingAutomation.internal_post_id) {
-        apiClient
-          .get<SocialPost[]>(`/posts`, { params: { status: 'PUBLISHED' } })
-          .then((res) => {
-            const match = (res.data || []).find((p) => p.id === editingAutomation.internal_post_id);
-            if (match) setSelectedPost(match);
-          })
-          .catch((err) => console.error('Error fetching target post for editing:', err));
+      // Initialize selected post from editing automation
+      if (editingAutomation.external_post_id) {
+        setSelectedPost({
+          id: editingAutomation.external_post_id,
+          platform: editingAutomation.platform,
+          internal_post_id: editingAutomation.internal_post_id,
+        });
+
+        // Optionally fetch richer details from Meta account if available
+        if (editingAutomation.social_account_id) {
+          apiClient
+            .get<{ items: PlatformPost[] }>(
+              `/social-accounts/${editingAutomation.social_account_id}/platform-posts`,
+              { params: { limit: 50 } }
+            )
+            .then((res) => {
+              const match = (res.data?.items || []).find(
+                (p) => p.id === editingAutomation.external_post_id
+              );
+              if (match) setSelectedPost(match);
+            })
+            .catch((err) => console.error('Error fetching platform post for editing:', err));
+        }
       }
       setCurrentStep(1);
     } else {
@@ -214,8 +228,8 @@ export default function AutomationWizardModal({
     }
 
     if (step === 2) {
-      if (!selectedPost && !internalPostId && !externalPostId) {
-        setErrorMessage('Please select a specific published post for this automation.');
+      if (!selectedPost && !externalPostId) {
+        setErrorMessage('Please select a specific real platform post for this automation.');
         return false;
       }
       return true;
@@ -273,8 +287,10 @@ export default function AutomationWizardModal({
     if (validateStep(currentStep)) {
       if (currentStep === 5 && !name.trim()) {
         // Auto-generate a friendly default name if blank
-        const postName = selectedPost?.title || `Post #${selectedPost?.id || ''}`;
-        setName(`${platform === 'facebook' ? 'Facebook' : 'Instagram'} - ${postName}`);
+        const postLabel = selectedPost?.caption
+          ? selectedPost.caption.slice(0, 24) + '...'
+          : selectedPost?.id || 'Post';
+        setName(`${platform === 'facebook' ? 'Facebook' : 'Instagram'} - ${postLabel}`);
       }
       setCurrentStep((prev) => Math.min(prev + 1, 6));
     }
@@ -303,8 +319,8 @@ export default function AutomationWizardModal({
           platform,
           social_account_id: selectedAccountId!,
           post_target_type: 'SPECIFIC_POST',
-          internal_post_id: selectedPost?.id || internalPostId,
-          external_post_id: selectedPost?.ig_media_id || selectedPost?.fb_post_id || externalPostId,
+          internal_post_id: selectedPost?.internal_post_id ?? internalPostId,
+          external_post_id: selectedPost?.id || externalPostId,
           trigger_type: triggerType,
           trigger_config: {
             keywords: triggerType === 'KEYWORD' ? cleanKeywords : [],
@@ -335,8 +351,8 @@ export default function AutomationWizardModal({
           platform,
           social_account_id: selectedAccountId!,
           post_target_type: 'SPECIFIC_POST',
-          internal_post_id: selectedPost?.id || null,
-          external_post_id: selectedPost?.ig_media_id || selectedPost?.fb_post_id || null,
+          internal_post_id: selectedPost?.internal_post_id ?? null,
+          external_post_id: selectedPost?.id || externalPostId || null,
           trigger_type: triggerType,
           trigger_config: {
             keywords: triggerType === 'KEYWORD' ? cleanKeywords : [],
@@ -553,7 +569,7 @@ export default function AutomationWizardModal({
                 <div>
                   <h3 className="text-sm font-bold text-slate-100">Step 2: Choose Target Post</h3>
                   <p className="text-slate-400 text-xs mt-0.5">
-                    This automation will listen for incoming comments on this specific post.
+                    This automation will listen for incoming comments on this specific platform post.
                   </p>
                 </div>
 
@@ -562,9 +578,9 @@ export default function AutomationWizardModal({
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex gap-3 min-w-0">
                         <div className="w-16 h-16 rounded-xl bg-slate-950 border border-slate-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                          {selectedPost.image_url || selectedPost.thumbnail_url ? (
+                          {selectedPost.thumbnail_url || selectedPost.media_url ? (
                             <img
-                              src={selectedPost.image_url || selectedPost.thumbnail_url}
+                              src={selectedPost.thumbnail_url || selectedPost.media_url}
                               alt="Post"
                               className="w-full h-full object-cover"
                             />
@@ -574,14 +590,22 @@ export default function AutomationWizardModal({
                         </div>
                         <div className="min-w-0 space-y-1">
                           <span className="font-bold text-xs text-slate-100 truncate block">
-                            {selectedPost.title || `Post #${selectedPost.id}`}
+                            {platform === 'instagram' ? 'Instagram Media' : 'Facebook Post'}
                           </span>
-                          <p className="text-[11px] text-slate-400 line-clamp-2">
-                            {selectedPost.caption || 'No caption'}
+                          <p className="text-[11px] text-slate-300 line-clamp-2">
+                            {selectedPost.caption || 'No caption text'}
                           </p>
-                          <span className="text-[10px] font-mono text-indigo-400 block">
-                            ID: {selectedPost.ig_media_id || selectedPost.fb_post_id || `#${selectedPost.id}`}
-                          </span>
+                          <div className="space-y-0.5 pt-0.5">
+                            <span className="text-[10px] font-mono text-indigo-400 block truncate">
+                              {platform === 'instagram' ? 'Instagram Media ID: ' : 'Facebook Post ID: '}
+                              <span className="text-slate-100 font-bold">{selectedPost.id}</span>
+                            </span>
+                            {selectedPost.internal_post_id ? (
+                              <span className="text-[9px] font-mono text-emerald-400 block">
+                                Local Post: #{selectedPost.internal_post_id}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
 
@@ -596,7 +620,7 @@ export default function AutomationWizardModal({
 
                     <div className="p-2.5 rounded-xl bg-indigo-900/30 border border-indigo-800/40 text-[11px] text-indigo-300 flex items-center space-x-2">
                       <ShieldCheck className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-                      <span>This automation will only run on this post.</span>
+                      <span>This automation will listen for comments on this exact platform post.</span>
                     </div>
                   </div>
                 ) : (
@@ -607,7 +631,7 @@ export default function AutomationWizardModal({
                     <div>
                       <p className="text-xs font-bold text-slate-200">No Post Selected</p>
                       <p className="text-[11px] text-slate-400 max-w-sm mx-auto mt-0.5">
-                        Choose a published {platform === 'facebook' ? 'Facebook' : 'Instagram'} post to trigger automations.
+                        Select any real published post directly from your connected {platform === 'facebook' ? 'Facebook Page' : 'Instagram Account'}.
                       </p>
                     </div>
                     <button
@@ -615,7 +639,7 @@ export default function AutomationWizardModal({
                       onClick={() => setIsPostPickerOpen(true)}
                       className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition shadow-md shadow-indigo-600/30"
                     >
-                      Select Post from Library
+                      Browse {platform === 'facebook' ? 'Facebook' : 'Instagram'} Posts
                     </button>
                   </div>
                 )}
@@ -909,8 +933,20 @@ export default function AutomationWizardModal({
                   {/* Target Post */}
                   <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
                     <span className="text-slate-400">Target Post</span>
-                    <span className="font-semibold text-slate-200 truncate max-w-[200px]">
-                      {selectedPost?.title || `Post #${selectedPost?.id || internalPostId || 'Selected'}`}
+                    <span className="font-semibold text-slate-200 truncate max-w-[260px] text-right">
+                      {selectedPost ? (
+                        <span>
+                          {platform === 'instagram' ? 'IG Media ' : 'FB Post '}
+                          <span className="font-mono text-indigo-300">{selectedPost.id}</span>
+                          {selectedPost.internal_post_id ? (
+                            <span className="text-[10px] text-emerald-400 ml-1.5 font-normal">(Local #{selectedPost.internal_post_id})</span>
+                          ) : null}
+                        </span>
+                      ) : externalPostId ? (
+                        <span className="font-mono text-indigo-300">{externalPostId}</span>
+                      ) : (
+                        'None'
+                      )}
                     </span>
                   </div>
 
@@ -1010,12 +1046,13 @@ export default function AutomationWizardModal({
       {/* Embedded Post Picker Modal */}
       <PostPickerModal
         isOpen={isPostPickerOpen}
+        socialAccountId={selectedAccountId}
         platform={platform}
-        selectedPostId={selectedPost?.id || internalPostId}
+        selectedPostId={selectedPost?.id || externalPostId}
         onSelectPost={(p) => {
           setSelectedPost(p);
-          setInternalPostId(p.id);
-          setExternalPostId(p.ig_media_id || p.fb_post_id || null);
+          setExternalPostId(p.id);
+          setInternalPostId(p.internal_post_id ?? null);
         }}
         onClose={() => setIsPostPickerOpen(false)}
       />

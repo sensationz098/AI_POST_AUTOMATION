@@ -318,6 +318,32 @@ export type AutomationStatus = 'DRAFT' | 'ACTIVE' | 'PAUSED';
 export type TriggerType = 'ANY_COMMENT' | 'KEYWORD';
 export type PostTargetType = 'SPECIFIC_POST';
 
+export interface PlatformPost {
+  id: string; // Real Meta Platform ID (IG Media ID or FB Post ID)
+  caption?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  permalink?: string;
+  created_time?: string;
+  platform: 'instagram' | 'facebook';
+  like_count?: number;
+  comments_count?: number;
+  internal_post_id?: number | null;
+}
+
+export interface PlatformPostsResponse {
+  items: PlatformPost[];
+  paging?: {
+    cursors?: {
+      before?: string;
+      after?: string;
+    };
+    next?: string;
+    previous?: string;
+  };
+}
+
+
 export interface TriggerConfig {
   keywords?: string[];
 }
