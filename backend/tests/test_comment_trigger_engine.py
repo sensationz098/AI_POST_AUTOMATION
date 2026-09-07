@@ -822,3 +822,245 @@ def test_no_external_api_dispatch_in_phase_3(
         # Zero external requests should be made
         mock_post.assert_not_called()
         mock_get.assert_not_called()
+
+
+def test_instagram_webhook_keyword_non_matching_creates_zero_executions(
+    db_session: Session,
+    test_user: User,
+    ig_account: SocialAccount,
+    ig_post: Post
+):
+    """Verify Instagram webhook comment with non-matching keyword ingests comment but creates 0 executions."""
+    auto = Automation(
+        user_id=test_user.id,
+        social_account_id=ig_account.id,
+        name="IG Keyword Auto",
+        platform="instagram",
+        status=AutomationStatus.ACTIVE.value,
+        post_target_type=PostTargetType.SPECIFIC_POST.value,
+        external_post_id="media_ig_123",
+        trigger_type=TriggerType.KEYWORD.value,
+        trigger_config={"keywords": ["coupon", "discount"]},
+        action_config={
+            "public_reply": {"enabled": True, "variations": ["Check DM"]},
+            "private_message": {"enabled": True, "message": "Code is 20OFF"}
+        }
+    )
+    db_session.add(auto)
+    db_session.commit()
+
+    payload = {
+        "object": "instagram",
+        "entry": [
+            {
+                "id": ig_account.account_id,
+                "time": 1710000000,
+                "changes": [
+                    {
+                        "field": "comments",
+                        "value": {
+                            "id": "ig_comm_nomatch_1",
+                            "text": "Great photo! Beautiful view.",
+                            "media": {"id": "media_ig_123"},
+                            "from": {"id": "ig_user_789", "username": "ig_wanderer"}
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    ingested = meta_comment_ingestion_service.parse_and_ingest_payload(db_session, payload)
+    assert len(ingested) == 1
+    assert ingested[0].external_comment_id == "ig_comm_nomatch_1"
+
+    # Verify zero AutomationExecution records created
+    execs = db_session.query(AutomationExecution).filter(
+        AutomationExecution.external_comment_id == "ig_comm_nomatch_1"
+    ).all()
+    assert len(execs) == 0
+
+
+def test_instagram_webhook_duplicate_delivery_idempotency(
+    db_session: Session,
+    test_user: User,
+    ig_account: SocialAccount,
+    ig_post: Post
+):
+    """Verify duplicate Instagram webhook delivery creates exactly 1 execution and remains idempotent."""
+    auto = Automation(
+        user_id=test_user.id,
+        social_account_id=ig_account.id,
+        name="IG Idempotent Auto",
+        platform="instagram",
+        status=AutomationStatus.ACTIVE.value,
+        post_target_type=PostTargetType.SPECIFIC_POST.value,
+        external_post_id="media_ig_123",
+        trigger_type=TriggerType.KEYWORD.value,
+        trigger_config={"keywords": ["deal"]},
+        action_config={
+            "public_reply": {"enabled": True, "variations": ["DM sent"]},
+            "private_message": {"enabled": True, "message": "Here is the deal"}
+        }
+    )
+    db_session.add(auto)
+    db_session.commit()
+
+    payload = {
+        "object": "instagram",
+        "entry": [
+            {
+                "id": ig_account.account_id,
+                "time": 1710000000,
+                "changes": [
+                    {
+                        "field": "comments",
+                        "value": {
+                            "id": "ig_comm_dup_101",
+                            "text": "Send me the deal please!",
+                            "media": {"id": "media_ig_123"},
+                            "from": {"id": "ig_user_deal_1", "username": "deal_seeker"}
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    # Delivery 1
+    meta_comment_ingestion_service.parse_and_ingest_payload(db_session, payload)
+    # Delivery 2 (Duplicate webhook from Meta)
+    meta_comment_ingestion_service.parse_and_ingest_payload(db_session, payload)
+
+    all_execs = db_session.query(AutomationExecution).filter(
+        AutomationExecution.automation_id == auto.id,
+        AutomationExecution.external_comment_id == "ig_comm_dup_101"
+    ).all()
+
+    assert len(all_execs) == 1
+    assert all_execs[0].status == ExecutionStatus.PENDING.value
+    assert all_execs[0].trigger_result["matched_keyword"] == "deal"
+
+
+def test_instagram_comment_trigger_observable_logging(
+    db_session: Session,
+    test_user: User,
+    ig_account: SocialAccount,
+    ig_post: Post,
+    caplog: pytest.LogCaptureFixture
+):
+    """Verify exact observable [COMMENT_TRIGGER] log statements are produced for Instagram evaluation."""
+    import logging
+    caplog.set_level(logging.INFO)
+
+    auto = Automation(
+        user_id=test_user.id,
+        social_account_id=ig_account.id,
+        name="Observable IG Auto",
+        platform="instagram",
+        status=AutomationStatus.ACTIVE.value,
+        post_target_type=PostTargetType.SPECIFIC_POST.value,
+        external_post_id="media_ig_123",
+        trigger_type=TriggerType.KEYWORD.value,
+        trigger_config={"keywords": ["pricing"]},
+        action_config={
+            "public_reply": {"enabled": True, "variations": ["Sent!"]},
+            "private_message": {"enabled": True, "message": "Pricing details"}
+        }
+    )
+    db_session.add(auto)
+    db_session.commit()
+
+    comment = SocialComment(
+        user_id=test_user.id,
+        social_account_id=ig_account.id,
+        platform="instagram",
+        external_comment_id="comm_observe_1",
+        external_post_id="media_ig_123",
+        comment_text="What is your pricing?",
+        commenter_id="ig_customer_55",
+        commenter_name="customer_sarah",
+        webhook_object="instagram",
+        processing_status="RECEIVED"
+    )
+    db_session.add(comment)
+    db_session.commit()
+
+    executions = comment_trigger_service.evaluate_comment(db_session, comment, ig_account)
+    assert len(executions) == 1
+
+    log_text = caplog.text
+    assert "[COMMENT_TRIGGER] Evaluating Instagram comment comm_observe_1" in log_text
+    assert f"[COMMENT_TRIGGER] account_id={ig_account.account_id} social_account_id={ig_account.id}" in log_text
+    assert "[COMMENT_TRIGGER] external_post_id=media_ig_123" in log_text
+    assert "[COMMENT_TRIGGER] candidate_automations=1" in log_text
+    assert f"[COMMENT_TRIGGER] automation_id={auto.id} status=ACTIVE trigger_type=KEYWORD" in log_text
+    assert "[COMMENT_TRIGGER] keyword_match=true matched_keyword=pricing" in log_text
+    assert f"[COMMENT_TRIGGER] execution_created={executions[0].id} status=PENDING" in log_text
+
+
+def test_instagram_webhook_with_metadata_account_lookup(
+    db_session: Session,
+    test_user: User
+):
+    """Verify Instagram webhook resolution works when account_id is found in metadata_json."""
+    acc = SocialAccount(
+        user_id=test_user.id,
+        platform="instagram",
+        account_id="page_linked_id_999",
+        account_name="meta_ig_account",
+        status="CONNECTED",
+        access_token="valid_token",
+        metadata_json={
+            "instagram_business_account": {"id": "ig_biz_id_888"}
+        }
+    )
+    db_session.add(acc)
+    db_session.commit()
+
+    auto = Automation(
+        user_id=test_user.id,
+        social_account_id=acc.id,
+        name="Meta Lookup Auto",
+        platform="instagram",
+        status=AutomationStatus.ACTIVE.value,
+        post_target_type=PostTargetType.SPECIFIC_POST.value,
+        external_post_id="media_meta_1",
+        trigger_type=TriggerType.ANY_COMMENT.value,
+        trigger_config={},
+        action_config={"public_reply": {"enabled": True, "variations": ["Thanks"]}}
+    )
+    db_session.add(auto)
+    db_session.commit()
+
+    payload = {
+        "object": "instagram",
+        "entry": [
+            {
+                "id": "ig_biz_id_888",
+                "time": 1710000000,
+                "changes": [
+                    {
+                        "field": "comments",
+                        "value": {
+                            "id": "comm_meta_lookup_1",
+                            "text": "Awesome post!",
+                            "media": {"id": "media_meta_1"},
+                            "from": {"id": "user_buyer_11", "username": "ig_user_11"}
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    ingested = meta_comment_ingestion_service.parse_and_ingest_payload(db_session, payload)
+    assert len(ingested) == 1
+
+    execs = db_session.query(AutomationExecution).filter(
+        AutomationExecution.automation_id == auto.id,
+        AutomationExecution.external_comment_id == "comm_meta_lookup_1"
+    ).all()
+    assert len(execs) == 1
+    assert execs[0].status == ExecutionStatus.PENDING.value
+

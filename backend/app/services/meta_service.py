@@ -2383,6 +2383,137 @@ class MetaGraphService:
                 logger.error(f"[IG_REPLY] Meta Service Instagram reply error: {e}")
             raise
 
+    def send_facebook_private_message(
+        self,
+        recipient_id: Optional[str],
+        access_token: str,
+        message: str,
+        comment_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Send a private message to a Facebook user in response to a post/comment via Meta Graph API: POST /me/messages
+        Uses Page Access Token with 'pages_messaging' scope.
+        Supports recipient specified via PSID ('id') or comment context ('comment_id').
+        """
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if is_mock_allowed and (not access_token or access_token.startswith("sandbox") or access_token.startswith("mock") or (recipient_id and recipient_id.startswith("mock")) or (comment_id and comment_id.startswith("mock"))):
+            logger.info(f"[FB_MESSAGE] Executing Sandbox Facebook Private Message Simulation for recipient: {recipient_id or comment_id}")
+            return {"recipient_id": recipient_id or "fb_mock_recipient", "message_id": f"fb_msg_mock_{abs(hash(message)) % 1000000}"}
+
+        if not access_token:
+            raise MetaPublishException("Valid Access Token is required for sending private message.")
+
+        if not recipient_id and not comment_id:
+            raise MetaPublishException("Either recipient_id or comment_id is required to send a Facebook private message.")
+
+        try:
+            logger.info(f"[MESSAGE_TRACE] FACEBOOK_PRIVATE_MESSAGE_STARTED | recipient_id={recipient_id} | comment_id={comment_id}")
+            url = f"{self.BASE_URL}/me/messages"
+            
+            # Construct recipient dict
+            if comment_id:
+                recipient = {"comment_id": comment_id}
+            else:
+                recipient = {"id": recipient_id}
+
+            payload = {
+                "recipient": recipient,
+                "message": {"text": message},
+                "messaging_type": "RESPONSE",
+                "access_token": access_token
+            }
+
+            response = requests.post(url, json=payload, timeout=15)
+            res_data = response.json()
+            logger.info(f"[MESSAGE_TRACE] FACEBOOK_PRIVATE_MESSAGE_RESPONSE | status_code={response.status_code}")
+
+            if response.status_code != 200:
+                err_dict = res_data.get("error", {})
+                error_msg = err_dict.get("message", "Facebook Private Message Error")
+                err_code = err_dict.get("code")
+                err_subcode = err_dict.get("error_subcode")
+                logger.error(f"[MESSAGE_TRACE] FACEBOOK_PRIVATE_MESSAGE_FAILED | status_code={response.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={error_msg}")
+                raise MetaPublishException(
+                    message=f"Facebook Graph API Messaging Error ({response.status_code}) [code={err_code}, subcode={err_subcode}]: {error_msg}",
+                    status_code=response.status_code,
+                    error_code=err_code,
+                    error_subcode=err_subcode,
+                    error_message=error_msg,
+                    raw_response=res_data
+                )
+
+            logger.info(f"[MESSAGE_TRACE] FACEBOOK_PRIVATE_MESSAGE_SUCCESS | message_id={res_data.get('message_id')}")
+            return res_data
+        except Exception as e:
+            if not isinstance(e, MetaPublishException):
+                logger.error(f"[FB_MESSAGE] Meta Service Facebook private message error: {e}")
+            raise
+
+    def send_instagram_private_message(
+        self,
+        recipient_id: Optional[str],
+        access_token: str,
+        message: str,
+        comment_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Send a private message to an Instagram user in response to a post/comment via Meta Graph API: POST /me/messages
+        Uses Instagram Professional / Page Access Token with 'instagram_manage_messages' scope.
+        Supports recipient specified via IGSID ('id') or comment context ('comment_id').
+        """
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if is_mock_allowed and (not access_token or access_token.startswith("sandbox") or access_token.startswith("mock") or (recipient_id and recipient_id.startswith("mock")) or (comment_id and comment_id.startswith("mock"))):
+            logger.info(f"[IG_MESSAGE] Executing Sandbox Instagram Private Message Simulation for recipient: {recipient_id or comment_id}")
+            return {"recipient_id": recipient_id or "ig_mock_recipient", "message_id": f"ig_msg_mock_{abs(hash(message)) % 1000000}"}
+
+        if not access_token:
+            raise MetaPublishException("Valid Access Token is required for sending private message.")
+
+        if not recipient_id and not comment_id:
+            raise MetaPublishException("Either recipient_id or comment_id is required to send an Instagram private message.")
+
+        try:
+            logger.info(f"[MESSAGE_TRACE] INSTAGRAM_PRIVATE_MESSAGE_STARTED | recipient_id={recipient_id} | comment_id={comment_id}")
+            url = f"{self.BASE_URL}/me/messages"
+
+            # Construct recipient dict
+            if comment_id:
+                recipient = {"comment_id": comment_id}
+            else:
+                recipient = {"id": recipient_id}
+
+            payload = {
+                "recipient": recipient,
+                "message": {"text": message},
+                "access_token": access_token
+            }
+
+            response = requests.post(url, json=payload, timeout=15)
+            res_data = response.json()
+            logger.info(f"[MESSAGE_TRACE] INSTAGRAM_PRIVATE_MESSAGE_RESPONSE | status_code={response.status_code}")
+
+            if response.status_code != 200:
+                err_dict = res_data.get("error", {})
+                error_msg = err_dict.get("message", "Instagram Private Message Error")
+                err_code = err_dict.get("code")
+                err_subcode = err_dict.get("error_subcode")
+                logger.error(f"[MESSAGE_TRACE] INSTAGRAM_PRIVATE_MESSAGE_FAILED | status_code={response.status_code} | error_code={err_code} | error_subcode={err_subcode} | error={error_msg}")
+                raise MetaPublishException(
+                    message=f"Instagram Graph API Messaging Error ({response.status_code}) [code={err_code}, subcode={err_subcode}]: {error_msg}",
+                    status_code=response.status_code,
+                    error_code=err_code,
+                    error_subcode=err_subcode,
+                    error_message=error_msg,
+                    raw_response=res_data
+                )
+
+            logger.info(f"[MESSAGE_TRACE] INSTAGRAM_PRIVATE_MESSAGE_SUCCESS | message_id={res_data.get('message_id')}")
+            return res_data
+        except Exception as e:
+            if not isinstance(e, MetaPublishException):
+                logger.error(f"[IG_MESSAGE] Meta Service Instagram private message error: {e}")
+            raise
+
     def fetch_instagram_media_info(self, media_id: str, access_token: str) -> Optional[Dict[str, Any]]:
         """Fetch Instagram media metadata directly from Meta Graph API for post context preview."""
         is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"

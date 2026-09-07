@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.repositories.social_account_repository import social_account_repo
 from app.repositories.social_comment_repository import social_comment_repo
 from app.models.social_comment import SocialComment
+from app.models.social_account import SocialAccount
 
 logger = logging.getLogger(__name__)
 
@@ -160,8 +161,21 @@ class MetaCommentIngestionService:
         """Parse Instagram account 'comments' or 'mentions' changes."""
         account = social_account_repo.get_by_account_id(db, user_id=None, platform="instagram", account_id=ig_account_id)
         if not account:
-            logger.info(f"[META_WEBHOOK_INGEST] Instagram Account {ig_account_id} not found in connected social accounts. Ignoring event.")
-            return []
+            # Fallback: Check if any connected Instagram account has this ID in metadata_json
+            candidates = db.query(SocialAccount).filter(SocialAccount.platform == "instagram").all()
+            for cand in candidates:
+                if isinstance(cand.metadata_json, dict):
+                    ig_id = (
+                        cand.metadata_json.get("instagram_business_account", {}).get("id")
+                        or cand.metadata_json.get("id")
+                        or cand.metadata_json.get("ig_business_account_id")
+                    )
+                    if ig_id and str(ig_id) == str(ig_account_id):
+                        account = cand
+                        break
+            if not account:
+                logger.info(f"[META_WEBHOOK_INGEST] Instagram Account {ig_account_id} not found in connected social accounts. Ignoring event.")
+                return []
 
         created_comments = []
         for change in changes:
@@ -199,7 +213,10 @@ class MetaCommentIngestionService:
                 continue
 
             media = value.get("media", {}) if isinstance(value.get("media"), dict) else {}
-            media_id = media.get("id") or value.get("media_id")
+            media_id = media.get("id") or value.get("media_id") or value.get("post_id")
+            if not media_id and "_" in comment_id:
+                media_id = comment_id.split("_")[0]
+
             comment_text = value.get("text")
             parent_id = value.get("parent_id")
             
