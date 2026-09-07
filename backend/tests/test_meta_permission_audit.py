@@ -7,7 +7,7 @@ from app.models.social_account import SocialAccount
 from app.repositories.social_account_repository import social_account_repo
 
 def test_meta_oauth_scopes_include_pages_read_user_content():
-    """Verify that pages_read_user_content is included in REQUIRED_META_OAUTH_SCOPES."""
+    """Verify that all core permissions are included in REQUIRED_META_OAUTH_SCOPES."""
     assert "pages_read_user_content" in meta_service.REQUIRED_META_OAUTH_SCOPES
     assert "pages_show_list" in meta_service.REQUIRED_META_OAUTH_SCOPES
     assert "pages_read_engagement" in meta_service.REQUIRED_META_OAUTH_SCOPES
@@ -16,10 +16,39 @@ def test_meta_oauth_scopes_include_pages_read_user_content():
     assert "ads_read" in meta_service.REQUIRED_META_OAUTH_SCOPES
 
 
+def test_all_15_roadmap_meta_scopes_present():
+    """Verify that all 15 complete Sensationz roadmap Meta OAuth permissions are present."""
+    expected_all_15 = [
+        "pages_show_list",
+        "pages_read_engagement",
+        "pages_read_user_content",
+        "pages_manage_posts",
+        "pages_manage_engagement",
+        "pages_manage_metadata",
+        "pages_messaging",
+        "instagram_basic",
+        "instagram_content_publish",
+        "instagram_manage_comments",
+        "instagram_manage_messages",
+        "instagram_manage_insights",
+        "ads_read",
+        "ads_management",
+        "business_management",
+    ]
+    for scope in expected_all_15:
+        assert scope in meta_service.REQUIRED_META_OAUTH_SCOPES, f"Scope '{scope}' missing from REQUIRED_META_OAUTH_SCOPES"
+
+    assert len(meta_service.REQUIRED_META_OAUTH_SCOPES) == 15
+
+
 def test_get_authorization_url_includes_pages_read_user_content():
-    """Verify the generated Meta OAuth authorization URL explicitly contains pages_read_user_content in scope query param."""
+    """Verify the generated Meta OAuth authorization URL explicitly contains pages_read_user_content and all roadmap scopes."""
     auth_url = meta_service.get_authorization_url(state="test_state_123")
     assert "pages_read_user_content" in auth_url
+    assert "pages_messaging" in auth_url
+    assert "instagram_manage_messages" in auth_url
+    assert "instagram_manage_insights" in auth_url
+    assert "ads_management" in auth_url
     assert "response_type=code" in auth_url
     assert "state=test_state_123" in auth_url
 
