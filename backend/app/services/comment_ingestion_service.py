@@ -139,6 +139,15 @@ class MetaCommentIngestionService:
             )
             created_comments.append(comment)
 
+            # Phase 3: Evaluate comment triggers for active automations
+            try:
+                from app.services.comment_trigger_service import comment_trigger_service
+                comment_trigger_service.evaluate_comment(db, comment, account)
+            except Exception as trigger_err:
+                logger.error(
+                    f"[COMMENT_TRIGGER] Unexpected error evaluating triggers for FB comment {comment.external_comment_id}: {trigger_err}"
+                )
+
         return created_comments
 
     def _process_instagram_changes(
@@ -223,6 +232,15 @@ class MetaCommentIngestionService:
                 metadata_json={"field": field}
             )
             created_comments.append(comment)
+
+            # Phase 3: Evaluate comment triggers for active automations
+            try:
+                from app.services.comment_trigger_service import comment_trigger_service
+                comment_trigger_service.evaluate_comment(db, comment, account)
+            except Exception as trigger_err:
+                logger.error(
+                    f"[COMMENT_TRIGGER] Unexpected error evaluating triggers for IG comment {comment.external_comment_id}: {trigger_err}"
+                )
 
         return created_comments
 
