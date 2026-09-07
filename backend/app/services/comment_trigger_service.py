@@ -340,6 +340,15 @@ class CommentTriggerService:
                         f"[COMMENT_TRIGGER] execution_created={exec_record.id} status={exec_record.status}"
                     )
                     executions.append(exec_record)
+
+                    # Phase 4: Dispatch execution asynchronously in background thread pool without blocking webhook response
+                    if exec_record.status == ExecutionStatus.PENDING.value:
+                        try:
+                            from app.services.automation_execution_service import automation_execution_service
+                            logger.info(f"[COMMENT_TRIGGER] dispatch_requested={exec_record.id}")
+                            automation_execution_service.dispatch_async(exec_record.id)
+                        except Exception as dispatch_err:
+                            logger.error(f"[COMMENT_TRIGGER] Failed to dispatch execution #{exec_record.id}: {dispatch_err}")
             else:
                 logger.info(
                     f"[COMMENT_TRIGGER] NO_MATCH: Automation '{auto.name}' (ID #{auto.id}) did not match comment {comment.external_comment_id}."

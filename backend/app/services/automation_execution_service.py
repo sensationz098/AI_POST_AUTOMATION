@@ -84,6 +84,10 @@ class AutomationExecutionService:
             logger.info(
                 f"[AUTOMATION_EXECUTION] automation_id={execution.automation_id} platform={execution.platform}"
             )
+            logger.info(f"[EXECUTION_WORKER] picked_execution_id={execution.id}")
+            logger.info(f"[EXECUTION_WORKER] automation_id={execution.automation_id}")
+            logger.info(f"[EXECUTION_WORKER] platform={execution.platform}")
+            logger.info(f"[EXECUTION_WORKER] external_post_id={execution.external_post_id}")
             return execution
         except Exception as e:
             db.rollback()
@@ -128,6 +132,8 @@ class AutomationExecutionService:
         reply_text = variations[execution.id % len(variations)]
 
         logger.info("[AUTOMATION_EXECUTION] public_reply=STARTED")
+        logger.info("[EXECUTION_WORKER] action=PUBLIC_REPLY")
+        logger.info("[EXECUTION_WORKER] sending_reply=true")
         try:
             target_comment_id = execution.external_comment_id
             if execution.platform == "facebook":
@@ -146,6 +152,7 @@ class AutomationExecutionService:
                 raise MetaPublishException(f"Unsupported platform '{execution.platform}' for public reply.")
 
             reply_id = res.get("id") or res.get("external_reply_id")
+            logger.info(f"[EXECUTION_WORKER] reply_sent=true meta_reply_id={reply_id}")
 
             # Persist action success immediately
             execution.public_reply_status = ActionExecutionStatus.SUCCESS.value
@@ -287,7 +294,8 @@ class AutomationExecutionService:
         """
         should_close = False
         if db is None:
-            db = SessionLocal()
+            import app.core.database as app_db
+            db = app_db.SessionLocal()
             should_close = True
 
         try:
@@ -380,6 +388,7 @@ class AutomationExecutionService:
             db.refresh(execution)
 
             logger.info(f"[AUTOMATION_EXECUTION] execution_id={execution.id} status={execution.status}")
+            logger.info(f"[EXECUTION_WORKER] execution_id={execution.id} status={execution.status}")
             return execution
         except Exception as top_err:
             if db:

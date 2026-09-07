@@ -28,12 +28,56 @@ from app.api.v1.health import router as health_router
 from app.api.v1.webhooks import router as webhooks_router
 from app.api.v1.social_comments import router as social_comments_router
 from app.api.v1.automations import router as automations_router
+import asyncio
+from contextlib import asynccontextmanager
+
+async def background_automation_execution_poller():
+    """
+    Background reliability poller running inside FastAPI.
+    Polls every 10 seconds to catch and execute any PENDING or retryable
+    executions caused by unexpected worker crashes, process restarts, or missed dispatches.
+    """
+    logger.info("[EXECUTION_WORKER] Background automation execution poller initialized.")
+    while True:
+        try:
+            await asyncio.sleep(10)
+            from app.core.database import SessionLocal
+            from app.services.automation_execution_service import automation_execution_service
+            db = SessionLocal()
+            try:
+                processed = automation_execution_service.process_pending_executions(db, limit=25)
+                if processed:
+                    logger.info(f"[EXECUTION_WORKER] Reliability poller processed {len(processed)} pending execution(s).")
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            logger.info("[EXECUTION_WORKER] Background poller gracefully cancelled.")
+            break
+        except Exception as e:
+            logger.error(f"[EXECUTION_WORKER] Error in background poller: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Launch background poller task
+    poller_task = asyncio.create_task(background_automation_execution_poller())
+    try:
+        yield
+    finally:
+        # Shutdown: Gracefully cancel background poller
+        poller_task.cancel()
+        try:
+            await poller_task
+        except asyncio.CancelledError:
+            pass
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    description="Production-Ready AI Social Media Automation Platform for Facebook & Instagram API."
+    description="Production-Ready AI Social Media Automation Platform for Facebook & Instagram API.",
+    lifespan=lifespan
 )
 
 # Register slowapi rate limiter

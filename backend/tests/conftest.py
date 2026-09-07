@@ -26,6 +26,14 @@ from app.main import app as fastapi_app
 from app.core.rate_limit import limiter
 limiter.enabled = False
 
+from unittest.mock import patch
+
+@pytest.fixture(autouse=True)
+def mock_background_dispatch():
+    """Mock background thread dispatch in unit tests to prevent thread pool tasks racing with in-memory SQLite drop_all."""
+    with patch("app.services.automation_execution_service.automation_execution_service.dispatch_async") as mock_d:
+        yield mock_d
+
 @pytest.fixture(autouse=True)
 def setup_db():
     Base.metadata.create_all(bind=engine)
