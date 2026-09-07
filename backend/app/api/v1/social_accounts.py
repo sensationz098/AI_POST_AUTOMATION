@@ -153,9 +153,12 @@ def get_social_account_platform_posts(
     Strictly isolated to the specified SocialAccount belonging to current user.
     Optionally correlates external post IDs with local Post records.
     """
+    import logging
     from app.core.security_encryption import decrypt_token
-    from app.services.meta_service import meta_service
+    from app.services.meta_service import meta_service, MetaPublishException
     from app.models.post import Post
+
+    logger = logging.getLogger(__name__)
 
     account = social_account_repo.get_by_id(db, social_account_id)
     if not account or account.user_id != current_user.id:
@@ -163,6 +166,11 @@ def get_social_account_platform_posts(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Social account not found or access denied."
         )
+
+    platform = account.platform.lower()
+    logger.info(f"[PLATFORM_POSTS] request social_account_id={account.id}")
+    logger.info(f"[PLATFORM_POSTS] platform={platform}")
+    logger.info(f"[PLATFORM_POSTS] status={account.status}")
 
     if account.status and account.status.upper() in ["TOKEN_EXPIRED", "REVOKED"]:
         raise HTTPException(
@@ -177,31 +185,64 @@ def get_social_account_platform_posts(
             detail="Valid access token not found for this social account."
         )
 
+    logger.info(f"[PLATFORM_POSTS] token_present=true token_length={len(decrypted_token)}")
+
     limit = max(1, min(limit, 100))
-    platform = account.platform.lower()
 
+    # Resolve platform account ID (IG Business ID or FB Page ID)
+    meta_account_id = account.account_id
     if platform == "instagram":
-        result = meta_service.fetch_instagram_account_posts(
-            instagram_account_id=account.account_id,
-            access_token=decrypted_token,
-            limit=limit,
-            after=after
-        )
+        if isinstance(account.metadata_json, dict):
+            ig_biz = account.metadata_json.get("instagram_business_account")
+            if isinstance(ig_biz, dict) and ig_biz.get("id"):
+                meta_account_id = str(ig_biz["id"])
+            elif isinstance(ig_biz, str) and ig_biz:
+                meta_account_id = str(ig_biz)
+        logger.info(f"[PLATFORM_POSTS] instagram_account_id={meta_account_id}")
     elif platform == "facebook":
-        result = meta_service.fetch_facebook_page_posts(
-            page_id=account.account_id,
-            access_token=decrypted_token,
-            limit=limit,
-            after=after
-        )
-    else:
+        logger.info(f"[PLATFORM_POSTS] facebook_page_id={meta_account_id}")
+
+    logger.info(f"[PLATFORM_POSTS] meta_account_id={meta_account_id}")
+    logger.info("[PLATFORM_POSTS] requesting_meta_posts=true")
+
+    try:
+        if platform == "instagram":
+            result = meta_service.fetch_instagram_account_posts(
+                instagram_account_id=meta_account_id,
+                access_token=decrypted_token,
+                limit=limit,
+                after=after
+            )
+        elif platform == "facebook":
+            result = meta_service.fetch_facebook_page_posts(
+                page_id=meta_account_id,
+                access_token=decrypted_token,
+                limit=limit,
+                after=after
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Platform '{account.platform}' does not support platform post fetching."
+            )
+    except MetaPublishException as m_err:
+        logger.error(f"[PLATFORM_POSTS] meta_error={m_err.error_message}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Platform '{account.platform}' does not support platform post fetching."
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Meta API Error ({m_err.status_code or 502}): {m_err.error_message}"
+        )
+    except Exception as exc:
+        logger.error(f"[PLATFORM_POSTS] meta_error={str(exc)}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to fetch posts from Meta: {str(exc)}"
         )
 
-    items = result.get("items", [])
+    items = result.get("items") or result.get("data") or []
     paging = result.get("paging", {})
+
+    logger.info(f"[PLATFORM_POSTS] meta_status=200")
+    logger.info(f"[PLATFORM_POSTS] meta_data_count={len(items)}")
 
     # Correlate with local Post table (Optional metadata only)
     if items:
@@ -221,6 +262,8 @@ def get_social_account_platform_posts(
 
         for item in items:
             item["internal_post_id"] = id_to_internal.get(item["id"], None)
+
+    logger.info(f"[PLATFORM_POSTS] mapped_platform_posts={len(items)}")
 
     # Optional search query filter by caption or ID
     if q and q.strip():

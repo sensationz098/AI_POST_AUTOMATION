@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,7 @@ from app.models.post import Post
 from app.models.social_comment import SocialComment
 from app.models.automation import Automation, AutomationStatus, TriggerType, PostTargetType
 from app.models.automation_execution import AutomationExecution, ExecutionStatus
-from app.services.meta_service import meta_service
+from app.services.meta_service import meta_service, MetaPublishException
 from app.services.comment_trigger_service import CommentTriggerService
 from app.api.v1.deps import get_current_user
 
@@ -54,6 +54,7 @@ def test_meta_service_fetch_instagram_and_facebook_posts_mock():
                 {
                     "id": "18026466023684307",
                     "caption": "Real Instagram Post Caption",
+                    "media_type": "IMAGE",
                     "media_url": "https://instagram.com/p/123.jpg",
                     "thumbnail_url": "https://instagram.com/p/123.jpg",
                     "permalink": "https://www.instagram.com/p/Cxyz123/",
@@ -63,6 +64,7 @@ def test_meta_service_fetch_instagram_and_facebook_posts_mock():
                     "comments_count": 22
                 }
             ],
+            "data": [],
             "paging": {}
         }
         res = meta_service.fetch_instagram_account_posts("17841400928371", "mock_token")
@@ -109,6 +111,7 @@ def test_get_platform_posts_api_endpoint(client: TestClient, db_session: Session
                 {
                     "id": "18026466023684307",
                     "caption": "Matching Caption",
+                    "media_type": "IMAGE",
                     "media_url": "https://instagram.com/p/1.jpg",
                     "thumbnail_url": "https://instagram.com/p/1.jpg",
                     "permalink": "https://instagram.com/p/1/",
@@ -118,6 +121,7 @@ def test_get_platform_posts_api_endpoint(client: TestClient, db_session: Session
                 {
                     "id": "19999999999999999",
                     "caption": "External Post With No Local Record",
+                    "media_type": "VIDEO",
                     "media_url": "https://instagram.com/p/2.jpg",
                     "thumbnail_url": "https://instagram.com/p/2.jpg",
                     "permalink": "https://instagram.com/p/2/",
@@ -140,6 +144,72 @@ def test_get_platform_posts_api_endpoint(client: TestClient, db_session: Session
         # 2nd item has NO local post
         assert data["items"][1]["id"] == "19999999999999999"
         assert data["items"][1]["internal_post_id"] is None
+
+
+def test_meta_api_error_surfaced_not_empty_success(client: TestClient, db_session: Session, test_user_and_brand):
+    """Verify that when Meta Graph API returns an error, the endpoint returns HTTP 502 with the error, NOT empty items."""
+    user, brand = test_user_and_brand
+
+    ig_acc = SocialAccount(
+        user_id=user.id,
+        brand_id=brand.id,
+        platform="instagram",
+        account_id="17841400928371",
+        account_name="test_ig_brand",
+        access_token=encrypt_token("EAAtest_ig_token"),
+        status="CONNECTED"
+    )
+    db_session.add(ig_acc)
+    db_session.commit()
+    db_session.refresh(ig_acc)
+
+    with patch.object(meta_service, "fetch_instagram_account_posts") as mock_fetch:
+        mock_fetch.side_effect = MetaPublishException(
+            message="Invalid OAuth access token - Cannot parse access token",
+            status_code=400,
+            error_code=190
+        )
+
+        response = client.get(f"/api/v1/social-accounts/{ig_acc.id}/platform-posts")
+        assert response.status_code == 502
+        data = response.json()
+        assert "Invalid OAuth access token" in data["detail"]
+
+
+def test_resolve_instagram_business_account_id_from_metadata(client: TestClient, db_session: Session, test_user_and_brand):
+    """Verify that if SocialAccount has instagram_business_account in metadata_json, that ID is passed to Meta."""
+    user, brand = test_user_and_brand
+
+    ig_acc = SocialAccount(
+        user_id=user.id,
+        brand_id=brand.id,
+        platform="instagram",
+        account_id="fb_page_id_12345",
+        account_name="test_ig_brand",
+        access_token=encrypt_token("EAAtest_ig_token"),
+        status="CONNECTED",
+        metadata_json={"instagram_business_account": {"id": "18026466023684307"}}
+    )
+    db_session.add(ig_acc)
+    db_session.commit()
+    db_session.refresh(ig_acc)
+
+    with patch.object(meta_service, "fetch_instagram_account_posts") as mock_fetch:
+        mock_fetch.return_value = {
+            "items": [
+                {
+                    "id": "18026466023684307",
+                    "caption": "Post",
+                    "platform": "instagram"
+                }
+            ]
+        }
+
+        response = client.get(f"/api/v1/social-accounts/{ig_acc.id}/platform-posts")
+        assert response.status_code == 200
+        mock_fetch.assert_called_once()
+        # Verify the actual IG business account ID was passed, NOT the page ID
+        assert mock_fetch.call_args[1]["instagram_account_id"] == "18026466023684307"
 
 
 def test_account_isolation_platform_posts(client: TestClient, db_session: Session, test_user_and_brand):
