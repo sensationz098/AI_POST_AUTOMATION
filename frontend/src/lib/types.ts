@@ -312,3 +312,77 @@ export interface MetaAdCommentsResponse {
   has_next: boolean;
   comments: SocialComment[];
 }
+
+export type AutomationPlatform = 'facebook' | 'instagram';
+export type AutomationStatus = 'DRAFT' | 'ACTIVE' | 'PAUSED';
+export type TriggerType = 'ANY_COMMENT' | 'KEYWORD';
+export type PostTargetType = 'SPECIFIC_POST';
+
+export interface TriggerConfig {
+  keywords?: string[];
+}
+
+export interface PublicReplyConfig {
+  enabled: boolean;
+  variations: string[];
+}
+
+export interface PrivateMessageConfig {
+  enabled: boolean;
+  message: string | null;
+}
+
+export interface ActionConfig {
+  public_reply?: PublicReplyConfig;
+  private_message?: PrivateMessageConfig;
+}
+
+export interface Automation {
+  id: number;
+  user_id: number;
+  social_account_id: number;
+  name: string;
+  platform: AutomationPlatform;
+  status: AutomationStatus;
+  post_target_type: PostTargetType | string;
+  external_post_id: string | null;
+  internal_post_id: number | null;
+  trigger_type: TriggerType | string;
+  trigger_config: TriggerConfig;
+  action_config: ActionConfig;
+  metadata_json?: Record<string, any> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationCreateInput {
+  name: string;
+  platform: AutomationPlatform;
+  social_account_id: number;
+  post_target_type?: PostTargetType | string;
+  internal_post_id?: number | null;
+  external_post_id?: string | null;
+  trigger_type: TriggerType | string;
+  trigger_config: TriggerConfig;
+  action_config: ActionConfig;
+  metadata_json?: Record<string, any>;
+}
+
+export interface AutomationUpdateInput {
+  name?: string;
+  platform?: AutomationPlatform;
+  social_account_id?: number;
+  post_target_type?: PostTargetType | string;
+  internal_post_id?: number | null;
+  external_post_id?: string | null;
+  trigger_type?: TriggerType | string;
+  trigger_config?: TriggerConfig;
+  action_config?: ActionConfig;
+  metadata_json?: Record<string, any>;
+}
+
+export interface AutomationDeleteResponse {
+  success: boolean;
+  message: string;
+  automation_id: number;
+}
