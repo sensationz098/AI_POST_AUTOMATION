@@ -124,6 +124,7 @@ class CommentTriggerService:
         Uses database index on (social_account_id, external_post_id, status).
         """
         if not external_post_id:
+            logger.info("[COMMENT_TRIGGER] external_post_id is empty or None. candidate_automations=0")
             return []
 
         # Find active automations belonging to this account and platform
@@ -139,9 +140,18 @@ class CommentTriggerService:
         matched_automations = []
 
         for auto in candidates:
-            # Match post ID: exact match or Facebook page_post suffix match
+            # Match post ID: exact match, prefix match, suffix match, or internal post mapping
             auto_post_id = str(auto.external_post_id) if auto.external_post_id else None
             incoming_post_id = str(external_post_id)
+
+            if not auto_post_id and auto.internal_post_id:
+                from app.models.post import Post
+                post = db.query(Post).filter(Post.id == auto.internal_post_id).first()
+                if post:
+                    if account.platform == "instagram":
+                        auto_post_id = str(post.ig_media_id) if post.ig_media_id else None
+                    elif account.platform == "facebook":
+                        auto_post_id = str(post.fb_post_id) if post.fb_post_id else None
 
             if not auto_post_id:
                 continue
@@ -149,7 +159,9 @@ class CommentTriggerService:
             if (
                 auto_post_id == incoming_post_id or
                 incoming_post_id.endswith(f"_{auto_post_id}") or
-                auto_post_id.endswith(f"_{incoming_post_id}")
+                auto_post_id.endswith(f"_{incoming_post_id}") or
+                incoming_post_id.startswith(f"{auto_post_id}_") or
+                auto_post_id.startswith(f"{incoming_post_id}_")
             ):
                 matched_automations.append(auto)
 
@@ -269,6 +281,11 @@ class CommentTriggerService:
         if not comment or not account:
             return []
 
+        platform_label = (account.platform or "UNKNOWN").capitalize()
+        logger.info(f"[COMMENT_TRIGGER] Evaluating {platform_label} comment {comment.external_comment_id}")
+        logger.info(f"[COMMENT_TRIGGER] account_id={account.account_id} social_account_id={account.id}")
+        logger.info(f"[COMMENT_TRIGGER] external_post_id={comment.external_post_id}")
+
         # 1. Owner comment protection
         if self.is_owner_comment(db, comment, account):
             logger.info(
@@ -283,6 +300,8 @@ class CommentTriggerService:
             external_post_id=comment.external_post_id
         )
 
+        logger.info(f"[COMMENT_TRIGGER] candidate_automations={len(candidates)}")
+
         if not candidates:
             return []
 
@@ -290,7 +309,13 @@ class CommentTriggerService:
 
         # 3. Evaluate each candidate automation
         for auto in candidates:
+            logger.info(
+                f"[COMMENT_TRIGGER] automation_id={auto.id} status={auto.status} trigger_type={auto.trigger_type}"
+            )
             is_matched, matched_kw = self.evaluate_trigger(auto, comment)
+            logger.info(
+                f"[COMMENT_TRIGGER] keyword_match={str(is_matched).lower()} matched_keyword={matched_kw or 'none'}"
+            )
             if is_matched:
                 logger.info(
                     f"[COMMENT_TRIGGER] MATCH: Automation '{auto.name}' (ID #{auto.id}, trigger={auto.trigger_type}) matched comment {comment.external_comment_id}."
@@ -302,9 +327,12 @@ class CommentTriggerService:
                     matched_keyword=matched_kw
                 )
                 if exec_record:
+                    logger.info(
+                        f"[COMMENT_TRIGGER] execution_created={exec_record.id} status={exec_record.status}"
+                    )
                     executions.append(exec_record)
             else:
-                logger.debug(
+                logger.info(
                     f"[COMMENT_TRIGGER] NO_MATCH: Automation '{auto.name}' (ID #{auto.id}) did not match comment {comment.external_comment_id}."
                 )
 
