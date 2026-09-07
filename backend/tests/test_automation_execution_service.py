@@ -818,3 +818,125 @@ def test_process_pending_executions_batch(db_session: Session, test_user: User, 
         for p in processed:
             assert p.status == ExecutionStatus.COMPLETED.value
 
+
+def test_comment_trigger_triggers_async_dispatch(db_session: Session, test_user: User, ig_account: SocialAccount, ig_automation: Automation, ig_comment: SocialComment):
+    """Verify that comment_trigger_service.evaluate_comment creates a PENDING execution and requests async dispatch."""
+    with patch.object(automation_execution_service, "dispatch_async") as mock_dispatch:
+        executions = comment_trigger_service.evaluate_comment(db_session, ig_comment, ig_account)
+        assert len(executions) == 1
+        created_exec = executions[0]
+        assert created_exec.status == ExecutionStatus.PENDING.value
+        mock_dispatch.assert_called_once_with(created_exec.id)
+
+
+def test_instagram_public_reply_end_to_end_success(db_session: Session, test_user: User, ig_account: SocialAccount, ig_automation: Automation, ig_comment: SocialComment):
+    """Verify complete Instagram public reply execution from PENDING -> COMPLETED."""
+    ig_automation.action_config = {
+        "public_reply": {
+            "enabled": True,
+            "variations": ["Hello! Thanks for your comment."]
+        },
+        "private_message": {"enabled": False}
+    }
+    db_session.commit()
+
+    exec_record = AutomationExecution(
+        automation_id=ig_automation.id,
+        user_id=test_user.id,
+        social_account_id=ig_account.id,
+        comment_id=ig_comment.id,
+        external_comment_id=ig_comment.external_comment_id,
+        external_post_id=ig_comment.external_post_id,
+        platform="instagram",
+        status=ExecutionStatus.PENDING.value
+    )
+    db_session.add(exec_record)
+    db_session.commit()
+    db_session.refresh(exec_record)
+
+    with patch.object(meta_service, "reply_to_instagram_comment") as mock_reply:
+        mock_reply.return_value = {"id": "ig_reply_1802998877", "status": "success"}
+
+        res = automation_execution_service.execute_pending_execution(exec_record.id, db=db_session)
+        assert res is not None
+        assert res.status == ExecutionStatus.COMPLETED.value
+        assert res.public_reply_status == ActionExecutionStatus.SUCCESS.value
+        assert res.public_reply_result["external_reply_id"] == "ig_reply_1802998877"
+        mock_reply.assert_called_once_with(
+            comment_id=ig_comment.external_comment_id,
+            access_token="EAANNCr_valid_ig_token",
+            message="Hello! Thanks for your comment."
+        )
+
+        # Verify SocialCommentReply audit record created
+        reply_audit = db_session.query(SocialCommentReply).filter(
+            SocialCommentReply.external_reply_id == "ig_reply_1802998877"
+        ).first()
+        assert reply_audit is not None
+        assert reply_audit.platform == "instagram"
+
+
+def test_instagram_public_reply_meta_api_failure(db_session: Session, test_user: User, ig_account: SocialAccount, ig_automation: Automation, ig_comment: SocialComment):
+    """Verify that Meta API errors move execution to FAILED with exact error details stored."""
+    ig_automation.action_config = {
+        "public_reply": {
+            "enabled": True,
+            "variations": ["Thanks!"]
+        },
+        "private_message": {"enabled": False}
+    }
+    db_session.commit()
+
+    exec_record = AutomationExecution(
+        automation_id=ig_automation.id,
+        user_id=test_user.id,
+        social_account_id=ig_account.id,
+        comment_id=ig_comment.id,
+        external_comment_id=ig_comment.external_comment_id,
+        external_post_id=ig_comment.external_post_id,
+        platform="instagram",
+        status=ExecutionStatus.PENDING.value
+    )
+    db_session.add(exec_record)
+    db_session.commit()
+    db_session.refresh(exec_record)
+
+    with patch.object(meta_service, "reply_to_instagram_comment") as mock_reply:
+        mock_reply.side_effect = MetaPublishException(
+            message="Graph API Error: (#200) Permission denied",
+            status_code=403,
+            error_code=200
+        )
+
+        res = automation_execution_service.execute_pending_execution(exec_record.id, db=db_session)
+        assert res is not None
+        assert res.status == ExecutionStatus.FAILED.value
+        assert res.public_reply_status == ActionExecutionStatus.FAILED.value
+        assert "Permission denied" in res.public_reply_result["error"]
+
+
+def test_orphaned_pending_execution_picked_up_by_poller(db_session: Session, test_user: User, ig_account: SocialAccount, ig_automation: Automation, ig_comment: SocialComment):
+    """Verify that an orphaned PENDING execution (e.g. from server restart) is picked up by process_pending_executions."""
+    orphaned = AutomationExecution(
+        automation_id=ig_automation.id,
+        user_id=test_user.id,
+        social_account_id=ig_account.id,
+        comment_id=ig_comment.id,
+        external_comment_id="orphaned_c99",
+        external_post_id=ig_comment.external_post_id,
+        platform="instagram",
+        status=ExecutionStatus.PENDING.value
+    )
+    db_session.add(orphaned)
+    db_session.commit()
+    db_session.refresh(orphaned)
+
+    with patch.object(meta_service, "reply_to_instagram_comment", return_value={"id": "rep_orphan"}), \
+         patch.object(meta_service, "send_instagram_private_message", return_value={"message_id": "dm_orphan"}):
+
+        processed = automation_execution_service.process_pending_executions(db_session, limit=10)
+        assert any(p.id == orphaned.id for p in processed)
+        db_session.refresh(orphaned)
+        assert orphaned.status == ExecutionStatus.COMPLETED.value
+
+
