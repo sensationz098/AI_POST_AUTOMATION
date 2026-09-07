@@ -13,6 +13,8 @@ from app.models.refresh_token import RefreshToken
 from app.models.social_comment import SocialComment, CommentProcessingStatus
 from app.models.social_comment_reply import SocialCommentReply
 from app.models.external_post_context import ExternalPostContext
+from app.models.automation import Automation, AutomationStatus, TriggerType, PostTargetType
+from app.models.automation_execution import AutomationExecution, ExecutionStatus, ActionExecutionStatus
 
 __all__ = [
     "User", 
@@ -33,7 +35,14 @@ __all__ = [
     "SocialComment",
     "CommentProcessingStatus",
     "SocialCommentReply",
-    "ExternalPostContext"
+    "ExternalPostContext",
+    "Automation",
+    "AutomationStatus",
+    "TriggerType",
+    "PostTargetType",
+    "AutomationExecution",
+    "ExecutionStatus",
+    "ActionExecutionStatus"
 ]
 
 

@@ -27,21 +27,29 @@ def test_meta_oauth_authorization_url_contains_all_scopes():
     for s in existing_scopes:
         assert s in scopes, f"Existing scope '{s}' missing from OAuth URL"
 
-    # 2. New comment automation permissions present
-    new_comment_scopes = [
+    # 2. Comment automation permissions present
+    comment_scopes = [
         "instagram_manage_comments",
         "pages_read_user_content",
         "pages_manage_engagement",
         "pages_manage_metadata"
     ]
-    for s in new_comment_scopes:
-        assert s in scopes, f"New comment scope '{s}' missing from OAuth URL"
+    for s in comment_scopes:
+        assert s in scopes, f"Comment scope '{s}' missing from OAuth URL"
 
-    # 3. Meta Ads read-only permission present
-    assert "ads_read" in scopes, "Permission 'ads_read' missing from OAuth URL"
+    # 3. Messenger, Instagram DMs, Insights, and Ads permissions present
+    extended_roadmap_scopes = [
+        "pages_messaging",
+        "instagram_manage_messages",
+        "instagram_manage_insights",
+        "ads_read",
+        "ads_management"
+    ]
+    for s in extended_roadmap_scopes:
+        assert s in scopes, f"Extended scope '{s}' missing from OAuth URL"
 
-    # Total expected scope count (10 existing + 1 ads_read = 11)
-    assert len(scopes) == 11
+    # Total expected scope count (15 complete roadmap permissions)
+    assert len(scopes) == 15
 
 def test_oauth_authorization_url_logging_does_not_leak_secrets():
     """Verify OAuth authorization URL generation logs scope names but NEVER logs secrets or tokens."""

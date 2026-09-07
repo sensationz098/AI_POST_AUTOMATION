@@ -33,8 +33,8 @@ def test_oauth_authorization_url_includes_ads_read_and_existing_scopes():
         for scope in expected_existing:
             assert scope in scope_list
 
-        assert len(scope_list) == 11
-        assert "ads_management" not in scope_list  # Must NOT include write access for Ads
+        assert "ads_management" in scope_list
+        assert len(scope_list) == 15
 
 
 def test_ads_read_permission_verification_when_granted():

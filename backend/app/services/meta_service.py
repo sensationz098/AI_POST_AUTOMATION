@@ -1069,11 +1069,15 @@ class MetaGraphService:
         "pages_read_user_content",
         "pages_manage_engagement",
         "pages_manage_metadata",
+        "pages_messaging",
         "instagram_basic",
         "instagram_content_publish",
         "instagram_manage_comments",
-        "business_management",
-        "ads_read"
+        "instagram_manage_messages",
+        "instagram_manage_insights",
+        "ads_read",
+        "ads_management",
+        "business_management"
     ]
 
     REQUIRED_COMMENT_AUTOMATION_SCOPES = [
