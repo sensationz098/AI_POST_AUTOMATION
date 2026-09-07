@@ -33,7 +33,7 @@ export default function AccountCommentBreakdownBar({
   loading = false,
 }: AccountCommentBreakdownBarProps) {
   const isAllSelected = selectedAccountId === 'ALL';
-  const totalInteractions = totalOrganicConversations + totalOrganicReplies;
+  const totalComments = totalOrganicConversations + totalOrganicReplies;
 
   const getPlatformIcon = (platform: string, size = 'w-4 h-4') => {
     if (platform?.toLowerCase() === 'facebook') {
@@ -55,7 +55,7 @@ export default function AccountCommentBreakdownBar({
             <span>COMMENTS BY ACCOUNT</span>
           </h2>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Inspect organic conversations by connected social account
+            Inspect organic comments by connected social account
           </p>
         </div>
 
@@ -101,9 +101,9 @@ export default function AccountCommentBreakdownBar({
           <div className="pt-2 border-t border-slate-800/70 flex items-center justify-between text-xs">
             <div className="flex items-baseline space-x-1.5">
               <span className="text-sm font-extrabold text-indigo-300 font-mono">
-                {loading ? '...' : totalOrganicConversations}
+                {loading ? '...' : totalComments}
               </span>
-              <span className="text-[10px] text-slate-400 font-semibold">Conversations</span>
+              <span className="text-[10px] text-slate-400 font-semibold">Comments</span>
             </div>
 
             <div className="text-[10px] text-slate-400 font-medium font-mono">
@@ -116,6 +116,7 @@ export default function AccountCommentBreakdownBar({
         {accounts.map((acc) => {
           const isSelected = String(acc.social_account_id) === String(selectedAccountId);
           const isFb = acc.platform?.toLowerCase() === 'facebook';
+          const accountTotalComments = (acc.top_level_comment_count || 0) + (acc.reply_count || 0);
 
           return (
             <div
@@ -182,9 +183,9 @@ export default function AccountCommentBreakdownBar({
                       isFb ? 'text-blue-300' : 'text-pink-300'
                     }`}
                   >
-                    {loading ? '...' : acc.top_level_comment_count}
+                    {loading ? '...' : accountTotalComments}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-semibold">Conversations</span>
+                  <span className="text-[10px] text-slate-400 font-semibold">Comments</span>
                 </div>
 
                 <div className="text-[10px] text-slate-400 font-medium font-mono">
