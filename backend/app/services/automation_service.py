@@ -62,7 +62,7 @@ class AutomationService:
             )
 
         resolved_internal_id = internal_post_id
-        resolved_external_id = external_post_id.strip() if external_post_id and external_post_id.strip() else None
+        resolved_external_id = external_post_id.strip() if external_post_id and str(external_post_id).strip() else None
 
         if resolved_internal_id is not None:
             post = db.query(Post).filter(
@@ -103,8 +103,15 @@ class AutomationService:
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Specified external_post_id does not match post's Facebook post ID."
                     )
+
+            if not resolved_external_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Selected local post #{resolved_internal_id} has not been published to {platform} or lacks an external platform post ID."
+                )
+
         elif resolved_external_id:
-            # Check if there is a known internal post for this external ID
+            # Check if there is an optional known internal post for this external ID
             if platform == "instagram":
                 matched_post = db.query(Post).filter(Post.user_id == user_id, Post.ig_media_id == resolved_external_id).first()
             else:
@@ -114,7 +121,13 @@ class AutomationService:
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A target post (internal_post_id or external_post_id) must be specified for SPECIFIC_POST automations."
+                detail="A target post (external_post_id or published internal_post_id) must be specified for SPECIFIC_POST automations."
+            )
+
+        if not resolved_external_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A valid external platform post ID is required."
             )
 
         return resolved_internal_id, resolved_external_id

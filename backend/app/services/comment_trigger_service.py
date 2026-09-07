@@ -153,16 +153,24 @@ class CommentTriggerService:
                     elif account.platform == "facebook":
                         auto_post_id = str(post.fb_post_id) if post.fb_post_id else None
 
-            if not auto_post_id:
-                continue
+            is_target_match = False
+            if auto_post_id:
+                if (
+                    auto_post_id == incoming_post_id or
+                    incoming_post_id.endswith(f"_{auto_post_id}") or
+                    auto_post_id.endswith(f"_{incoming_post_id}") or
+                    incoming_post_id.startswith(f"{auto_post_id}_") or
+                    auto_post_id.startswith(f"{incoming_post_id}_")
+                ):
+                    is_target_match = True
 
-            if (
-                auto_post_id == incoming_post_id or
-                incoming_post_id.endswith(f"_{auto_post_id}") or
-                auto_post_id.endswith(f"_{incoming_post_id}") or
-                incoming_post_id.startswith(f"{auto_post_id}_") or
-                auto_post_id.startswith(f"{incoming_post_id}_")
-            ):
+            logger.info(
+                f"[COMMENT_TRIGGER] automation_id={auto.id} automation_social_account_id={auto.social_account_id} "
+                f"automation_platform={auto.platform} automation_target_external_id={auto_post_id} "
+                f"incoming_external_post_id={incoming_post_id} target_match={str(is_target_match).lower()}"
+            )
+
+            if is_target_match:
                 matched_automations.append(auto)
 
         return matched_automations
@@ -285,6 +293,7 @@ class CommentTriggerService:
         logger.info(f"[COMMENT_TRIGGER] Evaluating {platform_label} comment {comment.external_comment_id}")
         logger.info(f"[COMMENT_TRIGGER] account_id={account.account_id} social_account_id={account.id}")
         logger.info(f"[COMMENT_TRIGGER] external_post_id={comment.external_post_id}")
+        logger.info(f"[COMMENT_TRIGGER] platform={account.platform} social_account_id={account.id} external_post_id={comment.external_post_id}")
 
         # 1. Owner comment protection
         if self.is_owner_comment(db, comment, account):
