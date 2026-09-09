@@ -194,13 +194,15 @@ class StoryService:
         all_warnings: List[str] = []
         account_checks: List[Dict[str, Any]] = []
 
+        target_ids = story_in.target_account_ids or []
+        logger.info(f"[STORY_PREFLIGHT] user_id={user_id} brand_id={story_in.brand_id} media_type={story_in.media_type} target_account_ids={target_ids} count={len(target_ids)}")
+
         # 1. Media validation
         is_media_valid, m_errors, m_warnings = self.validate_story_media(story_in.media_url, story_in.media_type)
         all_errors.extend(m_errors)
         all_warnings.extend(m_warnings)
 
         # 2. Selected target accounts check
-        target_ids = story_in.target_account_ids or []
         if not target_ids:
             all_errors.append("No Story destinations selected. Please select at least one account.")
             all_warnings.append("Select at least one connected Facebook Page or Instagram Business account.")
@@ -694,6 +696,8 @@ class StoryService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to publish this Story.")
 
         target_ids = story.target_account_ids or []
+        logger.info(f"[STORY_PUBLISH_NOW] story_id={story_id} user_id={story.user_id} target_account_ids={target_ids} count={len(target_ids)}")
+
         if not target_ids:
             story.status = StoryStatus.FAILED.value
             story.last_error = "Story has no target destination accounts configured."
@@ -734,6 +738,8 @@ class StoryService:
                 failed_account_ids.append(aid)
                 continue
 
+            logger.info(f"[STORY_META_PUBLISH_START] story_id={story.id} account_db_id={acc.id} platform={acc.platform} external_id={acc.account_id} media_type={story.media_type}")
+
             try:
                 if acc.platform == "facebook":
                     res = self.publish_facebook_story(
@@ -745,6 +751,7 @@ class StoryService:
                     successful_account_ids.append(acc.id)
                     if "facebook" not in successful_platforms:
                         successful_platforms.append("facebook")
+                    logger.info(f"[STORY_META_PUBLISH_SUCCESS] story_id={story.id} account_db_id={acc.id} platform=facebook meta_id={story.fb_story_id}")
                 elif acc.platform == "instagram":
                     res = self.publish_instagram_story(
                         account=acc,
@@ -756,12 +763,13 @@ class StoryService:
                     successful_account_ids.append(acc.id)
                     if "instagram" not in successful_platforms:
                         successful_platforms.append("instagram")
+                    logger.info(f"[STORY_META_PUBLISH_SUCCESS] story_id={story.id} account_db_id={acc.id} platform=instagram meta_id={story.ig_story_id}")
                 else:
                     err_msg = f"Unsupported platform '{acc.platform}' for account ID {aid}."
                     errors.append(err_msg)
                     failed_account_ids.append(aid)
             except Exception as e:
-                logger.error(f"[STORY_PUBLISH] Publishing failed for {acc.account_name} ({acc.platform}): {e}")
+                logger.error(f"[STORY_META_PUBLISH_FAIL] story_id={story.id} account_db_id={acc.id} platform={acc.platform}: {e}")
                 _, clean_msg = classify_story_error(str(e))
                 errors.append(f"{acc.account_name} ({acc.platform}) Error: {clean_msg}")
                 failed_account_ids.append(acc.id)

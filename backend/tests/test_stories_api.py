@@ -203,3 +203,62 @@ def test_story_api_tenant_isolation(client, db_session):
         headers=headers_b
     )
     assert malicious_res.status_code in [403, 400]
+
+
+def test_story_api_publish_now_flow(client, db_session):
+    token = get_auth_token(client, "publish_now_user@test.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    user = db_session.query(User).filter(User.email == "publish_now_user@test.com").first()
+    brand, fb_acc, ig_acc = create_brand_and_accounts(db_session, user.id)
+
+    # 1. Create Story Draft with exact target account
+    create_res = client.post(
+        "/api/v1/stories",
+        json={
+            "brand_id": brand.id,
+            "title": "Publish Now Story",
+            "media_url": "https://example.com/pic.jpg",
+            "media_type": "image",
+            "target_account_ids": [ig_acc.id]
+        },
+        headers=headers
+    )
+    assert create_res.status_code == 201
+    story_id = create_res.json()["id"]
+
+    # 2. Trigger dedicated publish-now endpoint
+    pub_res = client.post(f"/api/v1/stories/{story_id}/publish-now", headers=headers)
+    assert pub_res.status_code == 200
+    p_data = pub_res.json()
+    assert p_data["status"] == "PUBLISHED"
+    assert p_data["ig_story_id"] is not None
+    assert p_data["target_account_ids"] == [ig_acc.id]
+
+
+def test_story_api_empty_targets_publish_rejected(client, db_session):
+    token = get_auth_token(client, "empty_pub_user@test.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    user = db_session.query(User).filter(User.email == "empty_pub_user@test.com").first()
+    brand, fb_acc, ig_acc = create_brand_and_accounts(db_session, user.id)
+
+    # Create draft with empty targets
+    create_res = client.post(
+        "/api/v1/stories",
+        json={
+            "brand_id": brand.id,
+            "title": "Empty Target Draft",
+            "media_url": "https://example.com/pic.jpg",
+            "media_type": "image",
+            "target_account_ids": []
+        },
+        headers=headers
+    )
+    assert create_res.status_code == 201
+    story_id = create_res.json()["id"]
+
+    # Attempting publish-now should return 400
+    pub_res = client.post(f"/api/v1/stories/{story_id}/publish-now", headers=headers)
+    assert pub_res.status_code == 400
+

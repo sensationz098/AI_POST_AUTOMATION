@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import {
   Sparkles,
@@ -87,42 +87,68 @@ export function StoryComposer({
     setSelectedAccountIds([]);
   };
 
-  // Determine selected platforms based on selected accounts
-  const selectedPlatforms: ('facebook' | 'instagram')[] = Array.from(
-    new Set(
-      capableAccounts
-        .filter(a => selectedAccountIds.includes(a.id))
-        .map(a => a.platform)
-    )
-  );
+  // Memoize selected platforms to prevent new array references on every render
+  const selectedPlatforms: ('facebook' | 'instagram')[] = useMemo(() => {
+    return Array.from(
+      new Set(
+        capableAccounts
+          .filter(a => selectedAccountIds.includes(a.id))
+          .map(a => a.platform)
+      )
+    );
+  }, [capableAccounts, selectedAccountIds]);
 
-  // Validate preflight on media or account change (only when accounts are selected)
+  // Stable serialized key for selected accounts to prevent effect loop
+  const selectedAccountIdsKey = useMemo(() => {
+    return selectedAccountIds.slice().sort((a, b) => a - b).join(',');
+  }, [selectedAccountIds]);
+
+  const selectedBrandId = selectedBrand?.id;
+  const lastValidatedKeyRef = useRef<string>('');
+
+  // Validate preflight on media or account change (only when actual inputs change)
   useEffect(() => {
-    if (!mediaUrl || !selectedBrand || selectedAccountIds.length === 0) {
+    if (!mediaUrl || !selectedBrandId || selectedAccountIds.length === 0) {
       setValidationResult(null);
+      lastValidatedKeyRef.current = '';
+      return;
+    }
+
+    const currentKey = `${selectedBrandId}|${mediaUrl}|${mediaType}|${selectedAccountIdsKey}`;
+    if (currentKey === lastValidatedKeyRef.current) {
       return;
     }
 
     const timer = setTimeout(async () => {
+      if (currentKey === lastValidatedKeyRef.current) return;
+      lastValidatedKeyRef.current = currentKey;
       setIsValidating(true);
+      console.info('[STORY_PREFLIGHT_START]', {
+        brand_id: selectedBrandId,
+        media_type: mediaType,
+        target_account_ids: selectedAccountIds,
+        count: selectedAccountIds.length
+      });
+
       try {
         const res = await apiClient.post('/stories/validate-preflight', {
-          brand_id: selectedBrand.id,
+          brand_id: selectedBrandId,
           media_url: mediaUrl,
           media_type: mediaType,
           target_account_ids: selectedAccountIds,
           platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['instagram', 'facebook']
         });
+        console.info('[STORY_PREFLIGHT_SUCCESS]', res.data);
         setValidationResult(res.data);
-      } catch (err) {
-        console.error('Preflight validation error:', err);
+      } catch (err: any) {
+        console.error('[STORY_PREFLIGHT_ERROR]', err);
       } finally {
         setIsValidating(false);
       }
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [mediaUrl, mediaType, selectedAccountIds, selectedPlatforms, selectedBrand]);
+  }, [mediaUrl, mediaType, selectedAccountIdsKey, selectedBrandId, selectedPlatforms, selectedAccountIds]);
 
   // Media File Upload Handler (streaming to backend / upload-media)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,6 +216,12 @@ export function StoryComposer({
     }
 
     setIsPublishing(true);
+    console.info('[STORY_PUBLISH_INITIATED]', {
+      brand_id: selectedBrand.id,
+      media_type: mediaType,
+      target_account_ids: selectedAccountIds,
+      count: selectedAccountIds.length
+    });
     const pubToast = toast.loading('Publishing Story to Meta Graph API...');
 
     try {
@@ -203,9 +235,20 @@ export function StoryComposer({
         platforms: selectedPlatforms
       };
 
-      const res = await apiClient.post('/stories?publish_now=true', payload);
+      // 1. Create the Story record
+      const createRes = await apiClient.post('/stories', payload);
+      const storyId = createRes.data?.id;
+      if (!storyId) {
+        throw new Error('Failed to create Story record.');
+      }
+      console.info('[STORY_CREATED_TRIGGERING_PUBLISH_NOW]', { storyId, target_account_ids: selectedAccountIds });
+
+      // 2. Publish immediately via dedicated /publish-now endpoint
+      const pubRes = await apiClient.post(`/stories/${storyId}/publish-now`);
+      console.info('[STORY_PUBLISH_COMPLETED]', pubRes.data);
       toast.success('🎉 Story published successfully!', { id: pubToast });
     } catch (err: any) {
+      console.error('[STORY_PUBLISH_ERROR]', err);
       const msg = err.response?.data?.detail || err.message || 'Story publishing failed.';
       toast.error(msg, { id: pubToast, duration: 6000 });
     } finally {
@@ -590,7 +633,7 @@ export function StoryComposer({
             <button
               type="button"
               onClick={handlePublishNow}
-              disabled={isPublishing || !mediaUrl || selectedPlatforms.length === 0}
+              disabled={isPublishing || !mediaUrl || selectedAccountIds.length === 0}
               className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-fuchsia-600/20 transition duration-150"
             >
               {isPublishing ? (
