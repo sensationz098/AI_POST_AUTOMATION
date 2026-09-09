@@ -40,6 +40,13 @@ from app.repositories.audit_repository import audit_repo
 from app.schemas.story import StoryCreate, StoryUpdate, StoryValidationResult
 from app.services.media_service import upload_base64_to_public_https
 from app.services.meta_service import meta_service
+from app.core.story_url_helper import (
+    sanitize_instagram_username,
+    build_instagram_story_url,
+    is_valid_instagram_story_url,
+    is_valid_facebook_story_url,
+    resolve_instagram_username_from_social_account,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -266,17 +273,21 @@ class StoryService:
         ig_user_id = account.account_id
         story_log_id = story_id if story_id is not None else "n/a"
 
+        # Resolve clean Instagram username
+        username = resolve_instagram_username_from_social_account(account)
+
         # Sandbox / Mock Mode
         is_mock = (settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production") or token.startswith("sandbox") or token.startswith("mock") or ig_user_id == "sandbox"
         if is_mock:
             logger.info(f"[IG_STORY_PUBLISH] Executing Sandbox/Mock Instagram Story Publish for {ig_user_id}.")
-            username = (account.metadata_json or {}).get("username") if isinstance(account.metadata_json, dict) else account.account_name
-            mock_url = f"https://www.instagram.com/stories/{username}/" if username else "https://www.instagram.com/stories/"
+            mock_user = username or "mock_instagram_user"
+            mock_url = build_instagram_story_url(mock_user)
             return {
                 "id": f"ig_story_mock_{int(time.time())}",
                 "container_id": f"ig_container_mock_{int(time.time())}",
                 "status": "published_sandbox",
-                "url": mock_url
+                "url": mock_url,
+                "username": mock_user
             }
 
         # Resolve public HTTPS media URL
@@ -318,8 +329,6 @@ class StoryService:
         logger.info(f"[IG_STORY_CONTAINER_CREATED] story_id={story_log_id} container_id={container_id}")
 
         # Step 2: Robust bounded polling for container readiness (both images and videos)
-        # Meta asynchronously downloads media, validates encoding, and prepares container.
-        # Images typically finish in 1-6s, videos take 5-30s.
         max_attempts = 30 if is_video else 20
         poll_interval = 3.0 if is_video else 2.0
         container_poll_start = time.time()
@@ -396,6 +405,7 @@ class StoryService:
         total_elapsed = round(time.time() - start_time, 2)
         logger.info(f"[IG_STORY_PUBLISH_SUCCESS] story_id={story_log_id} container_id={container_id} meta_id={media_id} elapsed={total_elapsed}s")
 
+        # Step 4: Resolve legitimate public viewing URL
         ig_story_url = None
         try:
             p_res = requests.get(
@@ -404,22 +414,42 @@ class StoryService:
                 timeout=10
             )
             if p_res.status_code == 200:
-                ig_story_url = p_res.json().get("permalink")
+                cand_permalink = p_res.json().get("permalink")
+                if cand_permalink and is_valid_instagram_story_url(cand_permalink):
+                    ig_story_url = cand_permalink
         except Exception as p_err:
             logger.debug(f"[IG_STORY_URL_QUERY] Permalink query notice: {p_err}")
 
+        # If direct permalink is not returned (standard for ephemeral IG stories), resolve via username
         if not ig_story_url:
-            username = (account.metadata_json or {}).get("username") if isinstance(account.metadata_json, dict) else account.account_name
+            if not username and not is_mock:
+                try:
+                    u_res = requests.get(
+                        f"{self.BASE_URL}/{ig_user_id}",
+                        params={"fields": "username", "access_token": token},
+                        timeout=10
+                    )
+                    if u_res.status_code == 200:
+                        raw_u = u_res.json().get("username")
+                        username = sanitize_instagram_username(raw_u)
+                        if username and isinstance(account.metadata_json, dict):
+                            account.metadata_json["username"] = username
+                except Exception as u_err:
+                    logger.debug(f"[IG_USERNAME_QUERY] Notice: {u_err}")
+
             if username:
-                ig_story_url = f"https://www.instagram.com/stories/{username}/"
+                ig_story_url = build_instagram_story_url(username)
             else:
-                ig_story_url = "https://www.instagram.com/stories/"
+                ig_story_url = None
+
+        final_ig_url = ig_story_url if is_valid_instagram_story_url(ig_story_url) else None
 
         return {
             "id": str(media_id),
             "container_id": str(container_id),
             "status": "published",
-            "url": ig_story_url
+            "url": final_ig_url,
+            "username": username
         }
 
     def publish_facebook_story(
@@ -436,10 +466,12 @@ class StoryService:
         is_mock = (settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production") or token.startswith("sandbox") or token.startswith("mock") or page_id == "sandbox"
         if is_mock:
             logger.info(f"[FB_STORY_PUBLISH] Executing Sandbox/Mock Facebook Story Publish for {page_id}.")
+            mock_url = f"https://www.facebook.com/stories/mock_page_{int(time.time())}"
             return {
                 "id": f"fb_story_mock_{int(time.time())}",
                 "status": "published_sandbox",
-                "url": f"https://www.facebook.com/stories/{page_id}"
+                "url": mock_url,
+                "page_url": f"https://www.facebook.com/{page_id}"
             }
 
         final_url = media_url
@@ -504,18 +536,22 @@ class StoryService:
                 )
                 if p_res.status_code == 200:
                     fb_data = p_res.json()
-                    fb_story_url = fb_data.get("permalink_url") or fb_data.get("link")
+                    cand_url = fb_data.get("permalink_url") or fb_data.get("link")
+                    if cand_url and is_valid_facebook_story_url(cand_url):
+                        fb_story_url = cand_url
             except Exception as p_err:
                 logger.debug(f"[FB_STORY_URL_QUERY] Permlink query notice: {p_err}")
 
-            if not fb_story_url:
-                fb_story_url = f"https://www.facebook.com/stories/{page_id}"
+            # If Meta does not provide a legitimate public individual Story permalink,
+            # DO NOT generate https://www.facebook.com/{page_id} as a Story URL!
+            final_fb_url = fb_story_url if is_valid_facebook_story_url(fb_story_url) else None
 
             return {
                 "id": str(story_id),
                 "photo_id": str(photo_id),
                 "status": "published",
-                "url": fb_story_url
+                "url": final_fb_url,
+                "page_url": f"https://www.facebook.com/{page_id}"
             }
         else:
             # Video Story
@@ -567,18 +603,20 @@ class StoryService:
                 )
                 if p_res.status_code == 200:
                     fb_data = p_res.json()
-                    fb_story_url = fb_data.get("permalink_url") or fb_data.get("link")
+                    cand_url = fb_data.get("permalink_url") or fb_data.get("link")
+                    if cand_url and is_valid_facebook_story_url(cand_url):
+                        fb_story_url = cand_url
             except Exception as p_err:
                 logger.debug(f"[FB_STORY_URL_QUERY] Permlink query notice: {p_err}")
 
-            if not fb_story_url:
-                fb_story_url = f"https://www.facebook.com/stories/{page_id}"
+            final_fb_url = fb_story_url if is_valid_facebook_story_url(fb_story_url) else None
 
             return {
                 "id": str(story_id),
                 "video_id": str(vid_id),
                 "status": "published",
-                "url": fb_story_url
+                "url": final_fb_url,
+                "page_url": f"https://www.facebook.com/{page_id}"
             }
 
     def create_story(self, db: Session, story_in: StoryCreate, user_id: int) -> Story:
@@ -843,10 +881,12 @@ class StoryService:
                     meta_service.delete_facebook_post(ext_id, raw_token)
                     story.fb_story_id = None
                     story.fb_story_url = None
+                    story.fb_page_url = None
                 elif platform == "instagram":
                     meta_service.delete_instagram_media(ext_id, raw_token)
                     story.ig_story_id = None
                     story.ig_story_url = None
+                    story.ig_username = None
                 else:
                     raise Exception(f"Unsupported platform: {platform}")
 
@@ -1029,11 +1069,12 @@ class StoryService:
                     )
                     story.fb_story_id = str(res.get("id"))
                     story.fb_story_url = res.get("url")
+                    story.fb_page_url = res.get("page_url")
                     successful_account_ids.append(acc.id)
                     if "facebook" not in successful_platforms:
                         successful_platforms.append("facebook")
                     acc_duration = round(time.time() - acc_start_time, 2)
-                    logger.info(f"[STORY_META_PUBLISH_SUCCESS] story_id={story.id} account_db_id={acc.id} platform=facebook meta_id={story.fb_story_id} duration={acc_duration}s")
+                    logger.info(f"[STORY_META_PUBLISH_SUCCESS] story_id={story.id} account_db_id={acc.id} platform=facebook meta_id={story.fb_story_id} duration={acc_duration}s url={story.fb_story_url}")
                 elif acc.platform == "instagram":
                     res = self.publish_instagram_story(
                         account=acc,
@@ -1044,11 +1085,12 @@ class StoryService:
                     story.ig_container_id = str(res.get("container_id", ""))
                     story.ig_story_id = str(res.get("id"))
                     story.ig_story_url = res.get("url")
+                    story.ig_username = res.get("username")
                     successful_account_ids.append(acc.id)
                     if "instagram" not in successful_platforms:
                         successful_platforms.append("instagram")
                     acc_duration = round(time.time() - acc_start_time, 2)
-                    logger.info(f"[STORY_META_PUBLISH_SUCCESS] story_id={story.id} account_db_id={acc.id} platform=instagram meta_id={story.ig_story_id} duration={acc_duration}s")
+                    logger.info(f"[STORY_META_PUBLISH_SUCCESS] story_id={story.id} account_db_id={acc.id} platform=instagram meta_id={story.ig_story_id} duration={acc_duration}s url={story.ig_story_url}")
                 else:
                     err_msg = f"Unsupported platform '{acc.platform}' for account ID {aid}."
                     errors.append(err_msg)
@@ -1077,7 +1119,7 @@ class StoryService:
                 f"[STORY_PUBLISH_COMPLETED] story_id={story.id} duration={total_duration}s status={story.status} "
                 f"successful_account_ids={successful_account_ids} failed_account_ids={failed_account_ids} "
                 f"fb_story_id={story.fb_story_id} ig_story_id={story.ig_story_id} "
-                f"fb_story_url={story.fb_story_url} ig_story_url={story.ig_story_url}"
+                f"fb_story_url={story.fb_story_url} ig_story_url={story.ig_story_url} ig_username={story.ig_username}"
             )
 
             audit_repo.log(

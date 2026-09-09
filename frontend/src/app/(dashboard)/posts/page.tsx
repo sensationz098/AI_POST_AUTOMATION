@@ -27,6 +27,7 @@ import { SchedulerItem, SchedulerItemType } from '@/lib/types';
 import { apiClient } from '@/lib/api';
 import Link from 'next/link';
 import { StoryPreviewModal } from '@/components/StoryPreviewModal';
+import { getValidStoryUrls } from '@/lib/storyUrlHelper';
 import toast from 'react-hot-toast';
 
 function ViewPostButton({ item }: { item: SchedulerItem }) {
@@ -133,11 +134,7 @@ function ViewStoryButton({ item }: { item: SchedulerItem }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fbUrl = item.fb_url || (item.fb_id ? `https://www.facebook.com/${item.fb_id}` : null);
-  const igUrl = item.ig_url || (item.ig_id ? 'https://www.instagram.com/stories/' : null);
-
-  const hasFb = Boolean(item.fb_id && fbUrl);
-  const hasIg = Boolean(item.ig_id && igUrl);
+  const { fbUrl, igUrl, hasFb, hasIg } = getValidStoryUrls(item);
 
   if (!hasFb && !hasIg) {
     return null;

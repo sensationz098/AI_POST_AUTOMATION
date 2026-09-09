@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { SchedulerItem, SocialAccount } from '@/lib/types';
 import { PostStatusBadge } from '@/components/PostStatusBadge';
+import { getValidStoryUrls } from '@/lib/storyUrlHelper';
 
 interface StoryPreviewModalProps {
   item: SchedulerItem | null;
@@ -318,41 +319,66 @@ export function StoryPreviewModal({
             </div>
 
             {/* Published External IDs & Live Platform Links */}
-            {(item.fb_id || item.ig_id) && (
-              <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/60 space-y-1.5 text-xs">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Live Platform Links & Published Meta IDs
-                </p>
-                <div className="flex flex-wrap gap-2 text-[10px] font-mono">
-                  {item.fb_id && (
-                    <a
-                      href={item.fb_url || `https://www.facebook.com/${item.fb_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center space-x-1.5 bg-blue-950/50 hover:bg-blue-900/60 border border-blue-800/60 text-blue-300 px-2.5 py-1 rounded-lg transition"
-                      title="Open Facebook Story in new tab"
-                    >
-                      <ExternalLink className="w-3 h-3 text-blue-400" />
-                      <span className="font-bold">FB Story:</span>
-                      <span>{item.fb_id}</span>
-                    </a>
-                  )}
-                  {item.ig_id && (
-                    <a
-                      href={item.ig_url || 'https://www.instagram.com/stories/'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center space-x-1.5 bg-pink-950/50 hover:bg-pink-900/60 border border-pink-800/60 text-pink-300 px-2.5 py-1 rounded-lg transition"
-                      title="Open Instagram Story in new tab"
-                    >
-                      <ExternalLink className="w-3 h-3 text-pink-400" />
-                      <span className="font-bold">IG Story:</span>
-                      <span>{item.ig_id}</span>
-                    </a>
-                  )}
+            {(item.fb_id || item.ig_id) && (() => {
+              const { fbUrl, igUrl, hasFb, hasIg } = getValidStoryUrls(item);
+              return (
+                <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/60 space-y-1.5 text-xs">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Live Platform Links & Published Meta IDs
+                  </p>
+                  <div className="flex flex-wrap gap-2 text-[10px] font-mono">
+                    {item.fb_id && (
+                      hasFb ? (
+                        <a
+                          href={fbUrl!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center space-x-1.5 bg-blue-950/50 hover:bg-blue-900/60 border border-blue-800/60 text-blue-300 px-2.5 py-1 rounded-lg transition"
+                          title="Open Facebook Story in new tab"
+                        >
+                          <ExternalLink className="w-3 h-3 text-blue-400" />
+                          <span className="font-bold">FB Story:</span>
+                          <span>{item.fb_id}</span>
+                        </a>
+                      ) : (
+                        <div
+                          className="flex items-center space-x-1.5 bg-slate-900 border border-slate-800 text-slate-400 px-2.5 py-1 rounded-lg"
+                          title="Story ID published (Direct URL unavailable from Meta)"
+                        >
+                          <span className="font-bold text-slate-300">FB Story:</span>
+                          <span>{item.fb_id}</span>
+                          <span className="text-[9px] text-slate-500">(Direct link unavailable)</span>
+                        </div>
+                      )
+                    )}
+                    {item.ig_id && (
+                      hasIg ? (
+                        <a
+                          href={igUrl!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center space-x-1.5 bg-pink-950/50 hover:bg-pink-900/60 border border-pink-800/60 text-pink-300 px-2.5 py-1 rounded-lg transition"
+                          title="Open Instagram Story in new tab"
+                        >
+                          <ExternalLink className="w-3 h-3 text-pink-400" />
+                          <span className="font-bold">IG Story:</span>
+                          <span>{item.ig_id}</span>
+                        </a>
+                      ) : (
+                        <div
+                          className="flex items-center space-x-1.5 bg-slate-900 border border-slate-800 text-slate-400 px-2.5 py-1 rounded-lg"
+                          title="Story ID published (Username unavailable for direct link)"
+                        >
+                          <span className="font-bold text-slate-300">IG Story:</span>
+                          <span>{item.ig_id}</span>
+                          <span className="text-[9px] text-slate-500">(Username unavailable)</span>
+                        </div>
+                      )
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Bottom Action Footer */}

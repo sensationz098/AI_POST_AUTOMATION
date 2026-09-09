@@ -45,9 +45,11 @@ class Story(Base):
 
     fb_story_id = Column(String(255), nullable=True)
     fb_story_url = Column(Text, nullable=True)
+    fb_page_url = Column(Text, nullable=True)
     ig_container_id = Column(String(255), nullable=True)
     ig_story_id = Column(String(255), nullable=True)
     ig_story_url = Column(Text, nullable=True)
+    ig_username = Column(String(255), nullable=True)
 
     brand_id = Column(Integer, ForeignKey("brand_profiles.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

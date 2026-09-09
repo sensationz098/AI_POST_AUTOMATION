@@ -6,6 +6,13 @@ from app.models.social_account import SocialAccount
 from app.schemas.scheduler import SchedulerItemResponse, SchedulerTargetAccount
 from app.services.post_service import post_service
 from app.services.story_service import story_service
+from app.core.story_url_helper import (
+    is_valid_facebook_story_url,
+    is_valid_instagram_story_url,
+    build_instagram_story_url,
+    resolve_instagram_username_from_social_account,
+    sanitize_instagram_username,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +49,7 @@ class SchedulerFeedService:
                 posts = post_service.get_user_posts(db, user_id, status)
 
             for p in posts:
-                p_platforms = p.platforms or []
+                p_targets = getattr(p, "target_account_ids", None) or []
                 matched_accs = [
                     SchedulerTargetAccount(
                         id=acc.id,
@@ -52,8 +59,8 @@ class SchedulerFeedService:
                         username=(acc.metadata_json or {}).get("username") if isinstance(acc.metadata_json, dict) else acc.account_name,
                         logo_url=acc.logo_url
                     )
-                    for acc in user_accounts
-                    if acc.platform in p_platforms and (not p.brand_id or acc.brand_id == p.brand_id)
+                    for aid in p_targets
+                    if (acc := acc_map.get(aid)) is not None
                 ]
 
                 items.append(
@@ -68,7 +75,7 @@ class SchedulerFeedService:
                         media_type=p.media_type or ("video" if (p.image_url and any(p.image_url.lower().endswith(ext) for ext in [".mp4", ".mov", ".webm"])) else "image"),
                         thumbnail_url=p.thumbnail_url or p.image_url,
                         platforms=p.platforms or [],
-                        target_account_ids=[a.id for a in matched_accs],
+                        target_account_ids=p_targets,
                         target_accounts=matched_accs,
                         status=p.status,
                         scheduled_at=p.scheduled_at,
@@ -96,12 +103,36 @@ class SchedulerFeedService:
                         account_id=acc.account_id,
                         account_name=acc.account_name,
                         platform=acc.platform,
-                        username=(acc.metadata_json or {}).get("username") if isinstance(acc.metadata_json, dict) else acc.account_name,
+                        username=resolve_instagram_username_from_social_account(acc) if acc.platform == "instagram" else ((acc.metadata_json or {}).get("username") if isinstance(acc.metadata_json, dict) else acc.account_name),
                         logo_url=acc.logo_url
                     )
                     for aid in s_targets
                     if (acc := acc_map.get(aid)) is not None
                 ]
+
+                # Facebook Story URL: Only legitimate individual permalink is used. Never fake page-id URL.
+                fb_url = None
+                if s.fb_story_id and s.fb_story_url and is_valid_facebook_story_url(s.fb_story_url):
+                    fb_url = s.fb_story_url
+
+                # Instagram Story URL: Resolve legitimate username story link or valid permalink. Never bare /stories/.
+                ig_url = None
+                if s.ig_story_id:
+                    if s.ig_story_url and is_valid_instagram_story_url(s.ig_story_url):
+                        ig_url = s.ig_story_url
+                    else:
+                        # Attempt resolution from story.ig_username or matched IG accounts
+                        ig_user = sanitize_instagram_username(s.ig_username)
+                        if not ig_user:
+                            for aid in s_targets:
+                                acc = acc_map.get(aid)
+                                if acc and acc.platform == "instagram":
+                                    resolved = resolve_instagram_username_from_social_account(acc)
+                                    if resolved:
+                                        ig_user = resolved
+                                        break
+                        if ig_user:
+                            ig_url = build_instagram_story_url(ig_user)
 
                 items.append(
                     SchedulerItemResponse(
@@ -125,8 +156,8 @@ class SchedulerFeedService:
                         last_error=s.last_error,
                         fb_id=s.fb_story_id,
                         ig_id=s.ig_story_id,
-                        fb_url=s.fb_story_url or (f"https://www.facebook.com/{s.fb_story_id}" if s.fb_story_id else None),
-                        ig_url=s.ig_story_url or ("https://www.instagram.com/stories/" if s.ig_story_id else None),
+                        fb_url=fb_url,
+                        ig_url=ig_url,
                         created_at=s.created_at,
                         updated_at=s.updated_at
                     )

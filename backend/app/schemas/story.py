@@ -51,9 +51,11 @@ class StoryResponse(BaseModel):
     last_error: Optional[str] = None
     fb_story_id: Optional[str] = None
     fb_story_url: Optional[str] = None
+    fb_page_url: Optional[str] = None
     ig_container_id: Optional[str] = None
     ig_story_id: Optional[str] = None
     ig_story_url: Optional[str] = None
+    ig_username: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
