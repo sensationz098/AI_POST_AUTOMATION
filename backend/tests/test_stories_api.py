@@ -54,14 +54,14 @@ def test_story_api_crud_and_preflight(client, db_session):
     user = db_session.query(User).filter(User.email == "user_crud@test.com").first()
     brand, fb_acc, ig_acc = create_brand_and_accounts(db_session, user.id)
 
-    # 1. Validate Preflight
+    # 1. Validate Preflight with exact accounts
     preflight_res = client.post(
         "/api/v1/stories/validate-preflight",
         json={
             "brand_id": brand.id,
             "media_url": "https://example.com/vertical_story.jpg",
             "media_type": "image",
-            "platforms": ["facebook", "instagram"]
+            "target_account_ids": [fb_acc.id, ig_acc.id]
         },
         headers=headers
     )
@@ -79,7 +79,7 @@ def test_story_api_crud_and_preflight(client, db_session):
             "caption": "Check out our stories!",
             "media_url": "https://example.com/launch.jpg",
             "media_type": "image",
-            "platforms": ["facebook", "instagram"]
+            "target_account_ids": [fb_acc.id, ig_acc.id]
         },
         headers=headers
     )
@@ -88,6 +88,7 @@ def test_story_api_crud_and_preflight(client, db_session):
     story_id = story_data["id"]
     assert story_data["title"] == "Weekend Launch Story"
     assert story_data["status"] == "DRAFT"
+    assert story_data["target_account_ids"] == [fb_acc.id, ig_acc.id]
 
     # 3. List Stories
     list_res = client.get("/api/v1/stories", headers=headers)
@@ -98,15 +99,17 @@ def test_story_api_crud_and_preflight(client, db_session):
     get_res = client.get(f"/api/v1/stories/{story_id}", headers=headers)
     assert get_res.status_code == 200
     assert get_res.json()["id"] == story_id
+    assert get_res.json()["target_account_ids"] == [fb_acc.id, ig_acc.id]
 
     # 5. Update Story
     update_res = client.put(
         f"/api/v1/stories/{story_id}",
-        json={"title": "Updated Weekend Launch"},
+        json={"title": "Updated Weekend Launch", "target_account_ids": [fb_acc.id]},
         headers=headers
     )
     assert update_res.status_code == 200
     assert update_res.json()["title"] == "Updated Weekend Launch"
+    assert update_res.json()["target_account_ids"] == [fb_acc.id]
 
     # 6. Publish Story Now
     pub_res = client.post(f"/api/v1/stories/{story_id}/publish-now", headers=headers)
@@ -135,7 +138,7 @@ def test_story_api_schedule_and_retry(client, db_session):
             "title": "Scheduled Story",
             "media_url": "https://example.com/story.mp4",
             "media_type": "video",
-            "platforms": ["instagram"]
+            "target_account_ids": [ig_acc.id]
         },
         headers=headers
     )
@@ -157,7 +160,7 @@ def test_story_api_tenant_isolation(client, db_session):
     token_a = get_auth_token(client, "user_a@test.com")
     headers_a = {"Authorization": f"Bearer {token_a}"}
     user_a = db_session.query(User).filter(User.email == "user_a@test.com").first()
-    brand_a, _, _ = create_brand_and_accounts(db_session, user_a.id)
+    brand_a, fb_acc_a, _ = create_brand_and_accounts(db_session, user_a.id)
 
     create_res = client.post(
         "/api/v1/stories",
@@ -166,7 +169,7 @@ def test_story_api_tenant_isolation(client, db_session):
             "title": "User A Private Story",
             "media_url": "https://example.com/secret.jpg",
             "media_type": "image",
-            "platforms": ["facebook"]
+            "target_account_ids": [fb_acc_a.id]
         },
         headers=headers_a
     )
@@ -184,3 +187,19 @@ def test_story_api_tenant_isolation(client, db_session):
 
     del_res = client.delete(f"/api/v1/stories/{story_id}", headers=headers_b)
     assert del_res.status_code == 403
+
+    # User B tries to create a story targeting User A's account
+    user_b = db_session.query(User).filter(User.email == "user_b@test.com").first()
+    brand_b, _, _ = create_brand_and_accounts(db_session, user_b.id)
+    malicious_res = client.post(
+        "/api/v1/stories",
+        json={
+            "brand_id": brand_b.id,
+            "title": "Cross Tenant Exploit Story",
+            "media_url": "https://example.com/exploit.jpg",
+            "media_type": "image",
+            "target_account_ids": [fb_acc_a.id]
+        },
+        headers=headers_b
+    )
+    assert malicious_res.status_code in [403, 400]

@@ -39,12 +39,14 @@ def test_story_repository_crud(db_session):
         caption="Check out our summer discounts!",
         media_url="https://res.cloudinary.com/demo/image/upload/sample.jpg",
         media_type="image",
+        target_account_ids=[101, 102],
         platforms=["instagram", "facebook"],
         status=StoryStatus.DRAFT.value
     )
     created = story_repo.create(db_session, story)
     assert created.id is not None
     assert created.title == "Summer Promo Story"
+    assert created.target_account_ids == [101, 102]
     assert created.status == StoryStatus.DRAFT.value
 
     # Get by ID
