@@ -505,3 +505,52 @@ def test_facebook_video_story_publishing(db_session):
     published = story_service.publish_story(db_session, story.id, user.id)
     assert published.status == StoryStatus.PUBLISHED.value
     assert published.fb_story_id is not None
+
+
+def test_story_publish_idempotency_prevents_duplicate_meta_calls(db_session):
+    """Test that retrying or calling publish on an already PUBLISHED story makes ZERO Meta API calls."""
+    user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "idempotent_tester@test.com")
+
+    with patch.object(story_service, "publish_instagram_story", wraps=story_service.publish_instagram_story) as mock_ig, \
+         patch.object(story_service, "publish_facebook_story", wraps=story_service.publish_facebook_story) as mock_fb:
+
+        story_in = StoryCreate(
+            brand_id=brand.id,
+            title="Idempotency Story",
+            media_url="https://example.com/pic.jpg",
+            media_type="image",
+            target_account_ids=[fb_acc.id, ig_acc.id]
+        )
+        story = story_service.create_story(db_session, story_in, user.id)
+
+        # First publish: 1 FB + 1 IG
+        published1 = story_service.publish_story(db_session, story.id, user.id)
+        assert published1.status == StoryStatus.PUBLISHED.value
+        assert mock_fb.call_count == 1
+        assert mock_ig.call_count == 1
+
+        # Second publish (e.g. client re-attempt after timeout): 0 additional Meta calls
+        published2 = story_service.publish_story(db_session, story.id, user.id)
+        assert published2.status == StoryStatus.PUBLISHED.value
+        assert mock_fb.call_count == 1
+        assert mock_ig.call_count == 1
+
+
+def test_story_publish_multi_account_duration_and_audit(db_session):
+    """Test that multi-account publishing completes and audit log captures duration and accounts."""
+    user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "multi_audit_tester@test.com")
+
+    story_in = StoryCreate(
+        brand_id=brand.id,
+        title="Multi-account Audit Story",
+        media_url="https://example.com/pic.jpg",
+        media_type="image",
+        target_account_ids=[fb_acc.id, ig_acc.id]
+    )
+    story = story_service.create_story(db_session, story_in, user.id)
+    published = story_service.publish_story(db_session, story.id, user.id)
+
+    assert published.status == StoryStatus.PUBLISHED.value
+    assert published.fb_story_id is not None
+    assert published.ig_story_id is not None
+

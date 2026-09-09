@@ -262,3 +262,36 @@ def test_story_api_empty_targets_publish_rejected(client, db_session):
     pub_res = client.post(f"/api/v1/stories/{story_id}/publish-now", headers=headers)
     assert pub_res.status_code == 400
 
+
+def test_story_api_publish_now_idempotency(client, db_session):
+    token = get_auth_token(client, "idempotent_api_user@test.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    user = db_session.query(User).filter(User.email == "idempotent_api_user@test.com").first()
+    brand, fb_acc, ig_acc = create_brand_and_accounts(db_session, user.id)
+
+    create_res = client.post(
+        "/api/v1/stories",
+        json={
+            "brand_id": brand.id,
+            "title": "Idempotent API Story",
+            "media_url": "https://example.com/pic.jpg",
+            "media_type": "image",
+            "target_account_ids": [fb_acc.id]
+        },
+        headers=headers
+    )
+    assert create_res.status_code == 201
+    story_id = create_res.json()["id"]
+
+    # First call: publishes story
+    pub_res1 = client.post(f"/api/v1/stories/{story_id}/publish-now", headers=headers)
+    assert pub_res1.status_code == 200
+    assert pub_res1.json()["status"] == "PUBLISHED"
+
+    # Second call (e.g. client retries after network timeout): returns 200 with PUBLISHED
+    pub_res2 = client.post(f"/api/v1/stories/{story_id}/publish-now", headers=headers)
+    assert pub_res2.status_code == 200
+    assert pub_res2.json()["status"] == "PUBLISHED"
+
+

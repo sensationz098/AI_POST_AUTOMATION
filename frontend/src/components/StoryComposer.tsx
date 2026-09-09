@@ -22,7 +22,7 @@ import {
   Play,
   Volume2
 } from 'lucide-react';
-import { apiClient } from '@/lib/api';
+import { apiClient, PUBLISHING_TIMEOUT_MS } from '@/lib/api';
 import {
   BrandProfile,
   SocialAccount,
@@ -224,6 +224,7 @@ export function StoryComposer({
     });
     const pubToast = toast.loading('Publishing Story to Meta Graph API...');
 
+    let storyId: number | null = null;
     try {
       const payload = {
         brand_id: selectedBrand.id,
@@ -237,18 +238,33 @@ export function StoryComposer({
 
       // 1. Create the Story record
       const createRes = await apiClient.post('/stories', payload);
-      const storyId = createRes.data?.id;
+      storyId = createRes.data?.id;
       if (!storyId) {
         throw new Error('Failed to create Story record.');
       }
       console.info('[STORY_CREATED_TRIGGERING_PUBLISH_NOW]', { storyId, target_account_ids: selectedAccountIds });
 
-      // 2. Publish immediately via dedicated /publish-now endpoint
-      const pubRes = await apiClient.post(`/stories/${storyId}/publish-now`);
+      // 2. Publish immediately via dedicated /publish-now endpoint with extended publishing window (300s)
+      const pubRes = await apiClient.post(`/stories/${storyId}/publish-now`, null, {
+        timeout: PUBLISHING_TIMEOUT_MS
+      });
       console.info('[STORY_PUBLISH_COMPLETED]', pubRes.data);
       toast.success('🎉 Story published successfully!', { id: pubToast });
     } catch (err: any) {
       console.error('[STORY_PUBLISH_ERROR]', err);
+      // Resilience: If client encountered a network error / timeout, check if server actually succeeded
+      if (storyId) {
+        try {
+          const statusRes = await apiClient.get(`/stories/${storyId}`);
+          if (statusRes.data?.status === 'PUBLISHED') {
+            console.info('[STORY_PUBLISH_STATUS_RECOVERED]', statusRes.data);
+            toast.success('🎉 Story published successfully!', { id: pubToast });
+            return;
+          }
+        } catch (pollErr) {
+          console.warn('[STORY_STATUS_CHECK_FAILED]', pollErr);
+        }
+      }
       const msg = err.response?.data?.detail || err.message || 'Story publishing failed.';
       toast.error(msg, { id: pubToast, duration: 6000 });
     } finally {

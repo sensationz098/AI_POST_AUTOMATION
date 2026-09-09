@@ -688,6 +688,7 @@ class StoryService:
 
     def publish_story(self, db: Session, story_id: int, user_id: Optional[int] = None) -> Story:
         """Execute immediate Story publishing ONLY across explicitly targeted SocialAccount records."""
+        start_time = time.time()
         story = story_repo.get(db, story_id)
         if not story:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Story {story_id} not found.")
@@ -695,8 +696,16 @@ class StoryService:
         if user_id and story.user_id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to publish this Story.")
 
+        # Idempotency Protection: If already published, do NOT repeat Meta API calls
+        if story.status == StoryStatus.PUBLISHED.value:
+            logger.info(
+                f"[STORY_PUBLISH_ALREADY_PUBLISHED] story_id={story_id} user_id={story.user_id} "
+                f"status=PUBLISHED. Returning persisted published story without repeating Meta API calls."
+            )
+            return story
+
         target_ids = story.target_account_ids or []
-        logger.info(f"[STORY_PUBLISH_NOW] story_id={story_id} user_id={story.user_id} target_account_ids={target_ids} count={len(target_ids)}")
+        logger.info(f"[STORY_PUBLISH_START] story_id={story_id} user_id={story.user_id} target_account_ids={target_ids} count={len(target_ids)}")
 
         if not target_ids:
             story.status = StoryStatus.FAILED.value
@@ -738,6 +747,7 @@ class StoryService:
                 failed_account_ids.append(aid)
                 continue
 
+            acc_start_time = time.time()
             logger.info(f"[STORY_META_PUBLISH_START] story_id={story.id} account_db_id={acc.id} platform={acc.platform} external_id={acc.account_id} media_type={story.media_type}")
 
             try:
@@ -751,7 +761,8 @@ class StoryService:
                     successful_account_ids.append(acc.id)
                     if "facebook" not in successful_platforms:
                         successful_platforms.append("facebook")
-                    logger.info(f"[STORY_META_PUBLISH_SUCCESS] story_id={story.id} account_db_id={acc.id} platform=facebook meta_id={story.fb_story_id}")
+                    acc_duration = round(time.time() - acc_start_time, 2)
+                    logger.info(f"[STORY_META_PUBLISH_SUCCESS] story_id={story.id} account_db_id={acc.id} platform=facebook meta_id={story.fb_story_id} duration={acc_duration}s")
                 elif acc.platform == "instagram":
                     res = self.publish_instagram_story(
                         account=acc,
@@ -763,16 +774,20 @@ class StoryService:
                     successful_account_ids.append(acc.id)
                     if "instagram" not in successful_platforms:
                         successful_platforms.append("instagram")
-                    logger.info(f"[STORY_META_PUBLISH_SUCCESS] story_id={story.id} account_db_id={acc.id} platform=instagram meta_id={story.ig_story_id}")
+                    acc_duration = round(time.time() - acc_start_time, 2)
+                    logger.info(f"[STORY_META_PUBLISH_SUCCESS] story_id={story.id} account_db_id={acc.id} platform=instagram meta_id={story.ig_story_id} duration={acc_duration}s")
                 else:
                     err_msg = f"Unsupported platform '{acc.platform}' for account ID {aid}."
                     errors.append(err_msg)
                     failed_account_ids.append(aid)
             except Exception as e:
-                logger.error(f"[STORY_META_PUBLISH_FAIL] story_id={story.id} account_db_id={acc.id} platform={acc.platform}: {e}")
+                acc_duration = round(time.time() - acc_start_time, 2)
+                logger.error(f"[STORY_META_PUBLISH_FAIL] story_id={story.id} account_db_id={acc.id} platform={acc.platform} duration={acc_duration}s error={e}")
                 _, clean_msg = classify_story_error(str(e))
                 errors.append(f"{acc.account_name} ({acc.platform}) Error: {clean_msg}")
                 failed_account_ids.append(acc.id)
+
+        total_duration = round(time.time() - start_time, 2)
 
         # Determine overall outcome
         if successful_account_ids:
@@ -785,6 +800,12 @@ class StoryService:
             db.commit()
             db.refresh(story)
 
+            logger.info(
+                f"[STORY_PUBLISH_COMPLETED] story_id={story.id} duration={total_duration}s status={story.status} "
+                f"successful_account_ids={successful_account_ids} failed_account_ids={failed_account_ids} "
+                f"fb_story_id={story.fb_story_id} ig_story_id={story.ig_story_id}"
+            )
+
             audit_repo.log(
                 db=db,
                 user_id=story.user_id,
@@ -796,7 +817,8 @@ class StoryService:
                     "successful_account_ids": successful_account_ids,
                     "failed_account_ids": failed_account_ids,
                     "successful_platforms": successful_platforms,
-                    "errors": errors
+                    "errors": errors,
+                    "duration_seconds": total_duration
                 }
             )
             return story
@@ -806,6 +828,12 @@ class StoryService:
             story.last_error = " | ".join(errors) if errors else "Story publishing failed for all targeted accounts."
             db.commit()
             db.refresh(story)
+
+            logger.error(
+                f"[STORY_PUBLISH_FAILED] story_id={story.id} duration={total_duration}s status={story.status} "
+                f"successful_account_ids={successful_account_ids} failed_account_ids={failed_account_ids} "
+                f"errors={errors}"
+            )
 
             audit_repo.log(
                 db=db,
@@ -818,7 +846,8 @@ class StoryService:
                     "successful_account_ids": successful_account_ids,
                     "failed_account_ids": failed_account_ids,
                     "errors": errors,
-                    "retry_count": story.retry_count
+                    "retry_count": story.retry_count,
+                    "duration_seconds": total_duration
                 }
             )
             raise HTTPException(
