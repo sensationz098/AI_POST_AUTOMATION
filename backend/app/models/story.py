@@ -32,7 +32,8 @@ class Story(Base):
     media_type = Column(String(50), nullable=False, default="image")  # "image" or "video"
     thumbnail_url = Column(Text, nullable=True)
 
-    platforms = Column(JSON, default=list)  # ["facebook", "instagram"]
+    target_account_ids = Column(JSON, default=list)  # Database IDs of targeted SocialAccount records
+    platforms = Column(JSON, default=list)  # Derived/reported ["facebook", "instagram"]
     status = Column(String(50), default=StoryStatus.DRAFT.value, index=True)
 
     scheduled_at = Column(DateTime, nullable=True, index=True)

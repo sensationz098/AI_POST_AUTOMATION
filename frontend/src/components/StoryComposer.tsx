@@ -79,13 +79,13 @@ export function StoryComposer({
     return false;
   });
 
-  // Default select first available accounts for each platform
-  useEffect(() => {
-    if (capableAccounts.length > 0 && selectedAccountIds.length === 0) {
-      const defaultIds = capableAccounts.map(a => a.id);
-      setSelectedAccountIds(defaultIds);
-    }
-  }, [capableAccounts]);
+  const handleSelectAll = () => {
+    setSelectedAccountIds(capableAccounts.map(a => a.id));
+  };
+
+  const handleClearAll = () => {
+    setSelectedAccountIds([]);
+  };
 
   // Determine selected platforms based on selected accounts
   const selectedPlatforms: ('facebook' | 'instagram')[] = Array.from(
@@ -96,9 +96,9 @@ export function StoryComposer({
     )
   );
 
-  // Validate preflight on media or account change
+  // Validate preflight on media or account change (only when accounts are selected)
   useEffect(() => {
-    if (!mediaUrl || !selectedBrand) {
+    if (!mediaUrl || !selectedBrand || selectedAccountIds.length === 0) {
       setValidationResult(null);
       return;
     }
@@ -110,6 +110,7 @@ export function StoryComposer({
           brand_id: selectedBrand.id,
           media_url: mediaUrl,
           media_type: mediaType,
+          target_account_ids: selectedAccountIds,
           platforms: selectedPlatforms.length > 0 ? selectedPlatforms : ['instagram', 'facebook']
         });
         setValidationResult(res.data);
@@ -121,7 +122,7 @@ export function StoryComposer({
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [mediaUrl, mediaType, selectedPlatforms, selectedBrand]);
+  }, [mediaUrl, mediaType, selectedAccountIds, selectedPlatforms, selectedBrand]);
 
   // Media File Upload Handler (streaming to backend / upload-media)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -183,8 +184,8 @@ export function StoryComposer({
       toast.error('Please upload an image or video for your Story.');
       return;
     }
-    if (selectedPlatforms.length === 0) {
-      toast.error('Please select at least one platform to publish to.');
+    if (selectedAccountIds.length === 0) {
+      toast.error('Please select at least one Story destination account.');
       return;
     }
 
@@ -198,6 +199,7 @@ export function StoryComposer({
         caption: caption || undefined,
         media_url: mediaUrl,
         media_type: mediaType,
+        target_account_ids: selectedAccountIds,
         platforms: selectedPlatforms
       };
 
@@ -221,6 +223,10 @@ export function StoryComposer({
       toast.error('Please upload an image or video for your Story.');
       return;
     }
+    if (selectedAccountIds.length === 0) {
+      toast.error('Please select at least one Story destination account.');
+      return;
+    }
     if (!scheduledDateTime) {
       toast.error('Please select a future date and time.');
       return;
@@ -242,6 +248,7 @@ export function StoryComposer({
         caption: caption || undefined,
         media_url: mediaUrl,
         media_type: mediaType,
+        target_account_ids: selectedAccountIds,
         platforms: selectedPlatforms,
         status: 'SCHEDULED',
         scheduled_at: scheduledDate.toISOString()
@@ -271,6 +278,7 @@ export function StoryComposer({
         caption: caption || undefined,
         media_url: mediaUrl,
         media_type: mediaType,
+        target_account_ids: selectedAccountIds,
         platforms: selectedPlatforms,
         status: 'DRAFT'
       });
@@ -441,15 +449,39 @@ export function StoryComposer({
 
         {/* Destination Platform / Accounts Selection */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-2">
               <Share2 className="w-4 h-4 text-indigo-400" />
               <span>Target Story Destinations</span>
             </label>
-            <span className="text-[10px] text-slate-400 font-mono">
-              {selectedAccountIds.length} account(s) selected
-            </span>
+            <div className="flex items-center space-x-2">
+              {capableAccounts.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 px-2.5 py-1 rounded-lg bg-indigo-950/60 border border-indigo-800/60 hover:border-indigo-700 transition"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearAll}
+                    className="text-[10px] font-semibold text-slate-400 hover:text-slate-300 px-2.5 py-1 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition"
+                  >
+                    Clear
+                  </button>
+                </>
+              )}
+              <span className="text-[10px] text-slate-400 font-mono ml-1">
+                {selectedAccountIds.length} account{selectedAccountIds.length === 1 ? '' : 's'} selected
+              </span>
+            </div>
           </div>
+
+          <p className="text-[11px] text-slate-400">
+            The Story will be published <span className="text-slate-200 font-medium">ONLY</span> to the exact checked account(s) below.
+          </p>
 
           {capableAccounts.length === 0 ? (
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start space-x-2.5">
@@ -487,8 +519,11 @@ export function StoryComposer({
                       <p className="text-xs font-semibold truncate text-slate-200">
                         {acc.account_name}
                       </p>
-                      <p className="text-[10px] text-slate-400 capitalize">
-                        {acc.platform} {acc.platform === 'instagram' ? 'Business Story' : 'Page Story'}
+                      <p className="text-[10px] text-indigo-400 font-medium capitalize">
+                        {acc.platform === 'instagram' ? 'Instagram Story' : 'Facebook Page Story'}
+                      </p>
+                      <p className="text-[9px] text-slate-500 truncate">
+                        ID: {acc.id} &bull; {acc.platform === 'instagram' ? 'Business Account' : 'Facebook Page'}
                       </p>
                     </div>
                   </button>

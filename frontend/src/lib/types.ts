@@ -424,6 +424,7 @@ export interface Story {
   media_url: string;
   media_type: 'image' | 'video' | string;
   thumbnail_url?: string;
+  target_account_ids: number[];
   platforms: ('facebook' | 'instagram')[];
   status: StoryStatus;
   scheduled_at?: string;
@@ -445,7 +446,20 @@ export interface StoryCreateInput {
   media_url: string;
   media_type: 'image' | 'video' | string;
   thumbnail_url?: string;
-  platforms: ('facebook' | 'instagram')[];
+  target_account_ids?: number[];
+  platforms?: ('facebook' | 'instagram')[];
+  status?: StoryStatus | string;
+  scheduled_at?: string;
+}
+
+export interface StoryUpdateInput {
+  title?: string;
+  caption?: string;
+  media_url?: string;
+  media_type?: 'image' | 'video' | string;
+  thumbnail_url?: string;
+  target_account_ids?: number[];
+  platforms?: ('facebook' | 'instagram')[];
   status?: StoryStatus | string;
   scheduled_at?: string;
 }
@@ -455,11 +469,12 @@ export interface StoryValidationResult {
   errors: string[];
   warnings: string[];
   account_checks: {
-    platform: string;
-    account_id?: string;
+    account_id?: number | string;
     account_name?: string;
+    platform?: string;
     capable: boolean;
     reason?: string;
   }[];
 }
+
 

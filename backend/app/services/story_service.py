@@ -138,8 +138,58 @@ class StoryService:
 
         return True, None
 
+    def _validate_story_target_accounts(
+        self,
+        db: Session,
+        user_id: int,
+        target_account_ids: List[int],
+        require_non_empty: bool = True
+    ) -> List[SocialAccount]:
+        """
+        Validate that all specified target_account_ids exist, belong strictly to user_id,
+        and are capable of publishing Stories.
+        """
+        if not target_account_ids:
+            if require_non_empty:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No Story destinations selected. Please select at least one connected SocialAccount."
+                )
+            return []
+
+        # Query all requested account IDs
+        accounts = db.query(SocialAccount).filter(SocialAccount.id.in_(target_account_ids)).all()
+        account_map = {acc.id: acc for acc in accounts}
+
+        # Verify all IDs exist
+        for aid in target_account_ids:
+            if aid not in account_map:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Target SocialAccount ID {aid} not found."
+                )
+
+        # Security check: verify all accounts belong to the current user
+        for acc in accounts:
+            if acc.user_id != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Unauthorized: SocialAccount ID {acc.id} does not belong to the authenticated user."
+                )
+
+        # Validate Story capability for each account
+        for acc in accounts:
+            capable, reason = self.validate_account_capability(acc, acc.platform)
+            if not capable:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Account '{acc.account_name}' ({acc.platform}) is not capable of Story publishing: {reason}"
+                )
+
+        return [account_map[aid] for aid in target_account_ids]
+
     def validate_story_preflight(self, db: Session, story_in: StoryCreate, user_id: int) -> StoryValidationResult:
-        """Perform comprehensive preflight checks on media and selected target accounts."""
+        """Perform comprehensive preflight checks on media and explicitly selected target accounts."""
         all_errors: List[str] = []
         all_warnings: List[str] = []
         account_checks: List[Dict[str, Any]] = []
@@ -149,32 +199,49 @@ class StoryService:
         all_errors.extend(m_errors)
         all_warnings.extend(m_warnings)
 
-        # 2. Accounts check
-        platforms = [p.lower() for p in (story_in.platforms or ["facebook", "instagram"])]
-        user_accounts = social_account_repo.get_by_user(db, user_id)
+        # 2. Selected target accounts check
+        target_ids = story_in.target_account_ids or []
+        if not target_ids:
+            all_errors.append("No Story destinations selected. Please select at least one account.")
+            all_warnings.append("Select at least one connected Facebook Page or Instagram Business account.")
+            return StoryValidationResult(
+                is_valid=False,
+                errors=all_errors,
+                warnings=all_warnings,
+                account_checks=[]
+            )
 
-        for p in platforms:
-            matching_accounts = [a for a in user_accounts if a.platform == p]
-            if not matching_accounts:
-                all_errors.append(f"No connected {p.capitalize()} account found for user.")
+        for aid in target_ids:
+            acc = db.query(SocialAccount).filter(SocialAccount.id == aid).first()
+            if not acc:
+                all_errors.append(f"Target account ID {aid} does not exist.")
                 account_checks.append({
-                    "platform": p,
+                    "account_id": aid,
                     "account_name": None,
+                    "platform": None,
                     "capable": False,
-                    "reason": f"No connected {p} account."
+                    "reason": f"SocialAccount ID {aid} not found."
+                })
+            elif acc.user_id != user_id:
+                all_errors.append(f"Target account ID {aid} does not belong to the current user.")
+                account_checks.append({
+                    "account_id": aid,
+                    "account_name": None,
+                    "platform": acc.platform,
+                    "capable": False,
+                    "reason": "Unauthorized access to account."
                 })
             else:
-                for acc in matching_accounts:
-                    capable, reason = self.validate_account_capability(acc, p)
-                    account_checks.append({
-                        "platform": p,
-                        "account_id": acc.account_id,
-                        "account_name": acc.account_name,
-                        "capable": capable,
-                        "reason": reason
-                    })
-                    if not capable and reason:
-                        all_errors.append(reason)
+                capable, reason = self.validate_account_capability(acc, acc.platform)
+                account_checks.append({
+                    "account_id": acc.id,
+                    "account_name": acc.account_name,
+                    "platform": acc.platform,
+                    "capable": capable,
+                    "reason": reason
+                })
+                if not capable and reason:
+                    all_errors.append(f"{acc.account_name} ({acc.platform}): {reason}")
 
         return StoryValidationResult(
             is_valid=len(all_errors) == 0,
@@ -442,6 +509,27 @@ class StoryService:
                 detail=" | ".join(errors)
             )
 
+        target_ids = story_in.target_account_ids or []
+        status_val = story_in.status or StoryStatus.DRAFT.value
+
+        if status_val in [StoryStatus.SCHEDULED.value, StoryStatus.PUBLISHING.value] and not target_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Target destination accounts are required to schedule or publish a Story."
+            )
+
+        validated_accounts: List[SocialAccount] = []
+        if target_ids:
+            validated_accounts = self._validate_story_target_accounts(
+                db=db,
+                user_id=user_id,
+                target_account_ids=target_ids,
+                require_non_empty=True
+            )
+            platforms = list(dict.fromkeys([acc.platform for acc in validated_accounts]))
+        else:
+            platforms = []
+
         story = Story(
             brand_id=story_in.brand_id,
             user_id=user_id,
@@ -450,8 +538,9 @@ class StoryService:
             media_url=story_in.media_url,
             media_type=story_in.media_type or "image",
             thumbnail_url=story_in.thumbnail_url,
-            platforms=story_in.platforms or ["facebook", "instagram"],
-            status=story_in.status or StoryStatus.DRAFT.value,
+            target_account_ids=target_ids,
+            platforms=platforms,
+            status=status_val,
             scheduled_at=story_in.scheduled_at
         )
         db.add(story)
@@ -464,7 +553,12 @@ class StoryService:
             action="STORY_CREATED",
             resource_type="Story",
             resource_id=story.id,
-            details={"title": story.title, "platforms": story.platforms, "status": story.status}
+            details={
+                "title": story.title,
+                "target_account_ids": story.target_account_ids,
+                "platforms": story.platforms,
+                "status": story.status
+            }
         )
         return story
 
@@ -516,6 +610,19 @@ class StoryService:
                     detail=" | ".join(errors)
                 )
 
+        if "target_account_ids" in update_data and update_data["target_account_ids"] is not None:
+            target_ids = update_data["target_account_ids"]
+            if target_ids:
+                validated_accounts = self._validate_story_target_accounts(
+                    db=db,
+                    user_id=user_id,
+                    target_account_ids=target_ids,
+                    require_non_empty=True
+                )
+                update_data["platforms"] = list(dict.fromkeys([acc.platform for acc in validated_accounts]))
+            else:
+                update_data["platforms"] = []
+
         updated = story_repo.update(db, story, update_data)
         audit_repo.log(
             db=db,
@@ -541,8 +648,14 @@ class StoryService:
         return True
 
     def schedule_story(self, db: Session, story_id: int, user_id: int, scheduled_at: datetime) -> Story:
-        """Schedule story for future publication."""
+        """Schedule story for future publication using persisted target_account_ids."""
         story = self.get_story(db, story_id, user_id)
+        if not story.target_account_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot schedule Story with zero target destination accounts."
+            )
+
         now_utc = datetime.now(timezone.utc)
         sched = scheduled_at.replace(tzinfo=timezone.utc) if scheduled_at.tzinfo is None else scheduled_at
 
@@ -564,12 +677,15 @@ class StoryService:
             action="STORY_SCHEDULED",
             resource_type="Story",
             resource_id=story_id,
-            details={"scheduled_at": sched.isoformat()}
+            details={
+                "scheduled_at": sched.isoformat(),
+                "target_account_ids": story.target_account_ids
+            }
         )
         return story
 
     def publish_story(self, db: Session, story_id: int, user_id: Optional[int] = None) -> Story:
-        """Execute immediate Story publishing across selected platforms."""
+        """Execute immediate Story publishing ONLY across explicitly targeted SocialAccount records."""
         story = story_repo.get(db, story_id)
         if not story:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Story {story_id} not found.")
@@ -577,65 +693,81 @@ class StoryService:
         if user_id and story.user_id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to publish this Story.")
 
+        target_ids = story.target_account_ids or []
+        if not target_ids:
+            story.status = StoryStatus.FAILED.value
+            story.last_error = "Story has no target destination accounts configured."
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Story has no target destination accounts configured."
+            )
+
         story.status = StoryStatus.PUBLISHING.value
         db.commit()
 
-        user_accounts = social_account_repo.get_by_user(db, story.user_id)
-        platforms = [p.lower() for p in (story.platforms or ["facebook", "instagram"])]
-        is_video = story.media_type.lower() == "video"
+        # Fetch exact target accounts belonging strictly to the story author
+        target_accounts = db.query(SocialAccount).filter(
+            SocialAccount.id.in_(target_ids),
+            SocialAccount.user_id == story.user_id
+        ).all()
+        account_map = {acc.id: acc for acc in target_accounts}
 
+        is_video = story.media_type.lower() == "video"
+        successful_account_ids: List[int] = []
+        failed_account_ids: List[int] = []
         successful_platforms: List[str] = []
         errors: List[str] = []
 
-        # 1. Publish to Facebook if requested
-        if "facebook" in platforms:
-            fb_acc = next((a for a in user_accounts if a.platform == "facebook"), None)
-            if not fb_acc:
-                errors.append("FB Publish Notice: No connected Facebook Page account found.")
-            else:
-                capable, cap_err = self.validate_account_capability(fb_acc, "facebook")
-                if not capable:
-                    errors.append(f"FB Publish Error: {cap_err}")
-                else:
-                    try:
-                        res = self.publish_facebook_story(
-                            account=fb_acc,
-                            media_url=story.media_url,
-                            is_video=is_video
-                        )
-                        story.fb_story_id = str(res.get("id"))
-                        successful_platforms.append("facebook")
-                    except Exception as e:
-                        logger.error(f"[STORY_PUBLISH] Facebook error: {e}")
-                        _, clean_msg = classify_story_error(str(e))
-                        errors.append(f"FB Publish Error: {clean_msg}")
+        for aid in target_ids:
+            acc = account_map.get(aid)
+            if not acc:
+                err_msg = f"Target account ID {aid} not found or not owned by user."
+                errors.append(err_msg)
+                failed_account_ids.append(aid)
+                continue
 
-        # 2. Publish to Instagram if requested
-        if "instagram" in platforms:
-            ig_acc = next((a for a in user_accounts if a.platform == "instagram"), None)
-            if not ig_acc:
-                errors.append("IG Publish Notice: No connected Instagram Business account found.")
-            else:
-                capable, cap_err = self.validate_account_capability(ig_acc, "instagram")
-                if not capable:
-                    errors.append(f"IG Publish Error: {cap_err}")
-                else:
-                    try:
-                        res = self.publish_instagram_story(
-                            account=ig_acc,
-                            media_url=story.media_url,
-                            is_video=is_video
-                        )
-                        story.ig_container_id = str(res.get("container_id", ""))
-                        story.ig_story_id = str(res.get("id"))
+            capable, cap_err = self.validate_account_capability(acc, acc.platform)
+            if not capable:
+                err_msg = f"{acc.account_name} ({acc.platform}) capability error: {cap_err}"
+                errors.append(err_msg)
+                failed_account_ids.append(aid)
+                continue
+
+            try:
+                if acc.platform == "facebook":
+                    res = self.publish_facebook_story(
+                        account=acc,
+                        media_url=story.media_url,
+                        is_video=is_video
+                    )
+                    story.fb_story_id = str(res.get("id"))
+                    successful_account_ids.append(acc.id)
+                    if "facebook" not in successful_platforms:
+                        successful_platforms.append("facebook")
+                elif acc.platform == "instagram":
+                    res = self.publish_instagram_story(
+                        account=acc,
+                        media_url=story.media_url,
+                        is_video=is_video
+                    )
+                    story.ig_container_id = str(res.get("container_id", ""))
+                    story.ig_story_id = str(res.get("id"))
+                    successful_account_ids.append(acc.id)
+                    if "instagram" not in successful_platforms:
                         successful_platforms.append("instagram")
-                    except Exception as e:
-                        logger.error(f"[STORY_PUBLISH] Instagram error: {e}")
-                        _, clean_msg = classify_story_error(str(e))
-                        errors.append(f"IG Publish Error: {clean_msg}")
+                else:
+                    err_msg = f"Unsupported platform '{acc.platform}' for account ID {aid}."
+                    errors.append(err_msg)
+                    failed_account_ids.append(aid)
+            except Exception as e:
+                logger.error(f"[STORY_PUBLISH] Publishing failed for {acc.account_name} ({acc.platform}): {e}")
+                _, clean_msg = classify_story_error(str(e))
+                errors.append(f"{acc.account_name} ({acc.platform}) Error: {clean_msg}")
+                failed_account_ids.append(acc.id)
 
         # Determine overall outcome
-        if successful_platforms:
+        if successful_account_ids:
             story.status = StoryStatus.PUBLISHED.value
             story.published_at = datetime.now(timezone.utc)
             if errors:
@@ -651,13 +783,19 @@ class StoryService:
                 action="STORY_PUBLISHED",
                 resource_type="Story",
                 resource_id=story.id,
-                details={"successful_platforms": successful_platforms, "errors": errors}
+                details={
+                    "target_account_ids": target_ids,
+                    "successful_account_ids": successful_account_ids,
+                    "failed_account_ids": failed_account_ids,
+                    "successful_platforms": successful_platforms,
+                    "errors": errors
+                }
             )
             return story
         else:
             story.status = StoryStatus.FAILED.value
             story.retry_count += 1
-            story.last_error = " | ".join(errors) if errors else "Story publishing failed on all targeted platforms."
+            story.last_error = " | ".join(errors) if errors else "Story publishing failed for all targeted accounts."
             db.commit()
             db.refresh(story)
 
@@ -667,7 +805,13 @@ class StoryService:
                 action="STORY_PUBLISH_FAILED",
                 resource_type="Story",
                 resource_id=story.id,
-                details={"errors": errors, "retry_count": story.retry_count}
+                details={
+                    "target_account_ids": target_ids,
+                    "successful_account_ids": successful_account_ids,
+                    "failed_account_ids": failed_account_ids,
+                    "errors": errors,
+                    "retry_count": story.retry_count
+                }
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
