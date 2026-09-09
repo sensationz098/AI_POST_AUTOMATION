@@ -1,6 +1,6 @@
 """Add ig_username and fb_page_url to stories table
 
-Revision ID: 021_story_ig_username_fb_page_url
+Revision ID: 021_story_urls
 Revises: 020_story_platform_urls
 Create Date: 2026-09-09
 
@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = '021_story_ig_username_fb_page_url'
+revision: str = '021_story_urls'
 down_revision: Union[str, None] = '020_story_platform_urls'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
