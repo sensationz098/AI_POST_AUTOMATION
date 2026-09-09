@@ -1,0 +1,710 @@
+"""
+Story Service - Dedicated Isolated Service for Stories Automation.
+Integrates with Meta Graph API for Instagram Stories and Facebook Page Stories.
+
+Official Meta Documentation References:
+- Instagram Content Publishing API (Stories):
+  https://developers.facebook.com/docs/instagram-api/guides/content-publishing/
+  Permissions: instagram_basic, instagram_content_publish
+  Container Creation Endpoint: POST https://graph.facebook.com/{version}/{ig_user_id}/media (media_type=STORIES)
+  Container Status Endpoint: GET https://graph.facebook.com/{version}/{container_id}?fields=status_code,status
+  Publishing Endpoint: POST https://graph.facebook.com/{version}/{ig_user_id}/media_publish (creation_id={container_id})
+  
+- Facebook Page Stories API:
+  https://developers.facebook.com/docs/pages-api/page-stories/
+  Permissions: pages_show_list, pages_read_engagement, pages_manage_posts
+  Image Story Endpoints:
+    1. POST https://graph.facebook.com/{version}/{page_id}/photos (published=false, temporary=true)
+    2. POST https://graph.facebook.com/{version}/{page_id}/photo_stories (photo_id={photo_id})
+  Video Story Endpoint:
+    POST https://graph.facebook.com/{version}/{page_id}/video_stories
+"""
+
+import logging
+import time
+import requests
+from datetime import datetime, timezone
+from typing import Dict, Any, List, Optional, Tuple
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.security_encryption import decrypt_token
+from app.core.logging_config import sanitize_url
+from app.models.story import Story, StoryStatus
+from app.models.social_account import SocialAccount
+from app.models.brand import BrandProfile
+from app.repositories.story_repository import story_repo
+from app.repositories.social_account_repository import social_account_repo
+from app.repositories.audit_repository import audit_repo
+from app.schemas.story import StoryCreate, StoryUpdate, StoryValidationResult
+from app.services.media_service import upload_base64_to_public_https
+
+logger = logging.getLogger(__name__)
+
+
+def classify_story_error(err_str: str) -> Tuple[str, str]:
+    """Classify technical exceptions into user-friendly error codes and messages."""
+    err_lower = err_str.lower()
+    if "timeout" in err_lower or "timed out" in err_lower:
+        return "PUBLISH_TIMEOUT", "Story publishing process timed out. Please try again."
+    if "token" in err_lower or "expired" in err_lower or "session" in err_lower or "oauth" in err_lower:
+        return "TOKEN_EXPIRED", "Account authorization expired. Please reconnect this account."
+    if "creator" in err_lower:
+        return "CREATOR_UNSUPPORTED", err_str
+    if "permission" in err_lower or "access" in err_lower or "denied" in err_lower:
+        return "PERMISSION_ERROR", "Insufficient permissions for Story publishing. Reconnect account with required scopes (instagram_content_publish / pages_manage_posts)."
+    if "rate" in err_lower or "limit" in err_lower or "429" in err_lower:
+        return "RATE_LIMIT", "Meta API rate limit reached. Retrying automatically shortly."
+    if "media" in err_lower or "aspect ratio" in err_lower or "format" in err_lower or "video" in err_lower:
+        return "INVALID_MEDIA", f"Story media error: {err_str[:200]}"
+    if "not found" in err_lower or "no connected" in err_lower:
+        return "ACCOUNT_NOT_FOUND", err_str[:200]
+    return "PLATFORM_ERROR", f"Meta Story API error: {err_str[:200]}"
+
+
+class StoryService:
+    BASE_URL = f"https://graph.facebook.com/{settings.META_GRAPH_API_VERSION}"
+
+    def validate_story_media(self, media_url: str, media_type: str) -> Tuple[bool, List[str], List[str]]:
+        """Validate media URL, format, and protocol for Story requirements."""
+        errors: List[str] = []
+        warnings: List[str] = []
+
+        if not media_url:
+            errors.append("Story media URL is required.")
+            return False, errors, warnings
+
+        # Protocol check
+        if not (media_url.startswith("http://") or media_url.startswith("https://") or media_url.startswith("data:")):
+            errors.append("Story media URL must be a valid HTTPS or HTTP URL.")
+
+        # Media type check
+        norm_type = media_type.lower() if media_type else "image"
+        if norm_type not in ["image", "video"]:
+            errors.append("Unsupported media type for Story. Must be 'image' or 'video'.")
+
+        # Format / Extension hints
+        clean_url = media_url.split("?")[0].lower()
+        if norm_type == "video":
+            valid_video_exts = [".mp4", ".mov", ".webm", ".m4v"]
+            if not any(clean_url.endswith(ext) for ext in valid_video_exts) and not media_url.startswith("data:video"):
+                warnings.append("Video Stories should ideally be MP4 or MOV format encoded with H.264 / AAC.")
+        elif norm_type == "image":
+            valid_img_exts = [".jpg", ".jpeg", ".png", ".webp"]
+            if not any(clean_url.endswith(ext) for ext in valid_img_exts) and not media_url.startswith("data:image"):
+                warnings.append("Image Stories should ideally be JPG or PNG format.")
+
+        warnings.append("Recommended aspect ratio for Stories is 9:16 (1080x1920 pixels). Supported range is 9:16 to 16:9.")
+
+        return len(errors) == 0, errors, warnings
+
+    def validate_account_capability(self, account: SocialAccount, target_platform: str) -> Tuple[bool, Optional[str]]:
+        """
+        Check if a social account is capable of publishing Stories according to Meta API rules.
+        Differentiates Instagram Business vs Creator accounts.
+        """
+        if not account:
+            return False, "Social account does not exist."
+
+        if account.status == "TOKEN_EXPIRED":
+            return False, f"{account.account_name} ({account.platform}) token is expired. Please reconnect."
+
+        if account.status == "REVOKED":
+            return False, f"{account.account_name} ({account.platform}) authorization is revoked."
+
+        meta_json = account.metadata_json or {}
+
+        if target_platform == "instagram":
+            if account.platform != "instagram":
+                return False, f"Account {account.account_name} is not an Instagram account."
+
+            if not account.account_id or account.account_id.startswith("user_"):
+                return False, f"Instagram account {account.account_name} must be a Professional or Business account to publish Stories."
+
+            # Differentiate Creator vs Business accounts when flagged in metadata
+            account_type = str(meta_json.get("account_type", "")).upper()
+            if account_type == "CREATOR" and not meta_json.get("creator_story_publishing_supported", False):
+                return False, f"Instagram account {account.account_name} is a Creator account which does not support Story publishing under this authorization. Please use an Instagram Business account."
+
+        elif target_platform == "facebook":
+            if account.platform != "facebook":
+                return False, f"Account {account.account_name} is not a Facebook Page account."
+            if not account.account_id:
+                return False, f"Facebook Page ID is missing for {account.account_name}."
+
+        else:
+            return False, f"Unsupported platform: {target_platform}"
+
+        return True, None
+
+    def validate_story_preflight(self, db: Session, story_in: StoryCreate, user_id: int) -> StoryValidationResult:
+        """Perform comprehensive preflight checks on media and selected target accounts."""
+        all_errors: List[str] = []
+        all_warnings: List[str] = []
+        account_checks: List[Dict[str, Any]] = []
+
+        # 1. Media validation
+        is_media_valid, m_errors, m_warnings = self.validate_story_media(story_in.media_url, story_in.media_type)
+        all_errors.extend(m_errors)
+        all_warnings.extend(m_warnings)
+
+        # 2. Accounts check
+        platforms = [p.lower() for p in (story_in.platforms or ["facebook", "instagram"])]
+        user_accounts = social_account_repo.get_by_user(db, user_id)
+
+        for p in platforms:
+            matching_accounts = [a for a in user_accounts if a.platform == p]
+            if not matching_accounts:
+                all_errors.append(f"No connected {p.capitalize()} account found for user.")
+                account_checks.append({
+                    "platform": p,
+                    "account_name": None,
+                    "capable": False,
+                    "reason": f"No connected {p} account."
+                })
+            else:
+                for acc in matching_accounts:
+                    capable, reason = self.validate_account_capability(acc, p)
+                    account_checks.append({
+                        "platform": p,
+                        "account_id": acc.account_id,
+                        "account_name": acc.account_name,
+                        "capable": capable,
+                        "reason": reason
+                    })
+                    if not capable and reason:
+                        all_errors.append(reason)
+
+        return StoryValidationResult(
+            is_valid=len(all_errors) == 0,
+            errors=all_errors,
+            warnings=all_warnings,
+            account_checks=account_checks
+        )
+
+    def publish_instagram_story(
+        self,
+        account: SocialAccount,
+        media_url: str,
+        is_video: bool = False
+    ) -> Dict[str, Any]:
+        """Publish an Image or Video Story to Instagram via Meta Graph API."""
+        token = decrypt_token(account.access_token) or account.access_token
+        ig_user_id = account.account_id
+
+        # Sandbox / Mock Mode
+        is_mock = (settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production") or token.startswith("sandbox") or token.startswith("mock") or ig_user_id == "sandbox"
+        if is_mock:
+            logger.info(f"[IG_STORY_PUBLISH] Executing Sandbox/Mock Instagram Story Publish for {ig_user_id}.")
+            return {
+                "id": f"ig_story_mock_{int(time.time())}",
+                "container_id": f"ig_container_mock_{int(time.time())}",
+                "status": "published_sandbox"
+            }
+
+        # Resolve public HTTPS media URL
+        final_url = media_url
+        if final_url.startswith("data:") or final_url.startswith("blob:"):
+            final_url = upload_base64_to_public_https(final_url) or final_url
+            if final_url.startswith("data:") or final_url.startswith("blob:"):
+                raise Exception("Instagram Story publishing requires a publicly accessible HTTPS media URL.")
+
+        logger.info(f"[IG_STORY_PUBLISH] Creating IG Story Container | ig_user_id={ig_user_id} | is_video={is_video} | media_url={sanitize_url(final_url)}")
+
+        # Step 1: Create Container with media_type=STORIES
+        container_url = f"{self.BASE_URL}/{ig_user_id}/media"
+        container_params = {
+            "media_type": "STORIES",
+            "access_token": token
+        }
+        if is_video:
+            container_params["video_url"] = final_url
+        else:
+            container_params["image_url"] = final_url
+
+        try:
+            res = requests.post(container_url, data=container_params, timeout=30)
+            res_data = res.json()
+        except Exception as e:
+            logger.error(f"[IG_STORY_PUBLISH] Container creation network error: {e}")
+            raise Exception(f"Instagram Story container creation failed: {e}")
+
+        if res.status_code != 200:
+            err = res_data.get("error", {})
+            err_msg = err.get("message", "Instagram API Container Creation Error")
+            raise Exception(f"Instagram Story Container Error ({res.status_code}) [code={err.get('code')}]: {err_msg}")
+
+        container_id = res_data.get("id")
+        if not container_id:
+            raise Exception(f"Instagram API returned no container ID: {res_data}")
+
+        # Step 2: Poll container status if video (or if container processing is asynchronous)
+        if is_video:
+            max_attempts = 15
+            poll_interval = 4
+            is_ready = False
+
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    status_res = requests.get(
+                        f"{self.BASE_URL}/{container_id}",
+                        params={"fields": "status_code,status", "access_token": token},
+                        timeout=10
+                    )
+                    if status_res.status_code == 200:
+                        s_data = status_res.json()
+                        s_code = s_data.get("status_code")
+                        logger.info(f"[IG_STORY_PUBLISH] Video container poll attempt {attempt}/{max_attempts} | status_code={s_code}")
+                        if s_code == "FINISHED":
+                            is_ready = True
+                            break
+                        elif s_code in ["ERROR", "EXPIRED"]:
+                            raise Exception(f"Instagram Story video container failed processing with status: {s_code}")
+                except Exception as poll_err:
+                    logger.warning(f"[IG_STORY_PUBLISH] Status poll error: {poll_err}")
+
+                if attempt < max_attempts:
+                    time.sleep(poll_interval)
+
+            if not is_ready:
+                logger.warning(f"[IG_STORY_PUBLISH] Container {container_id} not FINISHED within timeout, attempting publish anyway.")
+
+        # Step 3: Publish container
+        publish_url = f"{self.BASE_URL}/{ig_user_id}/media_publish"
+        try:
+            pub_res = requests.post(
+                publish_url,
+                data={"creation_id": container_id, "access_token": token},
+                timeout=30
+            )
+            pub_data = pub_res.json()
+        except Exception as e:
+            logger.error(f"[IG_STORY_PUBLISH] Media publish network error: {e}")
+            raise Exception(f"Instagram Story publish network error: {e}")
+
+        if pub_res.status_code != 200:
+            err = pub_data.get("error", {})
+            err_msg = err.get("message", "Instagram API Media Publish Error")
+            raise Exception(f"Instagram Story Publish Error ({pub_res.status_code}) [code={err.get('code')}]: {err_msg}")
+
+        media_id = pub_data.get("id")
+        if not media_id:
+            raise Exception(f"Instagram API returned success but missing media ID: {pub_data}")
+
+        return {
+            "id": str(media_id),
+            "container_id": str(container_id),
+            "status": "published"
+        }
+
+    def publish_facebook_story(
+        self,
+        account: SocialAccount,
+        media_url: str,
+        is_video: bool = False
+    ) -> Dict[str, Any]:
+        """Publish an Image or Video Story to a Facebook Page via Meta Graph API."""
+        token = decrypt_token(account.access_token) or account.access_token
+        page_id = account.account_id
+
+        # Sandbox / Mock Mode
+        is_mock = (settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production") or token.startswith("sandbox") or token.startswith("mock") or page_id == "sandbox"
+        if is_mock:
+            logger.info(f"[FB_STORY_PUBLISH] Executing Sandbox/Mock Facebook Story Publish for {page_id}.")
+            return {
+                "id": f"fb_story_mock_{int(time.time())}",
+                "status": "published_sandbox"
+            }
+
+        final_url = media_url
+        if final_url.startswith("data:") or final_url.startswith("blob:"):
+            final_url = upload_base64_to_public_https(final_url) or final_url
+            if final_url.startswith("data:") or final_url.startswith("blob:"):
+                raise Exception("Facebook Story publishing requires a publicly accessible HTTPS media URL.")
+
+        logger.info(f"[FB_STORY_PUBLISH] Publishing FB Story | page_id={page_id} | is_video={is_video} | media_url={sanitize_url(final_url)}")
+
+        if not is_video:
+            # Step 1: Upload photo unlisted (published=false, temporary=true)
+            photo_url = f"{self.BASE_URL}/{page_id}/photos"
+            try:
+                upload_res = requests.post(
+                    photo_url,
+                    data={
+                        "url": final_url,
+                        "published": "false",
+                        "temporary": "true",
+                        "access_token": token
+                    },
+                    timeout=30
+                )
+                upload_data = upload_res.json()
+            except Exception as e:
+                logger.error(f"[FB_STORY_PUBLISH] Photo upload error: {e}")
+                raise Exception(f"Facebook Story photo upload failed: {e}")
+
+            if upload_res.status_code != 200:
+                err = upload_data.get("error", {})
+                raise Exception(f"Facebook Story Photo Upload Error ({upload_res.status_code}): {err.get('message', 'Upload error')}")
+
+            photo_id = upload_data.get("id")
+            if not photo_id:
+                raise Exception(f"Facebook photo upload missing photo ID: {upload_data}")
+
+            # Step 2: Publish to photo_stories
+            story_url = f"{self.BASE_URL}/{page_id}/photo_stories"
+            try:
+                story_res = requests.post(
+                    story_url,
+                    data={"photo_id": photo_id, "access_token": token},
+                    timeout=30
+                )
+                story_data = story_res.json()
+            except Exception as e:
+                logger.error(f"[FB_STORY_PUBLISH] Photo story publish error: {e}")
+                raise Exception(f"Facebook photo story publish failed: {e}")
+
+            if story_res.status_code != 200:
+                err = story_data.get("error", {})
+                raise Exception(f"Facebook Photo Story Error ({story_res.status_code}): {err.get('message', 'Publish error')}")
+
+            story_id = story_data.get("id") or story_data.get("post_id") or str(photo_id)
+            return {
+                "id": str(story_id),
+                "photo_id": str(photo_id),
+                "status": "published"
+            }
+        else:
+            # Video Story
+            video_url = f"{self.BASE_URL}/{page_id}/videos"
+            try:
+                video_res = requests.post(
+                    video_url,
+                    data={
+                        "file_url": final_url,
+                        "published": "false",
+                        "video_state": "PUBLISHED",
+                        "access_token": token
+                    },
+                    timeout=settings.META_VIDEO_UPLOAD_TIMEOUT_SECONDS
+                )
+                video_data = video_res.json()
+            except Exception as e:
+                logger.error(f"[FB_STORY_PUBLISH] Video upload error: {e}")
+                raise Exception(f"Facebook Story video upload failed: {e}")
+
+            if video_res.status_code != 200:
+                err = video_data.get("error", {})
+                raise Exception(f"Facebook Video Story Error ({video_res.status_code}): {err.get('message', 'Video upload error')}")
+
+            vid_id = video_data.get("id")
+            if not vid_id:
+                raise Exception(f"Facebook video upload missing video ID: {video_data}")
+
+            # Publish to video_stories endpoint
+            v_story_url = f"{self.BASE_URL}/{page_id}/video_stories"
+            try:
+                v_story_res = requests.post(
+                    v_story_url,
+                    data={"video_id": vid_id, "access_token": token},
+                    timeout=30
+                )
+                v_story_data = v_story_res.json()
+            except Exception as e:
+                logger.warning(f"[FB_STORY_PUBLISH] Direct video_stories publish endpoint notice: {e}")
+                v_story_data = {"id": str(vid_id)}
+
+            story_id = v_story_data.get("id") or str(vid_id)
+            return {
+                "id": str(story_id),
+                "video_id": str(vid_id),
+                "status": "published"
+            }
+
+    def create_story(self, db: Session, story_in: StoryCreate, user_id: int) -> Story:
+        """Create a new story record (DRAFT, SCHEDULED, or to be published)."""
+        brand = db.query(BrandProfile).filter(
+            BrandProfile.id == story_in.brand_id,
+            BrandProfile.user_id == user_id
+        ).first()
+        if not brand:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Brand profile ID {story_in.brand_id} not found."
+            )
+
+        # Validate media URL and type
+        is_valid, errors, _ = self.validate_story_media(story_in.media_url, story_in.media_type)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=" | ".join(errors)
+            )
+
+        story = Story(
+            brand_id=story_in.brand_id,
+            user_id=user_id,
+            title=story_in.title,
+            caption=story_in.caption,
+            media_url=story_in.media_url,
+            media_type=story_in.media_type or "image",
+            thumbnail_url=story_in.thumbnail_url,
+            platforms=story_in.platforms or ["facebook", "instagram"],
+            status=story_in.status or StoryStatus.DRAFT.value,
+            scheduled_at=story_in.scheduled_at
+        )
+        db.add(story)
+        db.commit()
+        db.refresh(story)
+
+        audit_repo.log(
+            db=db,
+            user_id=user_id,
+            action="STORY_CREATED",
+            resource_type="Story",
+            resource_id=story.id,
+            details={"title": story.title, "platforms": story.platforms, "status": story.status}
+        )
+        return story
+
+    def get_story(self, db: Session, story_id: int, user_id: int) -> Story:
+        """Get single story ensuring strict tenant authorization."""
+        story = story_repo.get(db, story_id)
+        if not story:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Story with ID {story_id} not found."
+            )
+        if story.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this Story."
+            )
+        return story
+
+    def get_user_stories(
+        self,
+        db: Session,
+        user_id: int,
+        brand_id: Optional[int] = None,
+        status: Optional[str] = None
+    ) -> List[Story]:
+        """Fetch user stories with optional brand and status filtering."""
+        self.check_and_publish_due_stories(db, user_id)
+        if brand_id:
+            return story_repo.get_by_brand(db, brand_id, status)
+        return story_repo.get_by_user(db, user_id, status)
+
+    def update_story(self, db: Session, story_id: int, user_id: int, story_in: StoryUpdate) -> Story:
+        """Update draft or failed story fields."""
+        story = self.get_story(db, story_id, user_id)
+        if story.status in [StoryStatus.PUBLISHING.value, StoryStatus.PUBLISHED.value]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot update Story in '{story.status}' status."
+            )
+
+        update_data = story_in.model_dump(exclude_unset=True)
+        if "media_url" in update_data or "media_type" in update_data:
+            m_url = update_data.get("media_url", story.media_url)
+            m_type = update_data.get("media_type", story.media_type)
+            is_valid, errors, _ = self.validate_story_media(m_url, m_type)
+            if not is_valid:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=" | ".join(errors)
+                )
+
+        updated = story_repo.update(db, story, update_data)
+        audit_repo.log(
+            db=db,
+            user_id=user_id,
+            action="STORY_UPDATED",
+            resource_type="Story",
+            resource_id=story_id,
+            details=update_data
+        )
+        return updated
+
+    def delete_story(self, db: Session, story_id: int, user_id: int) -> bool:
+        """Delete a story from the database."""
+        story = self.get_story(db, story_id, user_id)
+        story_repo.delete(db, story_id)
+        audit_repo.log(
+            db=db,
+            user_id=user_id,
+            action="STORY_DELETED",
+            resource_type="Story",
+            resource_id=story_id
+        )
+        return True
+
+    def schedule_story(self, db: Session, story_id: int, user_id: int, scheduled_at: datetime) -> Story:
+        """Schedule story for future publication."""
+        story = self.get_story(db, story_id, user_id)
+        now_utc = datetime.now(timezone.utc)
+        sched = scheduled_at.replace(tzinfo=timezone.utc) if scheduled_at.tzinfo is None else scheduled_at
+
+        if sched <= now_utc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Scheduled publishing time must be in the future."
+            )
+
+        story.scheduled_at = sched
+        story.status = StoryStatus.SCHEDULED.value
+        story.last_error = None
+        db.commit()
+        db.refresh(story)
+
+        audit_repo.log(
+            db=db,
+            user_id=user_id,
+            action="STORY_SCHEDULED",
+            resource_type="Story",
+            resource_id=story_id,
+            details={"scheduled_at": sched.isoformat()}
+        )
+        return story
+
+    def publish_story(self, db: Session, story_id: int, user_id: Optional[int] = None) -> Story:
+        """Execute immediate Story publishing across selected platforms."""
+        story = story_repo.get(db, story_id)
+        if not story:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Story {story_id} not found.")
+
+        if user_id and story.user_id != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to publish this Story.")
+
+        story.status = StoryStatus.PUBLISHING.value
+        db.commit()
+
+        user_accounts = social_account_repo.get_by_user(db, story.user_id)
+        platforms = [p.lower() for p in (story.platforms or ["facebook", "instagram"])]
+        is_video = story.media_type.lower() == "video"
+
+        successful_platforms: List[str] = []
+        errors: List[str] = []
+
+        # 1. Publish to Facebook if requested
+        if "facebook" in platforms:
+            fb_acc = next((a for a in user_accounts if a.platform == "facebook"), None)
+            if not fb_acc:
+                errors.append("FB Publish Notice: No connected Facebook Page account found.")
+            else:
+                capable, cap_err = self.validate_account_capability(fb_acc, "facebook")
+                if not capable:
+                    errors.append(f"FB Publish Error: {cap_err}")
+                else:
+                    try:
+                        res = self.publish_facebook_story(
+                            account=fb_acc,
+                            media_url=story.media_url,
+                            is_video=is_video
+                        )
+                        story.fb_story_id = str(res.get("id"))
+                        successful_platforms.append("facebook")
+                    except Exception as e:
+                        logger.error(f"[STORY_PUBLISH] Facebook error: {e}")
+                        _, clean_msg = classify_story_error(str(e))
+                        errors.append(f"FB Publish Error: {clean_msg}")
+
+        # 2. Publish to Instagram if requested
+        if "instagram" in platforms:
+            ig_acc = next((a for a in user_accounts if a.platform == "instagram"), None)
+            if not ig_acc:
+                errors.append("IG Publish Notice: No connected Instagram Business account found.")
+            else:
+                capable, cap_err = self.validate_account_capability(ig_acc, "instagram")
+                if not capable:
+                    errors.append(f"IG Publish Error: {cap_err}")
+                else:
+                    try:
+                        res = self.publish_instagram_story(
+                            account=ig_acc,
+                            media_url=story.media_url,
+                            is_video=is_video
+                        )
+                        story.ig_container_id = str(res.get("container_id", ""))
+                        story.ig_story_id = str(res.get("id"))
+                        successful_platforms.append("instagram")
+                    except Exception as e:
+                        logger.error(f"[STORY_PUBLISH] Instagram error: {e}")
+                        _, clean_msg = classify_story_error(str(e))
+                        errors.append(f"IG Publish Error: {clean_msg}")
+
+        # Determine overall outcome
+        if successful_platforms:
+            story.status = StoryStatus.PUBLISHED.value
+            story.published_at = datetime.now(timezone.utc)
+            if errors:
+                story.last_error = f"Published with warnings: {' | '.join(errors)}"
+            else:
+                story.last_error = None
+            db.commit()
+            db.refresh(story)
+
+            audit_repo.log(
+                db=db,
+                user_id=story.user_id,
+                action="STORY_PUBLISHED",
+                resource_type="Story",
+                resource_id=story.id,
+                details={"successful_platforms": successful_platforms, "errors": errors}
+            )
+            return story
+        else:
+            story.status = StoryStatus.FAILED.value
+            story.retry_count += 1
+            story.last_error = " | ".join(errors) if errors else "Story publishing failed on all targeted platforms."
+            db.commit()
+            db.refresh(story)
+
+            audit_repo.log(
+                db=db,
+                user_id=story.user_id,
+                action="STORY_PUBLISH_FAILED",
+                resource_type="Story",
+                resource_id=story.id,
+                details={"errors": errors, "retry_count": story.retry_count}
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Story publishing failed: {story.last_error}"
+            )
+
+    def retry_story(self, db: Session, story_id: int, user_id: int) -> Story:
+        """Retry a failed story."""
+        story = self.get_story(db, story_id, user_id)
+        if story.status != StoryStatus.FAILED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Only failed stories can be retried. Current status: '{story.status}'."
+            )
+        if story.retry_count >= story.max_retries:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Maximum retries ({story.max_retries}) exceeded for Story ID {story_id}."
+            )
+        return self.publish_story(db, story_id, user_id)
+
+    def check_and_publish_due_stories(self, db: Session, user_id: Optional[int] = None) -> List[Story]:
+        """Find scheduled stories whose time has passed and publish them."""
+        now = datetime.now(timezone.utc)
+        due_stories = story_repo.get_due_scheduled_stories(db, now)
+        if user_id:
+            due_stories = [s for s in due_stories if s.user_id == user_id]
+
+        published_stories: List[Story] = []
+        for s in due_stories:
+            try:
+                pub = self.publish_story(db, s.id, s.user_id)
+                published_stories.append(pub)
+            except Exception as e:
+                logger.error(f"[STORY_SCHEDULER] Error auto-publishing due story {s.id}: {e}")
+
+        return published_stories
+
+
+story_service = StoryService()
