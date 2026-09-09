@@ -43,6 +43,7 @@ from app.services.meta_service import meta_service
 from app.core.story_url_helper import (
     sanitize_instagram_username,
     build_instagram_story_url,
+    build_facebook_story_url,
     is_valid_instagram_story_url,
     is_valid_facebook_story_url,
     resolve_instagram_username_from_social_account,
@@ -542,8 +543,9 @@ class StoryService:
             except Exception as p_err:
                 logger.debug(f"[FB_STORY_URL_QUERY] Permlink query notice: {p_err}")
 
-            # If Meta does not provide a legitimate public individual Story permalink,
-            # DO NOT generate https://www.facebook.com/{page_id} as a Story URL!
+            if not fb_story_url and page_id and story_id:
+                fb_story_url = build_facebook_story_url(page_id, story_id)
+
             final_fb_url = fb_story_url if is_valid_facebook_story_url(fb_story_url) else None
 
             return {
@@ -608,6 +610,9 @@ class StoryService:
                         fb_story_url = cand_url
             except Exception as p_err:
                 logger.debug(f"[FB_STORY_URL_QUERY] Permlink query notice: {p_err}")
+
+            if not fb_story_url and page_id and story_id:
+                fb_story_url = build_facebook_story_url(page_id, story_id)
 
             final_fb_url = fb_story_url if is_valid_facebook_story_url(fb_story_url) else None
 

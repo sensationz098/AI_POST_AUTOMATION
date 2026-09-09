@@ -120,86 +120,53 @@ function ViewPostButton({ item }: { item: SchedulerItem }) {
   );
 }
 
-function ViewStoryButton({ item }: { item: SchedulerItem }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
+function StoryActionButtons({
+  item,
+  onOpenPreview
+}: {
+  item: SchedulerItem;
+  onOpenPreview: () => void;
+}) {
   const { fbUrl, igUrl, hasFb, hasIg } = getValidStoryUrls(item);
 
-  if (!hasFb && !hasIg) {
-    return null;
-  }
-
-  if (hasFb && hasIg) {
-    return (
-      <div className="relative inline-block text-left" ref={dropdownRef}>
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="px-2.5 py-1 rounded bg-fuchsia-950/80 hover:bg-fuchsia-900 border border-fuchsia-800/80 text-fuchsia-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
-          title="View published story options"
-        >
-          <ExternalLink className="w-3 h-3 text-fuchsia-400" />
-          <span>View ▾</span>
-        </button>
-
-        {isOpen && (
-          <div className="origin-top-right absolute right-0 mt-1 w-40 rounded-md shadow-2xl bg-slate-900 border border-slate-800 ring-1 ring-black ring-opacity-5 z-30">
-            <div className="py-1" role="menu">
-              <a
-                href={fbUrl!}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center px-3 py-1.5 text-[11px] text-slate-200 hover:bg-slate-800 hover:text-blue-300 transition-colors"
-                role="menuitem"
-              >
-                <span className="w-2 h-2 rounded-full bg-blue-500 mr-2 flex-shrink-0"></span>
-                View on Facebook
-              </a>
-              <a
-                href={igUrl!}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center px-3 py-1.5 text-[11px] text-slate-200 hover:bg-slate-800 hover:text-pink-300 transition-colors"
-                role="menuitem"
-              >
-                <span className="w-2 h-2 rounded-full bg-pink-500 mr-2 flex-shrink-0"></span>
-                View on Instagram
-              </a>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  const singleUrl = hasFb ? fbUrl! : igUrl!;
-  const platformName = hasFb ? 'Facebook' : 'Instagram';
-  const platformColor = hasFb ? 'text-blue-400' : 'text-pink-400';
-
   return (
-    <a
-      href={singleUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
-      title={`Open live story on ${platformName}`}
-    >
-      <ExternalLink className={`w-3 h-3 ${platformColor}`} />
-      <span>View on {platformName}</span>
-    </a>
+    <>
+      <button
+        type="button"
+        onClick={onOpenPreview}
+        className="px-2.5 py-1 rounded bg-fuchsia-950/60 hover:bg-fuchsia-900 border border-fuchsia-800/60 text-fuchsia-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+        title="View internal 9:16 story preview"
+      >
+        <Eye className="w-3 h-3 text-fuchsia-400" />
+        <span>Preview</span>
+      </button>
+
+      {hasFb && fbUrl && (
+        <a
+          href={fbUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-2.5 py-1 rounded bg-blue-950/80 hover:bg-blue-900 border border-blue-800/80 text-blue-300 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+          title="Open live story on Facebook"
+        >
+          <ExternalLink className="w-3 h-3 text-blue-400" />
+          <span>View on Facebook</span>
+        </a>
+      )}
+
+      {hasIg && igUrl && (
+        <a
+          href={igUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-2.5 py-1 rounded bg-pink-950/80 hover:bg-pink-900 border border-pink-800/80 text-pink-300 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+          title="Open live story on Instagram"
+        >
+          <ExternalLink className="w-3 h-3 text-pink-400" />
+          <span>View on Instagram</span>
+        </a>
+      )}
+    </>
   );
 }
 
@@ -768,18 +735,10 @@ export default function PostSchedulerPage() {
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end space-x-1.5">
                           {isStory ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setPreviewStory(item)}
-                                className="px-2.5 py-1 rounded bg-fuchsia-950/60 hover:bg-fuchsia-900 border border-fuchsia-800/60 text-fuchsia-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
-                                title="View internal 9:16 story preview"
-                              >
-                                <Eye className="w-3 h-3 text-fuchsia-400" />
-                                <span>Preview</span>
-                              </button>
-                              <ViewStoryButton item={item} />
-                            </>
+                            <StoryActionButtons
+                              item={item}
+                              onOpenPreview={() => setPreviewStory(item)}
+                            />
                           ) : (
                             <ViewPostButton item={item} />
                           )}

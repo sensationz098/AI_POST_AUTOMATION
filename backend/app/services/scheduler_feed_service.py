@@ -10,6 +10,7 @@ from app.core.story_url_helper import (
     is_valid_facebook_story_url,
     is_valid_instagram_story_url,
     build_instagram_story_url,
+    build_facebook_story_url,
     resolve_instagram_username_from_social_account,
     sanitize_instagram_username,
 )
@@ -112,8 +113,19 @@ class SchedulerFeedService:
 
                 # Facebook Story URL: Only legitimate individual permalink is used. Never fake page-id URL.
                 fb_url = None
-                if s.fb_story_id and s.fb_story_url and is_valid_facebook_story_url(s.fb_story_url):
-                    fb_url = s.fb_story_url
+                if s.fb_story_id:
+                    if s.fb_story_url and is_valid_facebook_story_url(s.fb_story_url):
+                        fb_url = s.fb_story_url
+                    else:
+                        for aid in s_targets:
+                            acc = acc_map.get(aid)
+                            if acc and acc.platform == "facebook":
+                                p_id = (acc.metadata_json or {}).get("page_id") if isinstance(acc.metadata_json, dict) else acc.account_id
+                                if p_id:
+                                    cand = build_facebook_story_url(p_id, s.fb_story_id)
+                                    if cand:
+                                        fb_url = cand
+                                        break
 
                 # Instagram Story URL: Resolve legitimate username story link or valid permalink. Never bare /stories/.
                 ig_url = None

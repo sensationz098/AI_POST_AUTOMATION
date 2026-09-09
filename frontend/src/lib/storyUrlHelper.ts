@@ -66,6 +66,15 @@ export function isValidFacebookStoryUrl(url?: string | null): boolean {
   return true;
 }
 
+export function buildFacebookStoryUrl(pageId?: string | number | null, storyId?: string | number | null): string | null {
+  if (!pageId || !storyId) return null;
+  const pId = String(pageId).trim();
+  const sId = String(storyId).trim();
+  if (!/^\d+$/.test(pId) || !/^\d+$/.test(sId)) return null;
+  const cand = `https://www.facebook.com/stories/${pId}/${sId}/`;
+  return isValidFacebookStoryUrl(cand) ? cand : null;
+}
+
 export interface ValidStoryUrls {
   fbUrl: string | null;
   igUrl: string | null;
@@ -86,8 +95,16 @@ export function getValidStoryUrls(item: SchedulerItem): ValidStoryUrls {
 
   // Facebook Story URL
   let fbUrl: string | null = null;
-  if (item.fb_id && item.fb_url && isValidFacebookStoryUrl(item.fb_url)) {
-    fbUrl = item.fb_url;
+  if (item.fb_id) {
+    if (item.fb_url && isValidFacebookStoryUrl(item.fb_url)) {
+      fbUrl = item.fb_url;
+    } else {
+      const fbAcc = item.target_accounts?.find((a) => a.platform === 'facebook');
+      const pageId = fbAcc?.account_id;
+      if (pageId) {
+        fbUrl = buildFacebookStoryUrl(pageId, item.fb_id);
+      }
+    }
   }
 
   // Instagram Story URL
@@ -113,7 +130,7 @@ export function getValidStoryUrls(item: SchedulerItem): ValidStoryUrls {
   return {
     fbUrl,
     igUrl,
-    hasFb: Boolean(fbUrl),
-    hasIg: Boolean(igUrl),
+    hasFb: Boolean(item.fb_id && fbUrl),
+    hasIg: Boolean(item.ig_id && igUrl),
   };
 }

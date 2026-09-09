@@ -8,6 +8,7 @@ from app.models.story import Story, StoryStatus
 from app.core.security_encryption import encrypt_token
 from app.core.security import get_password_hash
 from app.services.story_service import story_service
+from app.services.meta_service import meta_service
 
 
 def get_auth_headers(client, email="story_url_test@test.com", password="Password123!"):
@@ -311,7 +312,128 @@ class TestStoryPublishUrlHandling:
         items = res.json()
         story_item = next(i for i in items if i["id"] == legacy_story.id and i["item_type"].lower() == "story")
 
-        # The fake FB page URL must be sanitized out
-        assert story_item["fb_url"] is None
+        # The fake FB page URL must NOT be returned; it is repaired into a valid story permalink
+        assert story_item["fb_url"] == "https://www.facebook.com/stories/916776691089067/1698866234536797/"
+        assert story_item["fb_url"] != "https://www.facebook.com/916776691089067"
         # The broken IG URL must be repaired using the account's resolved username
         assert story_item["ig_url"] == "https://www.instagram.com/stories/brand_official/"
+        assert story_item["ig_url"] != "https://www.instagram.com/stories/"
+
+    def test_both_platforms_successful_records_both_ids_and_urls(self, client, db_session):
+        """When both FB and IG succeed, scheduler feed returns both fb_id, fb_url, ig_id, and ig_url."""
+        headers = get_auth_headers(client, "dual_success@test.com")
+        user = db_session.query(User).filter(User.email == "dual_success@test.com").first()
+        brand = BrandProfile(user_id=user.id, name="Dual Brand")
+        db_session.add(brand)
+        db_session.commit()
+        db_session.refresh(brand)
+
+        fb_acc = SocialAccount(
+            user_id=user.id,
+            brand_id=brand.id,
+            platform="facebook",
+            account_id="916776691089067",
+            account_name="Official FB Page",
+            access_token=encrypt_token("tok_fb_dual"),
+            status="CONNECTED",
+            metadata_json={"page_id": "916776691089067"}
+        )
+        ig_acc = SocialAccount(
+            user_id=user.id,
+            brand_id=brand.id,
+            platform="instagram",
+            account_id="17841443294223730",
+            account_name="@brand_official",
+            access_token=encrypt_token("tok_ig_dual"),
+            status="CONNECTED",
+            metadata_json={"username": "brand_official"}
+        )
+        db_session.add_all([fb_acc, ig_acc])
+        db_session.commit()
+        db_session.refresh(fb_acc)
+        db_session.refresh(ig_acc)
+
+        story = Story(
+            user_id=user.id,
+            brand_id=brand.id,
+            title="Dual Published Story",
+            media_url="https://res.cloudinary.com/demo/image/upload/story.jpg",
+            media_type="image",
+            target_account_ids=[fb_acc.id, ig_acc.id],
+            status=StoryStatus.DRAFT.value
+        )
+        db_session.add(story)
+        db_session.commit()
+        db_session.refresh(story)
+
+        mock_fb_res = {
+            "id": "1698866234536797",
+            "status": "published",
+            "url": "https://www.facebook.com/stories/916776691089067/1698866234536797/",
+            "page_url": "https://www.facebook.com/916776691089067"
+        }
+        mock_ig_res = {
+            "id": "18021105707861393",
+            "container_id": "container_123",
+            "status": "published",
+            "url": "https://www.instagram.com/stories/brand_official/",
+            "username": "brand_official"
+        }
+        with patch.object(story_service, "publish_facebook_story", return_value=mock_fb_res), \
+             patch.object(story_service, "publish_instagram_story", return_value=mock_ig_res):
+
+            updated = story_service.publish_story(db_session, story.id, user.id)
+            assert updated.status == StoryStatus.PUBLISHED.value
+            assert updated.fb_story_id == "1698866234536797"
+            assert updated.fb_story_url == "https://www.facebook.com/stories/916776691089067/1698866234536797/"
+            assert updated.ig_story_id == "18021105707861393"
+            assert updated.ig_story_url == "https://www.instagram.com/stories/brand_official/"
+
+        res = client.get("/api/v1/posts/scheduler-feed", headers=headers)
+        assert res.status_code == 200
+        items = res.json()
+        story_item = next(i for i in items if i["id"] == story.id and i["item_type"].lower() == "story")
+
+        assert story_item["fb_id"] == "1698866234536797"
+        assert story_item["fb_url"] == "https://www.facebook.com/stories/916776691089067/1698866234536797/"
+        assert story_item["ig_id"] == "18021105707861393"
+        assert story_item["ig_url"] == "https://www.instagram.com/stories/brand_official/"
+
+    def test_story_delete_only_calls_published_platforms(self, db_session):
+        """When deleting a story with only Facebook published, no Instagram delete call is made."""
+        user, brand, fb_acc, ig_acc = setup_story_test_env(db_session, "del_partial@test.com")
+        story = Story(
+            user_id=user.id,
+            brand_id=brand.id,
+            title="FB Only Story",
+            media_url="https://res.cloudinary.com/demo/image/upload/story.jpg",
+            media_type="image",
+            target_account_ids=[fb_acc.id, ig_acc.id],
+            status=StoryStatus.PUBLISHED.value,
+            published_at=datetime.now(timezone.utc),
+            fb_story_id="1698866234536797",
+            fb_story_url="https://www.facebook.com/stories/916776691089067/1698866234536797/",
+            ig_story_id=None,  # Not published to IG
+            ig_story_url=None
+        )
+        db_session.add(story)
+        db_session.commit()
+        db_session.refresh(story)
+
+        called_deletions = []
+
+        def mock_fb_delete(post_id, token):
+            called_deletions.append(("facebook", post_id))
+            return True
+
+        def mock_ig_delete(media_id, token):
+            called_deletions.append(("instagram", media_id))
+            return True
+
+        with patch.object(meta_service, "delete_facebook_post", side_effect=mock_fb_delete), \
+             patch.object(meta_service, "delete_instagram_media", side_effect=mock_ig_delete):
+            res = story_service.delete_story(db_session, story.id, user.id)
+            assert res["success"] is True
+            # Verified only FB was called, zero IG delete calls
+            assert len(called_deletions) == 1
+            assert called_deletions[0] == ("facebook", "1698866234536797")

@@ -2,6 +2,7 @@ import pytest
 from app.core.story_url_helper import (
     sanitize_instagram_username,
     build_instagram_story_url,
+    build_facebook_story_url,
     is_valid_instagram_story_url,
     is_valid_facebook_story_url,
     resolve_instagram_username_from_social_account,
@@ -43,6 +44,14 @@ class TestStoryUrlHelper:
         assert is_valid_instagram_story_url(None) is False
         assert is_valid_instagram_story_url("") is False
         assert is_valid_instagram_story_url("https://example.com/stories/user") is False
+
+    def test_build_facebook_story_url(self):
+        assert build_facebook_story_url("916776691089067", "1698866234536797") == "https://www.facebook.com/stories/916776691089067/1698866234536797/"
+        assert build_facebook_story_url("123", "456") == "https://www.facebook.com/stories/123/456/"
+        assert build_facebook_story_url(None, "123") is None
+        assert build_facebook_story_url("123", None) is None
+        assert build_facebook_story_url("invalid", "123") is None
+        assert build_facebook_story_url("123", "invalid") is None
 
     def test_is_valid_facebook_story_url(self):
         # Valid URLs

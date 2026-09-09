@@ -40,6 +40,23 @@ def build_instagram_story_url(username: Optional[str]) -> Optional[str]:
     return f"https://www.instagram.com/stories/{clean_user}/"
 
 
+def build_facebook_story_url(page_id: Optional[Any], story_id: Optional[Any]) -> Optional[str]:
+    """
+    Constructs a legitimate Facebook Story URL using the Page ID and Story ID:
+    https://www.facebook.com/stories/{page_id}/{story_id}/
+    Returns None if either page_id or story_id is missing or non-numeric/empty.
+    Never constructs bare https://www.facebook.com/{page_id}.
+    """
+    if not page_id or not story_id:
+        return None
+    p_id = str(page_id).strip()
+    s_id = str(story_id).strip()
+    if not p_id.isdigit() or not s_id.isdigit():
+        return None
+    cand = f"https://www.facebook.com/stories/{p_id}/{s_id}/"
+    return cand if is_valid_facebook_story_url(cand) else None
+
+
 def is_valid_instagram_story_url(url: Optional[str]) -> bool:
     """
     Validates that a URL is a legitimate Instagram Story or media destination.
