@@ -256,11 +256,14 @@ class StoryService:
         self,
         account: SocialAccount,
         media_url: str,
-        is_video: bool = False
+        is_video: bool = False,
+        story_id: Optional[Union[int, str]] = None
     ) -> Dict[str, Any]:
         """Publish an Image or Video Story to Instagram via Meta Graph API."""
+        start_time = time.time()
         token = decrypt_token(account.access_token) or account.access_token
         ig_user_id = account.account_id
+        story_log_id = story_id if story_id is not None else "n/a"
 
         # Sandbox / Mock Mode
         is_mock = (settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production") or token.startswith("sandbox") or token.startswith("mock") or ig_user_id == "sandbox"
@@ -279,7 +282,7 @@ class StoryService:
             if final_url.startswith("data:") or final_url.startswith("blob:"):
                 raise Exception("Instagram Story publishing requires a publicly accessible HTTPS media URL.")
 
-        logger.info(f"[IG_STORY_PUBLISH] Creating IG Story Container | ig_user_id={ig_user_id} | is_video={is_video} | media_url={sanitize_url(final_url)}")
+        logger.info(f"[IG_STORY_PUBLISH] Creating IG Story Container | story_id={story_log_id} | ig_user_id={ig_user_id} | is_video={is_video} | media_url={sanitize_url(final_url)}")
 
         # Step 1: Create Container with media_type=STORIES
         container_url = f"{self.BASE_URL}/{ig_user_id}/media"
@@ -308,38 +311,61 @@ class StoryService:
         if not container_id:
             raise Exception(f"Instagram API returned no container ID: {res_data}")
 
-        # Step 2: Poll container status if video (or if container processing is asynchronous)
-        if is_video:
-            max_attempts = 15
-            poll_interval = 4
-            is_ready = False
+        logger.info(f"[IG_STORY_CONTAINER_CREATED] story_id={story_log_id} container_id={container_id}")
 
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    status_res = requests.get(
-                        f"{self.BASE_URL}/{container_id}",
-                        params={"fields": "status_code,status", "access_token": token},
-                        timeout=10
+        # Step 2: Robust bounded polling for container readiness (both images and videos)
+        # Meta asynchronously downloads media, validates encoding, and prepares container.
+        # Images typically finish in 1-6s, videos take 5-30s.
+        max_attempts = 30 if is_video else 20
+        poll_interval = 3.0 if is_video else 2.0
+        container_poll_start = time.time()
+        is_ready = False
+        last_status_code = "UNKNOWN"
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                status_res = requests.get(
+                    f"{self.BASE_URL}/{container_id}",
+                    params={"fields": "status_code,status", "access_token": token},
+                    timeout=10
+                )
+                if status_res.status_code == 200:
+                    s_data = status_res.json()
+                    s_code = s_data.get("status_code", "UNKNOWN")
+                    last_status_code = s_code
+                    elapsed = round(time.time() - container_poll_start, 2)
+                    logger.info(
+                        f"[IG_STORY_CONTAINER_STATUS] story_id={story_log_id} container_id={container_id} "
+                        f"status={s_code} attempt={attempt}/{max_attempts} elapsed={elapsed}s"
                     )
-                    if status_res.status_code == 200:
-                        s_data = status_res.json()
-                        s_code = s_data.get("status_code")
-                        logger.info(f"[IG_STORY_PUBLISH] Video container poll attempt {attempt}/{max_attempts} | status_code={s_code}")
-                        if s_code == "FINISHED":
-                            is_ready = True
-                            break
-                        elif s_code in ["ERROR", "EXPIRED"]:
-                            raise Exception(f"Instagram Story video container failed processing with status: {s_code}")
-                except Exception as poll_err:
-                    logger.warning(f"[IG_STORY_PUBLISH] Status poll error: {poll_err}")
 
-                if attempt < max_attempts:
-                    time.sleep(poll_interval)
+                    if s_code == "FINISHED":
+                        is_ready = True
+                        logger.info(f"[IG_STORY_CONTAINER_READY] story_id={story_log_id} container_id={container_id} elapsed={elapsed}s")
+                        break
+                    elif s_code in ["ERROR", "EXPIRED"]:
+                        err_details = s_data.get("status") or s_code
+                        logger.error(f"[IG_STORY_PUBLISH_FAIL] story_id={story_log_id} container_id={container_id} status={s_code} error={err_details}")
+                        raise Exception(f"Instagram Story container failed processing with status: {s_code} ({err_details})")
+                else:
+                    logger.warning(f"[IG_STORY_CONTAINER_STATUS] status_check_http_error={status_res.status_code}")
+            except Exception as poll_err:
+                if "Instagram Story container failed processing" in str(poll_err):
+                    raise
+                logger.warning(f"[IG_STORY_PUBLISH] Status poll network warning: {poll_err}")
 
-            if not is_ready:
-                logger.warning(f"[IG_STORY_PUBLISH] Container {container_id} not FINISHED within timeout, attempting publish anyway.")
+            if attempt < max_attempts:
+                time.sleep(poll_interval)
 
-        # Step 3: Publish container
+        if not is_ready:
+            elapsed = round(time.time() - container_poll_start, 2)
+            logger.error(
+                f"[IG_STORY_PUBLISH_FAIL] story_id={story_log_id} container_id={container_id} "
+                f"status=TIMEOUT last_status={last_status_code} error=Container processing timed out after {elapsed}s"
+            )
+            raise Exception(f"Instagram Story container {container_id} processing timed out after {elapsed}s (last status: {last_status_code}). Media is not ready for publishing.")
+
+        # Step 3: Publish container once confirmed FINISHED/ready
         publish_url = f"{self.BASE_URL}/{ig_user_id}/media_publish"
         try:
             pub_res = requests.post(
@@ -349,17 +375,22 @@ class StoryService:
             )
             pub_data = pub_res.json()
         except Exception as e:
-            logger.error(f"[IG_STORY_PUBLISH] Media publish network error: {e}")
+            logger.error(f"[IG_STORY_PUBLISH_FAIL] story_id={story_log_id} container_id={container_id} status=FAIL error=Media publish network error: {e}")
             raise Exception(f"Instagram Story publish network error: {e}")
 
         if pub_res.status_code != 200:
             err = pub_data.get("error", {})
             err_msg = err.get("message", "Instagram API Media Publish Error")
+            logger.error(f"[IG_STORY_PUBLISH_FAIL] story_id={story_log_id} container_id={container_id} status=FAIL error={err_msg} [code={err.get('code')}]")
             raise Exception(f"Instagram Story Publish Error ({pub_res.status_code}) [code={err.get('code')}]: {err_msg}")
 
         media_id = pub_data.get("id")
         if not media_id:
+            logger.error(f"[IG_STORY_PUBLISH_FAIL] story_id={story_log_id} container_id={container_id} status=FAIL error=Missing media ID in response")
             raise Exception(f"Instagram API returned success but missing media ID: {pub_data}")
+
+        total_elapsed = round(time.time() - start_time, 2)
+        logger.info(f"[IG_STORY_PUBLISH_SUCCESS] story_id={story_log_id} container_id={container_id} meta_id={media_id} elapsed={total_elapsed}s")
 
         return {
             "id": str(media_id),
@@ -767,7 +798,8 @@ class StoryService:
                     res = self.publish_instagram_story(
                         account=acc,
                         media_url=story.media_url,
-                        is_video=is_video
+                        is_video=is_video,
+                        story_id=story.id
                     )
                     story.ig_container_id = str(res.get("container_id", ""))
                     story.ig_story_id = str(res.get("id"))

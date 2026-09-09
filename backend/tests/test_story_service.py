@@ -277,11 +277,11 @@ def test_multiple_accounts_exist_only_selected_receive_publish(db_session):
 
     called_account_ids = []
 
-    def mock_fb_pub(account, media_url, is_video=False):
+    def mock_fb_pub(account, media_url, is_video=False, **kwargs):
         called_account_ids.append(account.id)
         return {"id": "fb_mock_story_1", "status": "published_sandbox"}
 
-    def mock_ig_pub(account, media_url, is_video=False):
+    def mock_ig_pub(account, media_url, is_video=False, **kwargs):
         called_account_ids.append(account.id)
         return {"id": "ig_mock_story_1", "container_id": "c1", "status": "published_sandbox"}
 
@@ -600,5 +600,172 @@ def test_story_publishing_with_edited_media_preserves_targets(db_session):
         assert call_acc.id == fb_acc.id
         assert call_acc.id != extra_acc.id
         assert mock_ig.call_count == 0
+
+
+def test_instagram_story_container_polling_ready_first_try(db_session):
+    """Test Instagram Story container polling succeeds immediately when status is FINISHED on first poll."""
+    user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "ig_poll_1@test.com")
+    ig_acc.access_token = "live_meta_access_token_123"
+    db_session.commit()
+
+    with patch("app.services.story_service.requests.post") as mock_post, \
+         patch("app.services.story_service.requests.get") as mock_get, \
+         patch("app.services.story_service.settings.META_MOCK_MODE", False):
+
+        # 1. Container creation
+        mock_container_resp = MagicMock()
+        mock_container_resp.status_code = 200
+        mock_container_resp.json.return_value = {"id": "179998887770001"}
+
+        # 2. Publish response
+        mock_publish_resp = MagicMock()
+        mock_publish_resp.status_code = 200
+        mock_publish_resp.json.return_value = {"id": "180009998880002"}
+
+        mock_post.side_effect = [mock_container_resp, mock_publish_resp]
+
+        # Container status poll
+        mock_status_resp = MagicMock()
+        mock_status_resp.status_code = 200
+        mock_status_resp.json.return_value = {"status_code": "FINISHED", "id": "179998887770001"}
+        mock_get.return_value = mock_status_resp
+
+        res = story_service.publish_instagram_story(
+            account=ig_acc,
+            media_url="https://res.cloudinary.com/demo/image/upload/story_edit.jpg",
+            is_video=False,
+            story_id=42
+        )
+
+        assert res["id"] == "180009998880002"
+        assert res["container_id"] == "179998887770001"
+        assert res["status"] == "published"
+        assert mock_get.call_count == 1
+        assert mock_post.call_count == 2
+
+
+def test_instagram_story_container_polling_in_progress_then_finished(db_session):
+    """Test Instagram Story container polling handles IN_PROGRESS before transitioning to FINISHED."""
+    user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "ig_poll_2@test.com")
+    ig_acc.access_token = "live_meta_access_token_456"
+    db_session.commit()
+
+    with patch("app.services.story_service.requests.post") as mock_post, \
+         patch("app.services.story_service.requests.get") as mock_get, \
+         patch("app.services.story_service.time.sleep") as mock_sleep, \
+         patch("app.services.story_service.settings.META_MOCK_MODE", False):
+
+        mock_container_resp = MagicMock()
+        mock_container_resp.status_code = 200
+        mock_container_resp.json.return_value = {"id": "container_multi_poll"}
+
+        mock_publish_resp = MagicMock()
+        mock_publish_resp.status_code = 200
+        mock_publish_resp.json.return_value = {"id": "media_published_multi"}
+
+        mock_post.side_effect = [mock_container_resp, mock_publish_resp]
+
+        # 2 IN_PROGRESS responses followed by FINISHED
+        poll_resp_1 = MagicMock(status_code=200, json=lambda: {"status_code": "IN_PROGRESS"})
+        poll_resp_2 = MagicMock(status_code=200, json=lambda: {"status_code": "IN_PROGRESS"})
+        poll_resp_3 = MagicMock(status_code=200, json=lambda: {"status_code": "FINISHED"})
+        mock_get.side_effect = [poll_resp_1, poll_resp_2, poll_resp_3]
+
+        res = story_service.publish_instagram_story(
+            account=ig_acc,
+            media_url="https://res.cloudinary.com/demo/image/upload/story_edit_2.jpg",
+            is_video=False,
+            story_id=43
+        )
+
+        assert res["id"] == "media_published_multi"
+        assert mock_get.call_count == 3
+        assert mock_sleep.call_count == 2
+
+
+def test_instagram_story_container_polling_error_fails_cleanly(db_session):
+    """Test Instagram Story container polling raises clean exception when Meta reports ERROR status."""
+    user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "ig_poll_err@test.com")
+    ig_acc.access_token = "live_meta_access_token_err"
+    db_session.commit()
+
+    with patch("app.services.story_service.requests.post") as mock_post, \
+         patch("app.services.story_service.requests.get") as mock_get, \
+         patch("app.services.story_service.settings.META_MOCK_MODE", False):
+
+        mock_container_resp = MagicMock(status_code=200, json=lambda: {"id": "container_err"})
+        mock_post.return_value = mock_container_resp
+
+        mock_status_resp = MagicMock(status_code=200, json=lambda: {
+            "status_code": "ERROR",
+            "status": "Media download timed out or invalid format"
+        })
+        mock_get.return_value = mock_status_resp
+
+        with pytest.raises(Exception) as exc_info:
+            story_service.publish_instagram_story(
+                account=ig_acc,
+                media_url="https://res.cloudinary.com/demo/image/upload/invalid.jpg",
+                is_video=False,
+                story_id=44
+            )
+
+        assert "container failed processing with status: ERROR" in str(exc_info.value)
+        assert mock_post.call_count == 1  # Never calls media_publish
+
+
+def test_instagram_story_container_polling_timeout_raises_clear_error(db_session):
+    """Test Instagram Story container polling times out gracefully if Meta never reports FINISHED."""
+    user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "ig_poll_timeout@test.com")
+    ig_acc.access_token = "live_meta_access_token_timeout"
+    db_session.commit()
+
+    with patch("app.services.story_service.requests.post") as mock_post, \
+         patch("app.services.story_service.requests.get") as mock_get, \
+         patch("app.services.story_service.time.sleep") as mock_sleep, \
+         patch("app.services.story_service.settings.META_MOCK_MODE", False):
+
+        mock_container_resp = MagicMock(status_code=200, json=lambda: {"id": "container_timeout"})
+        mock_post.return_value = mock_container_resp
+
+        # Always returns IN_PROGRESS
+        mock_status_resp = MagicMock(status_code=200, json=lambda: {"status_code": "IN_PROGRESS"})
+        mock_get.return_value = mock_status_resp
+
+        with pytest.raises(Exception) as exc_info:
+            story_service.publish_instagram_story(
+                account=ig_acc,
+                media_url="https://res.cloudinary.com/demo/image/upload/slow.jpg",
+                is_video=False,
+                story_id=45
+            )
+
+        assert "processing timed out" in str(exc_info.value)
+        assert mock_post.call_count == 1  # Never calls media_publish
+
+
+def test_story_publish_partial_success_fb_succeeds_ig_fails(db_session):
+    """Test that when FB succeeds and IG fails, story status is PUBLISHED with warnings, capturing successful and failed account IDs."""
+    user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "partial_success_tester@test.com")
+
+    with patch.object(story_service, "publish_facebook_story", return_value={"id": "fb_story_101", "status": "published"}), \
+         patch.object(story_service, "publish_instagram_story", side_effect=Exception("Instagram Story container processing timed out after 40s")):
+
+        story_in = StoryCreate(
+            brand_id=brand.id,
+            title="Partial Success Story",
+            media_url="https://res.cloudinary.com/demo/image/upload/story.jpg",
+            media_type="image",
+            target_account_ids=[fb_acc.id, ig_acc.id]
+        )
+        story = story_service.create_story(db_session, story_in, user.id)
+        published = story_service.publish_story(db_session, story.id, user.id)
+
+        assert published.status == StoryStatus.PUBLISHED.value
+        assert published.fb_story_id == "fb_story_101"
+        assert published.ig_story_id is None
+        assert "Published with warnings" in published.last_error
+        assert "instagram" in published.last_error.lower()
+
 
 

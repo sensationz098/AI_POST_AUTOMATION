@@ -256,7 +256,12 @@ export function StoryComposer({
         timeout: PUBLISHING_TIMEOUT_MS
       });
       console.info('[STORY_PUBLISH_COMPLETED]', pubRes.data);
-      toast.success('🎉 Story published successfully!', { id: pubToast });
+      const resStory = pubRes.data;
+      if (resStory?.last_error && resStory?.last_error.includes('Published with warnings')) {
+        toast.success(`⚠️ ${resStory.last_error}`, { id: pubToast, duration: 8000 });
+      } else {
+        toast.success('🎉 Story published successfully!', { id: pubToast });
+      }
     } catch (err: any) {
       console.error('[STORY_PUBLISH_ERROR]', err);
       // Resilience: If client encountered a network error / timeout, check if server actually succeeded
@@ -265,7 +270,11 @@ export function StoryComposer({
           const statusRes = await apiClient.get(`/stories/${storyId}`);
           if (statusRes.data?.status === 'PUBLISHED') {
             console.info('[STORY_PUBLISH_STATUS_RECOVERED]', statusRes.data);
-            toast.success('🎉 Story published successfully!', { id: pubToast });
+            if (statusRes.data?.last_error) {
+              toast.success(`⚠️ ${statusRes.data.last_error}`, { id: pubToast, duration: 8000 });
+            } else {
+              toast.success('🎉 Story published successfully!', { id: pubToast });
+            }
             return;
           }
         } catch (pollErr) {
