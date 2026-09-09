@@ -28,6 +28,7 @@ from app.api.v1.health import router as health_router
 from app.api.v1.webhooks import router as webhooks_router
 from app.api.v1.social_comments import router as social_comments_router
 from app.api.v1.automations import router as automations_router
+from app.api.v1.stories import router as stories_router
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -110,6 +111,7 @@ app.include_router(audit_router, prefix=settings.API_V1_STR)
 app.include_router(webhooks_router, prefix=settings.API_V1_STR)
 app.include_router(social_comments_router, prefix=settings.API_V1_STR)
 app.include_router(automations_router, prefix=settings.API_V1_STR)
+app.include_router(stories_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")

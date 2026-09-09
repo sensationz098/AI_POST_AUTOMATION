@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { FacebookPostPreview } from '@/components/FacebookPostPreview';
 import { InstagramPostPreview } from '@/components/InstagramPostPreview';
+import { StoryComposer } from '@/components/StoryComposer';
 import axios from 'axios';
 import { apiClient, PUBLISHING_TIMEOUT_MS, MEDIA_UPLOAD_TIMEOUT_MS } from '@/lib/api';
 import {
@@ -166,6 +167,9 @@ function MusicCard({
 }
 
 export default function AIStudioPage() {
+  // Content Format: 'post' (standard feed post) vs 'story' (24h vertical story)
+  const [contentFormat, setContentFormat] = useState<'post' | 'story'>('post');
+
   // Creation Mode: 'premade' = Upload Custom Pre-Made Post Mode
   const [creationMode, setCreationMode] = useState<'ai' | 'premade'>('premade');
 
@@ -896,9 +900,48 @@ export default function AIStudioPage() {
         </div>
       </div>
 
+      {/* Content Format Switcher: Feed Post vs 24h Story */}
+      <div className="flex items-center space-x-2 border-b border-slate-800/80 pb-3">
+        <button
+          type="button"
+          onClick={() => setContentFormat('post')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            contentFormat === 'post'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+              : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-800'
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5" />
+          <span>Social Post (Feed / Reel)</span>
+        </button>
 
-      {/* Main Grid: Left Upload Form | Right Rich Social Preview */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <button
+          type="button"
+          onClick={() => setContentFormat('story')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            contentFormat === 'story'
+              ? 'bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white shadow-lg shadow-fuchsia-600/20'
+              : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-800'
+          }`}
+        >
+          <Camera className="w-3.5 h-3.5" />
+          <span>Story (24h)</span>
+          <span className="text-[9px] bg-fuchsia-500/20 text-fuchsia-300 px-1.5 py-0.5 rounded-full font-mono font-bold">
+            NEW
+          </span>
+        </button>
+      </div>
+
+      {contentFormat === 'story' ? (
+        <StoryComposer
+          brands={brands}
+          selectedBrand={selectedBrand}
+          onSelectBrand={setSelectedBrand}
+          socialAccounts={socialAccounts}
+        />
+      ) : (
+        /* Main Grid: Left Upload Form | Right Rich Social Preview */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Form Controls */}
         <div className="lg:col-span-7 space-y-6">
           {/* Custom Post Upload Card */}
@@ -1652,6 +1695,7 @@ export default function AIStudioPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Schedule Post Date Time Modal */}
       {isScheduleModalOpen && (

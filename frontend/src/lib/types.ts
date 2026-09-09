@@ -412,3 +412,54 @@ export interface AutomationDeleteResponse {
   message: string;
   automation_id: number;
 }
+
+export type StoryStatus = 'DRAFT' | 'SCHEDULED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED';
+
+export interface Story {
+  id: number;
+  brand_id: number;
+  user_id: number;
+  title?: string;
+  caption?: string;
+  media_url: string;
+  media_type: 'image' | 'video' | string;
+  thumbnail_url?: string;
+  platforms: ('facebook' | 'instagram')[];
+  status: StoryStatus;
+  scheduled_at?: string;
+  published_at?: string;
+  retry_count: number;
+  max_retries: number;
+  last_error?: string;
+  fb_story_id?: string;
+  ig_container_id?: string;
+  ig_story_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoryCreateInput {
+  brand_id: number;
+  title?: string;
+  caption?: string;
+  media_url: string;
+  media_type: 'image' | 'video' | string;
+  thumbnail_url?: string;
+  platforms: ('facebook' | 'instagram')[];
+  status?: StoryStatus | string;
+  scheduled_at?: string;
+}
+
+export interface StoryValidationResult {
+  is_valid: boolean;
+  errors: string[];
+  warnings: string[];
+  account_checks: {
+    platform: string;
+    account_id?: string;
+    account_name?: string;
+    capable: boolean;
+    reason?: string;
+  }[];
+}
+

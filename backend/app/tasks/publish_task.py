@@ -83,8 +83,43 @@ def process_scheduled_posts_task():
     finally:
         db.close()
 
+@celery_app.task(name="app.tasks.publish_task.process_scheduled_stories_task")
+def process_scheduled_stories_task():
+    """Celery Beat task: Find scheduled stories whose time has passed and publish them."""
+    from app.repositories.story_repository import story_repo
+    from app.services.story_service import story_service
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        due_stories = story_repo.get_due_scheduled_stories(db, now)
+        logger.info(f"Celery Story Task: Found {len(due_stories)} stories due for publishing.")
+        for story in due_stories:
+            try:
+                story.status = "PUBLISHING"
+                db.commit()
+                story_service.publish_story(db, story.id, story.user_id)
+                logger.info(f"Successfully published scheduled story ID={story.id}")
+            except Exception as e:
+                logger.error(f"Error publishing scheduled story ID={story.id}: {e}")
+                story.status = "FAILED"
+                story.last_error = str(e)
+                db.commit()
+
+        # Retry failed stories if retry count < max retries
+        retryable_stories = story_repo.get_failed_retryable_stories(db)
+        for story in retryable_stories:
+            try:
+                logger.info(f"Retrying failed story ID={story.id} (Attempt {story.retry_count + 1})")
+                story_service.publish_story(db, story.id, story.user_id)
+            except Exception as e:
+                logger.error(f"Retry failed for story ID={story.id}: {e}")
+    finally:
+        db.close()
+
+
 @celery_app.task(name="app.tasks.publish_task.sync_meta_analytics_task")
 def sync_meta_analytics_task():
     """Celery Beat task: Sync analytics metrics for published posts."""
     logger.info("Celery Task: Syncing Meta analytics metrics...")
     return {"status": "synced"}
+
