@@ -16,6 +16,8 @@ from app.models.external_post_context import ExternalPostContext
 from app.models.automation import Automation, AutomationStatus, TriggerType, PostTargetType
 from app.models.automation_execution import AutomationExecution, ExecutionStatus, ActionExecutionStatus
 
+from app.models.story import Story, StoryStatus
+
 __all__ = [
     "User", 
     "BrandProfile", 
@@ -24,6 +26,8 @@ __all__ = [
     "MetaAd",
     "Post", 
     "PostStatus", 
+    "Story",
+    "StoryStatus",
     "PostAnalytics", 
     "AuditLog",
     "SocialAccount",
