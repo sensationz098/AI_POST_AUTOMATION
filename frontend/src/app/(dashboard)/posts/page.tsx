@@ -119,6 +119,93 @@ function ViewPostButton({ item }: { item: SchedulerItem }) {
   );
 }
 
+function ViewStoryButton({ item }: { item: SchedulerItem }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fbUrl = item.fb_url || (item.fb_id ? `https://www.facebook.com/${item.fb_id}` : null);
+  const igUrl = item.ig_url || (item.ig_id ? 'https://www.instagram.com/stories/' : null);
+
+  const hasFb = Boolean(item.fb_id && fbUrl);
+  const hasIg = Boolean(item.ig_id && igUrl);
+
+  if (!hasFb && !hasIg) {
+    return null;
+  }
+
+  if (hasFb && hasIg) {
+    return (
+      <div className="relative inline-block text-left" ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="px-2.5 py-1 rounded bg-fuchsia-950/80 hover:bg-fuchsia-900 border border-fuchsia-800/80 text-fuchsia-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+          title="View published story options"
+        >
+          <ExternalLink className="w-3 h-3 text-fuchsia-400" />
+          <span>View ▾</span>
+        </button>
+
+        {isOpen && (
+          <div className="origin-top-right absolute right-0 mt-1 w-40 rounded-md shadow-2xl bg-slate-900 border border-slate-800 ring-1 ring-black ring-opacity-5 z-30">
+            <div className="py-1" role="menu">
+              <a
+                href={fbUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsOpen(false)}
+                className="flex items-center px-3 py-1.5 text-[11px] text-slate-200 hover:bg-slate-800 hover:text-blue-300 transition-colors"
+                role="menuitem"
+              >
+                <span className="w-2 h-2 rounded-full bg-blue-500 mr-2 flex-shrink-0"></span>
+                View on Facebook
+              </a>
+              <a
+                href={igUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsOpen(false)}
+                className="flex items-center px-3 py-1.5 text-[11px] text-slate-200 hover:bg-slate-800 hover:text-pink-300 transition-colors"
+                role="menuitem"
+              >
+                <span className="w-2 h-2 rounded-full bg-pink-500 mr-2 flex-shrink-0"></span>
+                View on Instagram
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const singleUrl = hasFb ? fbUrl! : igUrl!;
+  const platformName = hasFb ? 'Facebook' : 'Instagram';
+  const platformColor = hasFb ? 'text-blue-400' : 'text-pink-400';
+
+  return (
+    <a
+      href={singleUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+      title={`Open live story on ${platformName}`}
+    >
+      <ExternalLink className={`w-3 h-3 ${platformColor}`} />
+      <span>View on {platformName}</span>
+    </a>
+  );
+}
+
 export default function PostSchedulerPage() {
   const [items, setItems] = useState<SchedulerItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -323,6 +410,7 @@ export default function PostSchedulerPage() {
           setDeleteStatusMessage({
             type: 'error',
             text: data?.message || 'Story deletion failed.',
+            details: data?.details || [],
           });
         }
       } else {
@@ -683,15 +771,18 @@ export default function PostSchedulerPage() {
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end space-x-1.5">
                           {isStory ? (
-                            <button
-                              type="button"
-                              onClick={() => setPreviewStory(item)}
-                              className="px-2.5 py-1 rounded bg-fuchsia-950/60 hover:bg-fuchsia-900 border border-fuchsia-800/60 text-fuchsia-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
-                              title="View vertical 9:16 story preview"
-                            >
-                              <Eye className="w-3 h-3 text-fuchsia-400" />
-                              <span>View Story</span>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewStory(item)}
+                                className="px-2.5 py-1 rounded bg-fuchsia-950/60 hover:bg-fuchsia-900 border border-fuchsia-800/60 text-fuchsia-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+                                title="View internal 9:16 story preview"
+                              >
+                                <Eye className="w-3 h-3 text-fuchsia-400" />
+                                <span>Preview</span>
+                              </button>
+                              <ViewStoryButton item={item} />
+                            </>
                           ) : (
                             <ViewPostButton item={item} />
                           )}
@@ -783,12 +874,54 @@ export default function PostSchedulerPage() {
                     <p className="font-bold">🕒 Scheduled Story Cancellation</p>
                     <p>Deleting this record will safely cancel scheduled publication and prevent any Meta API calls.</p>
                   </div>
-                ) : confirmDeleteItem.status === 'PUBLISHED' ? (
-                  <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 text-slate-300 text-[11px] space-y-1">
-                    <p className="font-bold text-slate-200">ℹ️ Scheduler History Cleanup</p>
-                    <p>This removes the story record from your automation history. Note: 24-hour stories published on Instagram/Facebook expire automatically on Meta.</p>
+                ) : confirmDeleteItem.status === 'PUBLISHED' || Boolean(confirmDeleteItem.fb_id || confirmDeleteItem.ig_id) ? (
+                  <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800/50 text-rose-200 space-y-2 text-[11px]">
+                    <p className="font-bold flex items-center space-x-1 text-rose-300">
+                      <span>⚠️ External Platform Story Removal</span>
+                    </p>
+                    <p>This will attempt to remove the Story from the connected platforms:</p>
+                    
+                    <div className="space-y-1 pl-1 font-mono text-[11px]">
+                      {confirmDeleteItem.fb_id ? (
+                        <div className="text-emerald-400 flex items-center space-x-1.5">
+                          <span>✓</span>
+                          <span className="text-slate-200">Facebook Page</span>
+                          <span className="text-[10px] text-slate-400">({confirmDeleteItem.fb_id})</span>
+                        </div>
+                      ) : (confirmDeleteItem.platforms || []).includes('facebook') ? (
+                        <div className="text-rose-400 flex items-center space-x-1.5">
+                          <span>✕</span>
+                          <span className="text-slate-400">Facebook Page (not published)</span>
+                        </div>
+                      ) : null}
+
+                      {confirmDeleteItem.ig_id ? (
+                        <div className="text-emerald-400 flex items-center space-x-1.5">
+                          <span>✓</span>
+                          <span className="text-slate-200">Instagram Business</span>
+                          <span className="text-[10px] text-slate-400">({confirmDeleteItem.ig_id})</span>
+                        </div>
+                      ) : (confirmDeleteItem.platforms || []).includes('instagram') ? (
+                        <div className="text-rose-400 flex items-center space-x-1.5">
+                          <span>✕</span>
+                          <span className="text-slate-400">Instagram Business (not published)</span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {((!confirmDeleteItem.fb_id && (confirmDeleteItem.platforms || []).includes('facebook')) ||
+                      (!confirmDeleteItem.ig_id && (confirmDeleteItem.platforms || []).includes('instagram'))) && (
+                      <p className="text-[10px] text-amber-300">
+                        Only successfully published platforms will be affected by deletion.
+                      </p>
+                    )}
                   </div>
-                ) : null
+                ) : (
+                  <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 text-slate-300 text-[11px] space-y-1">
+                    <p className="font-bold text-slate-200">ℹ️ Story Record Removal</p>
+                    <p>Deleting this record will remove it from your scheduler queue.</p>
+                  </div>
+                )
               ) : (
                 confirmDeleteItem.status === 'PUBLISHED' ? (
                   <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800/50 text-rose-200 space-y-1 text-[11px]">
@@ -815,7 +948,7 @@ export default function PostSchedulerPage() {
                   <ul className="list-disc pl-4 space-y-0.5 text-[10px]">
                     {deleteStatusMessage.details.map((d: any, idx: number) => (
                       <li key={idx}>
-                        {d.platform} ({d.external_post_id}): {d.error || (d.success ? 'Deleted' : 'Failed')}
+                        {d.platform} ({d.external_story_id || d.external_post_id}): {d.error || (d.success ? 'Deleted' : 'Failed')}
                       </li>
                     ))}
                   </ul>

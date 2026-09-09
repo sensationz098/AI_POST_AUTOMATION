@@ -2197,8 +2197,12 @@ class MetaGraphService:
 
     def delete_facebook_post(self, external_post_id: str, access_token: str) -> Dict[str, Any]:
         """Delete a Facebook post or video from Meta Graph API."""
-        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
-        if is_mock_allowed and (not external_post_id or not access_token or external_post_id.startswith("mock") or external_post_id.startswith("fb_mock") or access_token.startswith("sandbox") or access_token.startswith("mock")):
+        is_mock_allowed = (
+            (settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production")
+            or (access_token and (access_token.startswith("sandbox") or access_token.startswith("mock")))
+            or (external_post_id and (external_post_id.startswith("mock") or external_post_id.startswith("fb_mock") or external_post_id.startswith("fb_story_mock")))
+        )
+        if is_mock_allowed and (not external_post_id or not access_token or external_post_id.startswith("mock") or external_post_id.startswith("fb_mock") or external_post_id.startswith("fb_story_mock") or access_token.startswith("sandbox") or access_token.startswith("mock")):
             logger.info(f"[FB_DELETE] Executing Sandbox Facebook Delete Simulation for object ID: {external_post_id}")
             return {"success": True, "status": "deleted_sandbox"}
 
@@ -2241,8 +2245,12 @@ class MetaGraphService:
 
     def delete_instagram_media(self, external_media_id: str, access_token: str) -> Dict[str, Any]:
         """Delete an Instagram media post from Meta Graph API."""
-        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
-        if is_mock_allowed and (not external_media_id or not access_token or external_media_id.startswith("mock") or external_media_id.startswith("ig_media_mock") or access_token.startswith("sandbox") or access_token.startswith("mock")):
+        is_mock_allowed = (
+            (settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production")
+            or (access_token and (access_token.startswith("sandbox") or access_token.startswith("mock")))
+            or (external_media_id and (external_media_id.startswith("mock") or external_media_id.startswith("ig_media_mock") or external_media_id.startswith("ig_story_mock")))
+        )
+        if is_mock_allowed and (not external_media_id or not access_token or external_media_id.startswith("mock") or external_media_id.startswith("ig_media_mock") or external_media_id.startswith("ig_story_mock") or access_token.startswith("sandbox") or access_token.startswith("mock")):
             logger.info(f"[IG_DELETE] Executing Sandbox Instagram Delete Simulation for media ID: {external_media_id}")
             return {"success": True, "status": "deleted_sandbox"}
 

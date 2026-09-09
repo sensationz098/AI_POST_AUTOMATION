@@ -15,7 +15,8 @@ from app.schemas.story import (
     StoryUpdate,
     StoryScheduleRequest,
     StoryResponse,
-    StoryValidationResult
+    StoryValidationResult,
+    StoryDeleteResponse
 )
 from app.services.story_service import story_service
 from app.services.cloudinary_service import upload_media_to_cloudinary
@@ -140,15 +141,14 @@ def update_story(
     return story_service.update_story(db, story_id, current_user.id, story_in)
 
 
-@router.delete("/{story_id}")
+@router.delete("/{story_id}", response_model=StoryDeleteResponse)
 def delete_story(
     story_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete a Story."""
-    success = story_service.delete_story(db, story_id, current_user.id)
-    return {"success": success, "message": f"Story ID {story_id} deleted successfully."}
+    """Delete a Story and attempt platform deletion for published targets."""
+    return story_service.delete_story(db, story_id, current_user.id)
 
 
 @router.post("/{story_id}/publish-now", response_model=StoryResponse)

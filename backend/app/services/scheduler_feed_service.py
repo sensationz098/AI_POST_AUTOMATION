@@ -125,8 +125,8 @@ class SchedulerFeedService:
                         last_error=s.last_error,
                         fb_id=s.fb_story_id,
                         ig_id=s.ig_story_id,
-                        fb_url=f"https://www.facebook.com/{s.fb_story_id}" if s.fb_story_id else None,
-                        ig_url=f"https://www.instagram.com/stories/" if s.ig_story_id else None,
+                        fb_url=s.fb_story_url or (f"https://www.facebook.com/{s.fb_story_id}" if s.fb_story_id else None),
+                        ig_url=s.ig_story_url or ("https://www.instagram.com/stories/" if s.ig_story_id else None),
                         created_at=s.created_at,
                         updated_at=s.updated_at
                     )

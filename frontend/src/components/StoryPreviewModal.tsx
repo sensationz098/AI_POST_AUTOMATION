@@ -317,24 +317,38 @@ export function StoryPreviewModal({
               )}
             </div>
 
-            {/* Published External IDs */}
+            {/* Published External IDs & Live Platform Links */}
             {(item.fb_id || item.ig_id) && (
               <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/60 space-y-1.5 text-xs">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Published Meta Graph API IDs
+                  Live Platform Links & Published Meta IDs
                 </p>
                 <div className="flex flex-wrap gap-2 text-[10px] font-mono">
                   {item.fb_id && (
-                    <div className="flex items-center space-x-1.5 bg-blue-950/50 border border-blue-800/60 text-blue-300 px-2.5 py-1 rounded-lg">
-                      <span className="font-bold">FB Story ID:</span>
+                    <a
+                      href={item.fb_url || `https://www.facebook.com/${item.fb_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center space-x-1.5 bg-blue-950/50 hover:bg-blue-900/60 border border-blue-800/60 text-blue-300 px-2.5 py-1 rounded-lg transition"
+                      title="Open Facebook Story in new tab"
+                    >
+                      <ExternalLink className="w-3 h-3 text-blue-400" />
+                      <span className="font-bold">FB Story:</span>
                       <span>{item.fb_id}</span>
-                    </div>
+                    </a>
                   )}
                   {item.ig_id && (
-                    <div className="flex items-center space-x-1.5 bg-pink-950/50 border border-pink-800/60 text-pink-300 px-2.5 py-1 rounded-lg">
-                      <span className="font-bold">IG Media ID:</span>
+                    <a
+                      href={item.ig_url || 'https://www.instagram.com/stories/'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center space-x-1.5 bg-pink-950/50 hover:bg-pink-900/60 border border-pink-800/60 text-pink-300 px-2.5 py-1 rounded-lg transition"
+                      title="Open Instagram Story in new tab"
+                    >
+                      <ExternalLink className="w-3 h-3 text-pink-400" />
+                      <span className="font-bold">IG Story:</span>
                       <span>{item.ig_id}</span>
-                    </div>
+                    </a>
                   )}
                 </div>
               </div>

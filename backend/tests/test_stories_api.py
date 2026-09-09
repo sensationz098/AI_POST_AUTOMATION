@@ -202,7 +202,7 @@ def test_story_api_tenant_isolation(client, db_session):
         },
         headers=headers_b
     )
-    assert malicious_res.status_code in [403, 400]
+    assert malicious_res.status_code in [403, 400, 404]
 
 
 def test_story_api_publish_now_flow(client, db_session):

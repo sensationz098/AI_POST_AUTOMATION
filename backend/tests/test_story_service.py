@@ -640,7 +640,7 @@ def test_instagram_story_container_polling_ready_first_try(db_session):
         assert res["id"] == "180009998880002"
         assert res["container_id"] == "179998887770001"
         assert res["status"] == "published"
-        assert mock_get.call_count == 1
+        assert mock_get.call_count == 2  # 1 for container poll, 1 for permalink
         assert mock_post.call_count == 2
 
 
@@ -665,11 +665,12 @@ def test_instagram_story_container_polling_in_progress_then_finished(db_session)
 
         mock_post.side_effect = [mock_container_resp, mock_publish_resp]
 
-        # 2 IN_PROGRESS responses followed by FINISHED
+        # 2 IN_PROGRESS responses followed by FINISHED, plus permalink query
         poll_resp_1 = MagicMock(status_code=200, json=lambda: {"status_code": "IN_PROGRESS"})
         poll_resp_2 = MagicMock(status_code=200, json=lambda: {"status_code": "IN_PROGRESS"})
         poll_resp_3 = MagicMock(status_code=200, json=lambda: {"status_code": "FINISHED"})
-        mock_get.side_effect = [poll_resp_1, poll_resp_2, poll_resp_3]
+        permalink_resp = MagicMock(status_code=200, json=lambda: {"permalink": "https://instagram.com/p/123"})
+        mock_get.side_effect = [poll_resp_1, poll_resp_2, poll_resp_3, permalink_resp]
 
         res = story_service.publish_instagram_story(
             account=ig_acc,
@@ -679,7 +680,7 @@ def test_instagram_story_container_polling_in_progress_then_finished(db_session)
         )
 
         assert res["id"] == "media_published_multi"
-        assert mock_get.call_count == 3
+        assert mock_get.call_count == 4  # 3 status polls + 1 permalink query
         assert mock_sleep.call_count == 2
 
 
@@ -748,7 +749,7 @@ def test_story_publish_partial_success_fb_succeeds_ig_fails(db_session):
     """Test that when FB succeeds and IG fails, story status is PUBLISHED with warnings, capturing successful and failed account IDs."""
     user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "partial_success_tester@test.com")
 
-    with patch.object(story_service, "publish_facebook_story", return_value={"id": "fb_story_101", "status": "published"}), \
+    with patch.object(story_service, "publish_facebook_story", return_value={"id": "fb_story_101", "status": "published", "url": "https://www.facebook.com/stories/123"}), \
          patch.object(story_service, "publish_instagram_story", side_effect=Exception("Instagram Story container processing timed out after 40s")):
 
         story_in = StoryCreate(
@@ -763,9 +764,142 @@ def test_story_publish_partial_success_fb_succeeds_ig_fails(db_session):
 
         assert published.status == StoryStatus.PUBLISHED.value
         assert published.fb_story_id == "fb_story_101"
+        assert published.fb_story_url == "https://www.facebook.com/stories/123"
         assert published.ig_story_id is None
+        assert published.ig_story_url is None
         assert "Published with warnings" in published.last_error
         assert "instagram" in published.last_error.lower()
+
+
+def test_story_deletion_success_both_platforms(db_session):
+    """Test that deleting a published story with both FB and IG targets deletes both on Meta and deletes local record."""
+    user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "delete_success@test.com")
+
+    story = Story(
+        brand_id=brand.id,
+        user_id=user.id,
+        title="To Delete Story",
+        media_url="https://res.cloudinary.com/demo/image/upload/del.jpg",
+        media_type="image",
+        target_account_ids=[fb_acc.id, ig_acc.id],
+        platforms=["facebook", "instagram"],
+        status=StoryStatus.PUBLISHED.value,
+        fb_story_id="fb_story_999",
+        fb_story_url="https://www.facebook.com/stories/123",
+        ig_story_id="ig_story_888",
+        ig_story_url="https://www.instagram.com/stories/testuser/"
+    )
+    db_session.add(story)
+    db_session.commit()
+    story_id = story.id
+
+    with patch("app.services.story_service.meta_service.delete_facebook_post", return_value={"success": True, "status": "deleted"}) as mock_fb_del, \
+         patch("app.services.story_service.meta_service.delete_instagram_media", return_value={"success": True, "status": "deleted"}) as mock_ig_del:
+
+        res = story_service.delete_story(db_session, story_id, user.id)
+        assert res["success"] is True
+        assert res["deleted_external_targets"] == 2
+        assert res["failed_external_targets"] == 0
+        assert mock_fb_del.call_count == 1
+        assert mock_ig_del.call_count == 1
+
+        # Check DB record is removed
+        assert db_session.query(Story).filter(Story.id == story_id).first() is None
+
+
+def test_story_deletion_partial_failure_retains_record(db_session):
+    """Test that when FB deletion succeeds but IG deletion fails, local story record is retained and partial state saved."""
+    user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "delete_partial@test.com")
+
+    story = Story(
+        brand_id=brand.id,
+        user_id=user.id,
+        title="Partial Delete Story",
+        media_url="https://res.cloudinary.com/demo/image/upload/del.jpg",
+        media_type="image",
+        target_account_ids=[fb_acc.id, ig_acc.id],
+        platforms=["facebook", "instagram"],
+        status=StoryStatus.PUBLISHED.value,
+        fb_story_id="fb_story_777",
+        fb_story_url="https://www.facebook.com/stories/123",
+        ig_story_id="ig_story_666",
+        ig_story_url="https://www.instagram.com/stories/testuser/"
+    )
+    db_session.add(story)
+    db_session.commit()
+    story_id = story.id
+
+    with patch("app.services.story_service.meta_service.delete_facebook_post", return_value={"success": True, "status": "deleted"}), \
+         patch("app.services.story_service.meta_service.delete_instagram_media", side_effect=Exception("Instagram Graph API Delete Error (400): Unsupported request")):
+
+        res = story_service.delete_story(db_session, story_id, user.id)
+        assert res["success"] is False
+        assert res["deleted_external_targets"] == 1
+        assert res["failed_external_targets"] == 1
+        assert len(res["details"]) == 2
+
+        # Verify local story is still in DB with FB cleared and IG retained
+        saved = db_session.query(Story).filter(Story.id == story_id).first()
+        assert saved is not None
+        assert saved.fb_story_id is None
+        assert saved.fb_story_url is None
+        assert saved.ig_story_id == "ig_story_666"
+        assert saved.ig_story_url == "https://www.instagram.com/stories/testuser/"
+        assert "Deletion failed" in saved.last_error
+
+
+def test_scheduled_story_deletion_cancels_without_meta_calls(db_session):
+    """Test that deleting a SCHEDULED story cancels scheduled state and removes record without calling Meta APIs."""
+    user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "sched_del@test.com")
+
+    story = Story(
+        brand_id=brand.id,
+        user_id=user.id,
+        title="Scheduled Story",
+        media_url="https://res.cloudinary.com/demo/image/upload/sched.jpg",
+        media_type="image",
+        target_account_ids=[fb_acc.id],
+        platforms=["facebook"],
+        status=StoryStatus.SCHEDULED.value,
+        scheduled_at=datetime.now(timezone.utc) + timedelta(hours=2)
+    )
+    db_session.add(story)
+    db_session.commit()
+    story_id = story.id
+
+    with patch("app.services.story_service.meta_service.delete_facebook_post") as mock_fb_del, \
+         patch("app.services.story_service.meta_service.delete_instagram_media") as mock_ig_del:
+
+        res = story_service.delete_story(db_session, story_id, user.id)
+        assert res["success"] is True
+        assert mock_fb_del.call_count == 0
+        assert mock_ig_del.call_count == 0
+        assert db_session.query(Story).filter(Story.id == story_id).first() is None
+
+
+def test_unauthorized_user_cannot_delete_story(db_session):
+    """Test that a user cannot delete another user's story."""
+    user1, brand1, fb_acc1, _ = setup_user_brand_accounts(db_session, "owner@test.com")
+    user2, _, _, _ = setup_user_brand_accounts(db_session, "attacker@test.com")
+
+    story = Story(
+        brand_id=brand1.id,
+        user_id=user1.id,
+        title="Private Story",
+        media_url="https://res.cloudinary.com/demo/image/upload/p.jpg",
+        media_type="image",
+        target_account_ids=[fb_acc1.id],
+        platforms=["facebook"],
+        status=StoryStatus.DRAFT.value
+    )
+    db_session.add(story)
+    db_session.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        story_service.delete_story(db_session, story.id, user2.id)
+
+    assert exc_info.value.status_code == 403
+
 
 
 

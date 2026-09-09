@@ -39,6 +39,7 @@ from app.repositories.social_account_repository import social_account_repo
 from app.repositories.audit_repository import audit_repo
 from app.schemas.story import StoryCreate, StoryUpdate, StoryValidationResult
 from app.services.media_service import upload_base64_to_public_https
+from app.services.meta_service import meta_service
 
 logger = logging.getLogger(__name__)
 
@@ -269,10 +270,13 @@ class StoryService:
         is_mock = (settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production") or token.startswith("sandbox") or token.startswith("mock") or ig_user_id == "sandbox"
         if is_mock:
             logger.info(f"[IG_STORY_PUBLISH] Executing Sandbox/Mock Instagram Story Publish for {ig_user_id}.")
+            username = (account.metadata_json or {}).get("username") if isinstance(account.metadata_json, dict) else account.account_name
+            mock_url = f"https://www.instagram.com/stories/{username}/" if username else "https://www.instagram.com/stories/"
             return {
                 "id": f"ig_story_mock_{int(time.time())}",
                 "container_id": f"ig_container_mock_{int(time.time())}",
-                "status": "published_sandbox"
+                "status": "published_sandbox",
+                "url": mock_url
             }
 
         # Resolve public HTTPS media URL
@@ -392,10 +396,30 @@ class StoryService:
         total_elapsed = round(time.time() - start_time, 2)
         logger.info(f"[IG_STORY_PUBLISH_SUCCESS] story_id={story_log_id} container_id={container_id} meta_id={media_id} elapsed={total_elapsed}s")
 
+        ig_story_url = None
+        try:
+            p_res = requests.get(
+                f"{self.BASE_URL}/{media_id}",
+                params={"fields": "permalink", "access_token": token},
+                timeout=10
+            )
+            if p_res.status_code == 200:
+                ig_story_url = p_res.json().get("permalink")
+        except Exception as p_err:
+            logger.debug(f"[IG_STORY_URL_QUERY] Permalink query notice: {p_err}")
+
+        if not ig_story_url:
+            username = (account.metadata_json or {}).get("username") if isinstance(account.metadata_json, dict) else account.account_name
+            if username:
+                ig_story_url = f"https://www.instagram.com/stories/{username}/"
+            else:
+                ig_story_url = "https://www.instagram.com/stories/"
+
         return {
             "id": str(media_id),
             "container_id": str(container_id),
-            "status": "published"
+            "status": "published",
+            "url": ig_story_url
         }
 
     def publish_facebook_story(
@@ -414,7 +438,8 @@ class StoryService:
             logger.info(f"[FB_STORY_PUBLISH] Executing Sandbox/Mock Facebook Story Publish for {page_id}.")
             return {
                 "id": f"fb_story_mock_{int(time.time())}",
-                "status": "published_sandbox"
+                "status": "published_sandbox",
+                "url": f"https://www.facebook.com/stories/{page_id}"
             }
 
         final_url = media_url
@@ -470,10 +495,27 @@ class StoryService:
                 raise Exception(f"Facebook Photo Story Error ({story_res.status_code}): {err.get('message', 'Publish error')}")
 
             story_id = story_data.get("id") or story_data.get("post_id") or str(photo_id)
+            fb_story_url = None
+            try:
+                p_res = requests.get(
+                    f"{self.BASE_URL}/{story_id}",
+                    params={"fields": "permalink_url,link", "access_token": token},
+                    timeout=10
+                )
+                if p_res.status_code == 200:
+                    fb_data = p_res.json()
+                    fb_story_url = fb_data.get("permalink_url") or fb_data.get("link")
+            except Exception as p_err:
+                logger.debug(f"[FB_STORY_URL_QUERY] Permlink query notice: {p_err}")
+
+            if not fb_story_url:
+                fb_story_url = f"https://www.facebook.com/stories/{page_id}"
+
             return {
                 "id": str(story_id),
                 "photo_id": str(photo_id),
-                "status": "published"
+                "status": "published",
+                "url": fb_story_url
             }
         else:
             # Video Story
@@ -516,10 +558,27 @@ class StoryService:
                 v_story_data = {"id": str(vid_id)}
 
             story_id = v_story_data.get("id") or str(vid_id)
+            fb_story_url = None
+            try:
+                p_res = requests.get(
+                    f"{self.BASE_URL}/{story_id}",
+                    params={"fields": "permalink_url,link", "access_token": token},
+                    timeout=10
+                )
+                if p_res.status_code == 200:
+                    fb_data = p_res.json()
+                    fb_story_url = fb_data.get("permalink_url") or fb_data.get("link")
+            except Exception as p_err:
+                logger.debug(f"[FB_STORY_URL_QUERY] Permlink query notice: {p_err}")
+
+            if not fb_story_url:
+                fb_story_url = f"https://www.facebook.com/stories/{page_id}"
+
             return {
                 "id": str(story_id),
                 "video_id": str(vid_id),
-                "status": "published"
+                "status": "published",
+                "url": fb_story_url
             }
 
     def create_story(self, db: Session, story_in: StoryCreate, user_id: int) -> Story:
@@ -667,18 +726,198 @@ class StoryService:
         )
         return updated
 
-    def delete_story(self, db: Session, story_id: int, user_id: int) -> bool:
-        """Delete a story from the database."""
-        story = self.get_story(db, story_id, user_id)
-        story_repo.delete(db, story_id)
+    def delete_story(self, db: Session, story_id: int, user_id: int) -> dict:
+        """
+        Safely delete a story by ID.
+        - Verifies user ownership (raises 404 if not found or unauthorized).
+        - For scheduled stories: cancels scheduled execution safely, then deletes.
+        - For published stories: finds all associated external Meta targets,
+          attempts external Meta Graph API deletion for each published target, and handles partial failures.
+        - If all external deletions succeed: removes local story record.
+        - If any external deletion fails: retains local story record, records partial state, and returns details.
+        """
+        story = story_repo.get(db, story_id)
+        if not story:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Story with ID {story_id} not found."
+            )
+        if story.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this Story."
+            )
+
+        # 1. Gather all external targets for this story
+        targets = []
+        user_accs = db.query(SocialAccount).filter(SocialAccount.user_id == user_id).all()
+        acc_map = {acc.id: acc for acc in user_accs}
+
+        if story.fb_story_id:
+            # Find the target FB social account
+            fb_acc = None
+            for aid in (story.target_account_ids or []):
+                acc = acc_map.get(aid)
+                if acc and acc.platform == "facebook":
+                    fb_acc = acc
+                    break
+            if not fb_acc:
+                fb_acc = next((a for a in user_accs if a.platform == "facebook" and a.brand_id == story.brand_id), None) or next((a for a in user_accs if a.platform == "facebook"), None)
+            
+            targets.append({
+                "platform": "facebook",
+                "social_account": fb_acc,
+                "external_story_id": story.fb_story_id,
+            })
+
+        if story.ig_story_id:
+            # Find the target IG social account
+            ig_acc = None
+            for aid in (story.target_account_ids or []):
+                acc = acc_map.get(aid)
+                if acc and acc.platform == "instagram":
+                    ig_acc = acc
+                    break
+            if not ig_acc:
+                ig_acc = next((a for a in user_accs if a.platform == "instagram" and a.brand_id == story.brand_id), None) or next((a for a in user_accs if a.platform == "instagram"), None)
+            
+            targets.append({
+                "platform": "instagram",
+                "social_account": ig_acc,
+                "external_story_id": story.ig_story_id,
+            })
+
+        # 2. If scheduled, cancel scheduled state before proceeding
+        if story.status == StoryStatus.SCHEDULED.value:
+            logger.info(f"[STORY_DELETE_TRACE] Cancelling scheduled story ID={story.id}")
+            story.scheduled_at = None
+            story.status = StoryStatus.DRAFT.value
+            db.commit()
+
+        # 3. Attempt external deletion for all targets
+        logger.info(f"[STORY_DELETE_START] story_id={story.id} user_id={user_id} target_count={len(targets)}")
+        details = []
+        deleted_count = 0
+        failed_count = 0
+
+        for t in targets:
+            platform = t["platform"]
+            ext_id = t["external_story_id"]
+            soc_acc = t["social_account"]
+            account_name = soc_acc.account_name if soc_acc else None
+            account_id_str = soc_acc.account_id if soc_acc else None
+
+            logger.info(f"[STORY_PLATFORM_DELETE] story_id={story.id} platform={platform} external_id={ext_id}")
+
+            if not soc_acc or not soc_acc.access_token:
+                err_msg = f"Social account not found or access token unavailable for {platform}"
+                logger.error(f"[STORY_PLATFORM_DELETE_FAIL] story_id={story.id} platform={platform} external_id={ext_id} error={err_msg}")
+                failed_count += 1
+                details.append({
+                    "platform": platform,
+                    "account_id": account_id_str,
+                    "account_name": account_name,
+                    "external_story_id": ext_id,
+                    "success": False,
+                    "error": err_msg
+                })
+                continue
+
+            raw_token = decrypt_token(soc_acc.access_token) or soc_acc.access_token
+            if not raw_token:
+                err_msg = f"Failed to decrypt access token for {platform}"
+                logger.error(f"[STORY_PLATFORM_DELETE_FAIL] story_id={story.id} platform={platform} external_id={ext_id} error={err_msg}")
+                failed_count += 1
+                details.append({
+                    "platform": platform,
+                    "account_id": account_id_str,
+                    "account_name": account_name,
+                    "external_story_id": ext_id,
+                    "success": False,
+                    "error": err_msg
+                })
+                continue
+
+            try:
+                if platform == "facebook":
+                    meta_service.delete_facebook_post(ext_id, raw_token)
+                    story.fb_story_id = None
+                    story.fb_story_url = None
+                elif platform == "instagram":
+                    meta_service.delete_instagram_media(ext_id, raw_token)
+                    story.ig_story_id = None
+                    story.ig_story_url = None
+                else:
+                    raise Exception(f"Unsupported platform: {platform}")
+
+                deleted_count += 1
+                logger.info(f"[STORY_PLATFORM_DELETE_SUCCESS] story_id={story.id} platform={platform} external_id={ext_id}")
+                details.append({
+                    "platform": platform,
+                    "account_id": account_id_str,
+                    "account_name": account_name,
+                    "external_story_id": ext_id,
+                    "success": True,
+                    "error": None
+                })
+            except Exception as delete_err:
+                err_str = str(delete_err)
+                logger.error(f"[STORY_PLATFORM_DELETE_FAIL] story_id={story.id} platform={platform} external_id={ext_id} error={err_str}")
+                failed_count += 1
+                details.append({
+                    "platform": platform,
+                    "account_id": account_id_str,
+                    "account_name": account_name,
+                    "external_story_id": ext_id,
+                    "success": False,
+                    "error": err_str
+                })
+
+        # 4. Handle Deletion Outcome
+        if failed_count > 0:
+            story.last_error = f"Deletion failed for {failed_count} external target(s)."
+            db.commit()
+
+            audit_repo.log(
+                db=db,
+                user_id=user_id,
+                action="STORY_DELETE_FAILED",
+                resource_type="Story",
+                resource_id=story.id,
+                details={"deleted_targets": deleted_count, "failed_targets": failed_count, "target_details": details}
+            )
+            logger.info(f"[STORY_DELETE_COMPLETED] story_id={story.id} status=PARTIAL_FAILURE deleted={deleted_count} failed={failed_count}")
+
+            return {
+                "success": False,
+                "message": f"Failed to delete {failed_count} of {len(targets)} external target(s). Local story retained.",
+                "story_id": story_id,
+                "deleted_external_targets": deleted_count,
+                "failed_external_targets": failed_count,
+                "details": details
+            }
+
         audit_repo.log(
             db=db,
             user_id=user_id,
             action="STORY_DELETED",
             resource_type="Story",
-            resource_id=story_id
+            resource_id=story_id,
+            details={"deleted_external_targets": deleted_count, "target_details": details}
         )
-        return True
+
+        db.delete(story)
+        db.commit()
+        logger.info(f"[STORY_DELETE_COMPLETED] story_id={story_id} status=SUCCESS deleted={deleted_count}")
+
+        return {
+            "success": True,
+            "message": "Story and external targets deleted successfully." if targets else "Story deleted successfully.",
+            "story_id": story_id,
+            "deleted_external_targets": deleted_count,
+            "failed_external_targets": 0,
+            "details": details
+        }
 
     def schedule_story(self, db: Session, story_id: int, user_id: int, scheduled_at: datetime) -> Story:
         """Schedule story for future publication using persisted target_account_ids."""
@@ -789,6 +1028,7 @@ class StoryService:
                         is_video=is_video
                     )
                     story.fb_story_id = str(res.get("id"))
+                    story.fb_story_url = res.get("url")
                     successful_account_ids.append(acc.id)
                     if "facebook" not in successful_platforms:
                         successful_platforms.append("facebook")
@@ -803,6 +1043,7 @@ class StoryService:
                     )
                     story.ig_container_id = str(res.get("container_id", ""))
                     story.ig_story_id = str(res.get("id"))
+                    story.ig_story_url = res.get("url")
                     successful_account_ids.append(acc.id)
                     if "instagram" not in successful_platforms:
                         successful_platforms.append("instagram")
@@ -835,7 +1076,8 @@ class StoryService:
             logger.info(
                 f"[STORY_PUBLISH_COMPLETED] story_id={story.id} duration={total_duration}s status={story.status} "
                 f"successful_account_ids={successful_account_ids} failed_account_ids={failed_account_ids} "
-                f"fb_story_id={story.fb_story_id} ig_story_id={story.ig_story_id}"
+                f"fb_story_id={story.fb_story_id} ig_story_id={story.ig_story_id} "
+                f"fb_story_url={story.fb_story_url} ig_story_url={story.ig_story_url}"
             )
 
             audit_repo.log(

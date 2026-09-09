@@ -50,8 +50,10 @@ class StoryResponse(BaseModel):
     max_retries: int = 3
     last_error: Optional[str] = None
     fb_story_id: Optional[str] = None
+    fb_story_url: Optional[str] = None
     ig_container_id: Optional[str] = None
     ig_story_id: Optional[str] = None
+    ig_story_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -63,3 +65,22 @@ class StoryValidationResult(BaseModel):
     errors: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
     account_checks: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class StoryTargetDeleteDetail(BaseModel):
+    platform: str
+    account_id: Optional[str] = None
+    account_name: Optional[str] = None
+    external_story_id: str
+    success: bool
+    error: Optional[str] = None
+
+
+class StoryDeleteResponse(BaseModel):
+    success: bool
+    message: str
+    story_id: int
+    deleted_external_targets: int = 0
+    failed_external_targets: int = 0
+    details: List[StoryTargetDeleteDetail] = Field(default_factory=list)
+
