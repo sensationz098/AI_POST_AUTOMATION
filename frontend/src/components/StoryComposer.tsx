@@ -29,6 +29,7 @@ import {
   Story,
   StoryValidationResult
 } from '@/lib/types';
+import { StoryMediaEditorModal } from './StoryMediaEditorModal';
 
 interface StoryComposerProps {
   brands: BrandProfile[];
@@ -45,6 +46,10 @@ export function StoryComposer({
 }: StoryComposerProps) {
   // Media State
   const [mediaUrl, setMediaUrl] = useState<string>('');
+  const [originalMediaUrl, setOriginalMediaUrl] = useState<string>('');
+  const [isEdited, setIsEdited] = useState<boolean>(false);
+  const [isEditorOpen, setIsEditorOpen] = useState<boolean>(false);
+
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const [title, setTitle] = useState<string>('');
   const [caption, setCaption] = useState<string>('');
@@ -179,6 +184,8 @@ export function StoryComposer({
 
       if (res.data?.url) {
         setMediaUrl(res.data.url);
+        setOriginalMediaUrl(res.data.url);
+        setIsEdited(false);
         toast.success(`Story ${mType} uploaded successfully!`, { id: uploadToast });
       } else {
         throw new Error('No URL returned from upload');
@@ -396,7 +403,81 @@ export function StoryComposer({
             </span>
           </div>
 
-          {!mediaUrl ? (
+          {mediaUrl ? (
+            <div className="relative rounded-2xl overflow-hidden border border-slate-700/80 bg-slate-950 p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3 truncate">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 flex-shrink-0">
+                    {mediaType === 'video' ? <Film className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
+                  </div>
+                  <div className="truncate">
+                    <p className="text-xs font-semibold text-slate-200 truncate">
+                      {mediaUrl.split('/').pop() || 'Story Asset'}
+                    </p>
+                    <div className="flex items-center space-x-2 mt-0.5">
+                      <p className="text-[10px] text-emerald-400 flex items-center space-x-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span className="capitalize">{mediaType} Story Ready</span>
+                      </p>
+                      {isEdited && (
+                        <span className="text-[9px] font-bold text-fuchsia-300 bg-fuchsia-500/20 border border-fuchsia-500/30 px-2 py-0.5 rounded-full flex items-center space-x-1">
+                          <Sparkles className="w-2.5 h-2.5 text-fuchsia-400" />
+                          <span>9:16 Custom Edited</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditorOpen(true)}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-fuchsia-600/20 transition hover:scale-105"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>✏ Edit Story</span>
+                  </button>
+
+                  {isEdited && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMediaUrl(originalMediaUrl);
+                        setIsEdited(false);
+                        toast.success('Reverted back to original uploaded media.');
+                      }}
+                      className="text-[11px] bg-slate-800 hover:bg-slate-700 text-amber-300 font-medium px-2.5 py-1.5 rounded-xl transition"
+                      title="Revert back to original media"
+                    >
+                      Revert
+                    </button>
+                  )}
+
+                  <label className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-xl cursor-pointer transition font-medium">
+                    Replace
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMediaUrl('');
+                      setOriginalMediaUrl('');
+                      setIsEdited(false);
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-rose-400 transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
             <label className="relative flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 hover:border-indigo-500/80 rounded-2xl bg-slate-950/60 cursor-pointer transition-all duration-200 group overflow-hidden">
               <div className="flex flex-col items-center justify-center space-y-2 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition">
@@ -419,42 +500,6 @@ export function StoryComposer({
                 className="hidden"
               />
             </label>
-          ) : (
-            <div className="relative rounded-xl overflow-hidden border border-slate-700/80 bg-slate-950 p-3 flex items-center justify-between">
-              <div className="flex items-center space-x-3 truncate">
-                <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 flex-shrink-0">
-                  {mediaType === 'video' ? <Film className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
-                </div>
-                <div className="truncate">
-                  <p className="text-xs font-semibold text-slate-200 truncate">
-                    {mediaUrl.split('/').pop() || 'Story Asset'}
-                  </p>
-                  <p className="text-[10px] text-emerald-400 flex items-center space-x-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    <span className="capitalize">{mediaType} Story Asset Ready</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <label className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg cursor-pointer transition">
-                  Replace
-                  <input
-                    type="file"
-                    accept="image/*,video/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setMediaUrl('')}
-                  className="p-1 text-slate-400 hover:text-rose-400 transition"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
           )}
 
           {/* Or Paste Direct Public HTTPS URL */}
@@ -465,8 +510,11 @@ export function StoryComposer({
               placeholder="https://your-cdn.com/story-media.mp4"
               value={mediaUrl}
               onChange={(e) => {
-                setMediaUrl(e.target.value);
-                if (e.target.value.match(/\.(mp4|mov|webm)$/i)) setMediaType('video');
+                const val = e.target.value;
+                setMediaUrl(val);
+                setOriginalMediaUrl(val);
+                setIsEdited(false);
+                if (val.match(/\.(mp4|mov|webm)$/i)) setMediaType('video');
                 else setMediaType('image');
               }}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition"
@@ -822,8 +870,38 @@ export function StoryComposer({
               </div>
             </div>
           </div>
+
+          {/* Quick Edit Overlay Button on Mockup */}
+          {mediaUrl && (
+            <button
+              type="button"
+              onClick={() => setIsEditorOpen(true)}
+              className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 flex items-center space-x-1.5 px-4 py-1.5 rounded-full bg-black/75 hover:bg-black/90 border border-white/20 text-white text-xs font-bold backdrop-blur-md shadow-xl transition hover:scale-105"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-fuchsia-400" />
+              <span>Edit Media</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Story Media Visual Editor Modal */}
+      <StoryMediaEditorModal
+        isOpen={isEditorOpen}
+        onClose={() => setIsEditorOpen(false)}
+        mediaUrl={originalMediaUrl || mediaUrl}
+        mediaType={mediaType}
+        onSave={({ processedUrl, originalUrl }) => {
+          setMediaUrl(processedUrl);
+          setOriginalMediaUrl(originalUrl);
+          setIsEdited(true);
+          console.info('[STORY_MEDIA_SAVED]', {
+            originalUrl,
+            processedUrl,
+            target_account_ids: selectedAccountIds
+          });
+        }}
+      />
     </div>
   );
 }

@@ -295,3 +295,47 @@ def test_story_api_publish_now_idempotency(client, db_session):
     assert pub_res2.json()["status"] == "PUBLISHED"
 
 
+def test_story_api_upload_media_and_publish_edited_flow(client, db_session):
+    token = get_auth_token(client, "upload_edited_user@test.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    user = db_session.query(User).filter(User.email == "upload_edited_user@test.com").first()
+    brand, fb_acc, ig_acc = create_brand_and_accounts(db_session, user.id)
+
+    # 1. Upload edited image file
+    fake_img_data = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xff\xdb\x00C\x00"
+    upload_res = client.post(
+        "/api/v1/stories/upload-media",
+        files={"file": ("story_edit_1080x1920.jpg", fake_img_data, "image/jpeg")},
+        headers=headers
+    )
+    assert upload_res.status_code == 200
+    up_data = upload_res.json()
+    assert "url" in up_data
+    assert up_data["media_type"] == "image"
+    cdn_url = up_data["url"]
+
+    # 2. Create Story with returned CDN URL and specific target account
+    create_res = client.post(
+        "/api/v1/stories",
+        json={
+            "brand_id": brand.id,
+            "title": "Story with Uploaded Edited Asset",
+            "media_url": cdn_url,
+            "media_type": "image",
+            "target_account_ids": [ig_acc.id]
+        },
+        headers=headers
+    )
+    assert create_res.status_code == 201
+    story_id = create_res.json()["id"]
+
+    # 3. Publish Story
+    pub_res = client.post(f"/api/v1/stories/{story_id}/publish-now", headers=headers)
+    assert pub_res.status_code == 200
+    assert pub_res.json()["status"] == "PUBLISHED"
+    assert pub_res.json()["media_url"] == cdn_url
+    assert pub_res.json()["target_account_ids"] == [ig_acc.id]
+
+
+

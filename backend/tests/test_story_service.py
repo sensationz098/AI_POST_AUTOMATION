@@ -554,3 +554,51 @@ def test_story_publish_multi_account_duration_and_audit(db_session):
     assert published.fb_story_id is not None
     assert published.ig_story_id is not None
 
+
+def test_story_publishing_with_edited_media_preserves_targets(db_session):
+    """Test that publishing an edited 9:16 media Story targets ONLY selected account IDs and uses processed URL."""
+    user, brand, fb_acc, ig_acc = setup_user_brand_accounts(db_session, "edited_media_tester@test.com")
+
+    # Add extra account that is NOT selected
+    extra_acc = SocialAccount(
+        user_id=user.id,
+        brand_id=brand.id,
+        platform="facebook",
+        account_id="fb_page_extra",
+        account_name="extra_fb_page",
+        access_token="sandbox_token_extra",
+        status="CONNECTED"
+    )
+    db_session.add(extra_acc)
+    db_session.commit()
+    db_session.refresh(extra_acc)
+
+    with patch.object(story_service, "publish_facebook_story", wraps=story_service.publish_facebook_story) as mock_fb, \
+         patch.object(story_service, "publish_instagram_story", wraps=story_service.publish_instagram_story) as mock_ig:
+
+        # Processed 9:16 media URL from StoryMediaEditor
+        edited_url = "https://res.cloudinary.com/demo/image/upload/v12345/story_edit_1080x1920.jpg"
+        story_in = StoryCreate(
+            brand_id=brand.id,
+            title="Edited 9:16 Story",
+            media_url=edited_url,
+            media_type="image",
+            target_account_ids=[fb_acc.id]  # Only fb_acc selected
+        )
+        story = story_service.create_story(db_session, story_in, user.id)
+        assert story.media_url == edited_url
+        assert story.target_account_ids == [fb_acc.id]
+
+        published = story_service.publish_story(db_session, story.id, user.id)
+        assert published.status == StoryStatus.PUBLISHED.value
+        assert published.media_url == edited_url
+        assert published.fb_story_id is not None
+
+        # Verify only selected fb_acc received publish call, extra_acc received ZERO
+        assert mock_fb.call_count == 1
+        call_acc = mock_fb.call_args[1]["account"]
+        assert call_acc.id == fb_acc.id
+        assert call_acc.id != extra_acc.id
+        assert mock_ig.call_count == 0
+
+

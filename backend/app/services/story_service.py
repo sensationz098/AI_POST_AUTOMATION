@@ -76,7 +76,7 @@ class StoryService:
             return False, errors, warnings
 
         # Protocol check
-        if not (media_url.startswith("http://") or media_url.startswith("https://") or media_url.startswith("data:")):
+        if not (media_url.startswith("http://") or media_url.startswith("https://") or media_url.startswith("data:") or media_url.startswith("/uploads/")):
             errors.append("Story media URL must be a valid HTTPS or HTTP URL.")
 
         # Media type check
