@@ -477,4 +477,43 @@ export interface StoryValidationResult {
   }[];
 }
 
+export type SchedulerItemType = 'post' | 'story';
+
+export interface SchedulerTargetAccount {
+  id: number;
+  account_id: string;
+  account_name: string;
+  platform: 'facebook' | 'instagram' | string;
+  username?: string;
+  logo_url?: string;
+}
+
+export interface SchedulerItem {
+  id: number;
+  item_type: SchedulerItemType;
+  brand_id: number;
+  user_id: number;
+  title?: string;
+  caption?: string;
+  media_url?: string;
+  media_type?: 'image' | 'video' | string;
+  thumbnail_url?: string;
+  platforms: ('facebook' | 'instagram')[];
+  target_account_ids: number[];
+  target_accounts: SchedulerTargetAccount[];
+  status: PostStatus | StoryStatus | string;
+  scheduled_at?: string;
+  published_at?: string;
+  retry_count: number;
+  max_retries: number;
+  last_error?: string;
+  fb_id?: string;
+  ig_id?: string;
+  fb_url?: string | null;
+  ig_url?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+
 

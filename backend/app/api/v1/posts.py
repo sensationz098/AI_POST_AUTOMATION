@@ -129,6 +129,27 @@ def create_post(
     return post_service.create_post(db, current_user.id, post_in)
 
 
+from app.schemas.scheduler import SchedulerItemResponse
+from app.services.scheduler_feed_service import scheduler_feed_service
+
+@router.get("/scheduler-feed", response_model=List[SchedulerItemResponse])
+def get_scheduler_feed(
+    brand_id: Optional[int] = Query(None, description="Filter by brand ID"),
+    status: Optional[str] = Query(None, description="Filter by status: DRAFT, APPROVED, SCHEDULED, PUBLISHED, FAILED"),
+    item_type: Optional[str] = Query(None, description="Filter by item type: 'post' or 'story'"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieve unified scheduler items (Posts & Stories) ordered chronologically."""
+    return scheduler_feed_service.get_scheduler_feed(
+        db=db,
+        user_id=current_user.id,
+        brand_id=brand_id,
+        status=status,
+        item_type=item_type
+    )
+
+
 @router.get("/", response_model=List[PostResponse])
 def get_user_posts(
     status: Optional[str] = Query(None, description="Filter by status: DRAFT, APPROVED, SCHEDULED, PUBLISHED, FAILED"),
