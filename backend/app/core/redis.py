@@ -12,12 +12,16 @@ def get_redis_client() -> Optional[redis.Redis]:
     global _redis_client
     if _redis_client is not None:
         return _redis_client
+    redis_url = settings.get_redis_url()
     try:
-        _redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        kwargs = {"decode_responses": True}
+        if redis_url.startswith("rediss://"):
+            kwargs["ssl_cert_reqs"] = None
+        _redis_client = redis.Redis.from_url(redis_url, **kwargs)
         _redis_client.ping()
         return _redis_client
     except Exception as e:
-        logger.warning(f"Redis connection failed: {e}. Fallback to in-memory state dictionary.")
+        logger.warning(f"Redis connection failed ({redis_url}): {e}. Fallback to in-memory state dictionary.")
         _redis_client = None
         return None
 

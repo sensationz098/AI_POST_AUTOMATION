@@ -22,7 +22,10 @@ from app.repositories.social_account_repository import social_account_repo
 from app.repositories.brand_repository import brand_repo
 from app.repositories.youtube_upload_repository import youtube_upload_repo
 from app.models.youtube_upload import YouTubeUpload, YouTubeUploadStatus
-from app.tasks.youtube_tasks import poll_youtube_video_processing_task
+from app.tasks.youtube_tasks import (
+    poll_youtube_video_processing_task,
+    check_and_update_youtube_processing_status,
+)
 from app.services.youtube_service import (
     youtube_service,
     YouTubeOAuthException,
@@ -563,23 +566,9 @@ def get_youtube_upload_status(
         access_token = youtube_service.get_valid_access_token_for_account(db, account) if account else None
 
         # Case A: In PROCESSING state -> query videos.list for video encoding completion
-        if upload.upload_status == YouTubeUploadStatus.PROCESSING.value and upload.video_id and access_token:
+        if upload.upload_status == YouTubeUploadStatus.PROCESSING.value and upload.video_id:
             try:
-                proc_data = youtube_service.fetch_video_processing_status(access_token, upload.video_id)
-                if proc_data.get("is_ready"):
-                    youtube_upload_repo.mark_processing_status(
-                        db, upload_id, processing_status="succeeded", upload_status=YouTubeUploadStatus.READY.value
-                    )
-                elif proc_data.get("is_failed"):
-                    youtube_upload_repo.mark_processing_status(
-                        db, upload_id, processing_status="failed", upload_status=YouTubeUploadStatus.FAILED.value,
-                        failure_reason=proc_data.get("processing_failure_reason")
-                    )
-                else:
-                    youtube_upload_repo.mark_processing_status(
-                        db, upload_id, processing_status=proc_data.get("processing_status", "processing"),
-                        upload_status=YouTubeUploadStatus.PROCESSING.value
-                    )
+                check_and_update_youtube_processing_status(db, upload_id)
                 db.refresh(upload)
             except Exception as e:
                 logger.warning(f"[YOUTUBE_STATUS] Live processing query failed for {upload_id}: {e}")

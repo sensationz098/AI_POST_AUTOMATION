@@ -478,3 +478,144 @@ def test_celery_task_updates_processing_status_to_ready(db_session):
     assert upload.processing_status == "succeeded"
 
 
+def test_end_to_end_upload_to_processing_to_ready_pipeline(client, db_session):
+    """
+    End-to-end test:
+    1. Final chunk returns 200 with video_id.
+    2. Celery task is enqueued.
+    3. Celery task executes and queries YouTube videos.list.
+    4. YouTube returns processingStatus=succeeded.
+    5. DB becomes READY.
+    """
+    headers = get_auth_headers(client, "e2e_proc@socialai.com")
+    user = db_session.query(User).filter(User.email == "e2e_proc@socialai.com").first()
+    acc = create_mock_youtube_account(db_session, user.id, "UC_E2E_PROC_CHAN")
+
+    upload = youtube_upload_repository.create(
+        db=db_session,
+        upload_id="ytu_test_e2e_pipeline_777",
+        user_id=user.id,
+        social_account_id=acc.id,
+        channel_id="UC_E2E_PROC_CHAN",
+        title="E2E Pipeline Video",
+        file_size_bytes=1048576,
+        mime_type="video/mp4",
+        encrypted_session_url=encrypt_token("https://google.com/upload/mock"),
+    )
+
+    mock_200_res = {
+        "status": "PROCESSING",
+        "http_status": 200,
+        "video_id": "P0c9zaF_sGc",
+        "video_url": "https://www.youtube.com/watch?v=P0c9zaF_sGc",
+        "is_complete": True,
+    }
+
+    mock_youtube_ready_status = {
+        "upload_status": "processed",
+        "processing_status": "succeeded",
+        "is_ready": True,
+        "privacy_status": "private",
+        "published_at": datetime.now(timezone.utc).isoformat(),
+        "video_url": "https://www.youtube.com/watch?v=P0c9zaF_sGc",
+    }
+
+    req_headers = {
+        **headers,
+        "Content-Range": "bytes 0-1048575/1048576",
+        "Content-Type": "video/mp4",
+    }
+
+    with patch.object(youtube_service, "upload_resumable_chunk", return_value=mock_200_res):
+        with patch.object(poll_youtube_video_processing, "delay") as mock_celery_delay:
+            res = client.put(f"/api/v1/youtube/upload/{upload.upload_id}/chunk", data=b"x" * 1048576, headers=req_headers)
+
+    assert res.status_code == 200
+    assert res.json()["status"] == "PROCESSING"
+    assert res.json()["video_id"] == "P0c9zaF_sGc"
+    mock_celery_delay.assert_called_once_with(upload_id=upload.upload_id, attempt=1)
+
+    # Now execute the Celery task
+    with patch("app.tasks.youtube_tasks.SessionLocal", return_value=db_session):
+        with patch.object(db_session, "close"):
+            with patch.object(youtube_service, "fetch_video_processing_status", return_value=mock_youtube_ready_status):
+                task_res = poll_youtube_video_processing(upload.upload_id, attempt=1)
+
+    assert task_res["status"] == "READY"
+    db_session.refresh(upload)
+    assert upload.upload_status == YouTubeUploadStatus.READY.value
+    assert upload.processing_status == "succeeded"
+
+
+def test_celery_unavailable_fallback_poller_recovers_processing_upload(client, db_session):
+    """
+    Fallback reliability test:
+    When Celery enqueue fails (e.g. Redis connection lost), the upload remains in PROCESSING,
+    and the background reliability poller catches it and transitions it to READY.
+    """
+    from app.tasks.youtube_tasks import process_pending_youtube_processing_uploads
+
+    headers = get_auth_headers(client, "fallback_test@socialai.com")
+    user = db_session.query(User).filter(User.email == "fallback_test@socialai.com").first()
+    acc = create_mock_youtube_account(db_session, user.id, "UC_FALLBACK_CHAN")
+
+    upload = youtube_upload_repository.create(
+        db=db_session,
+        upload_id="ytu_test_fallback_888",
+        user_id=user.id,
+        social_account_id=acc.id,
+        channel_id="UC_FALLBACK_CHAN",
+        title="Fallback Video",
+        file_size_bytes=1048576,
+        mime_type="video/mp4",
+        encrypted_session_url=encrypt_token("https://google.com/upload/mock"),
+    )
+
+    mock_200_res = {
+        "status": "PROCESSING",
+        "http_status": 200,
+        "video_id": "vid_fallback_999",
+        "video_url": "https://www.youtube.com/watch?v=vid_fallback_999",
+        "is_complete": True,
+    }
+
+    req_headers = {
+        **headers,
+        "Content-Range": "bytes 0-1048575/1048576",
+        "Content-Type": "video/mp4",
+    }
+
+    # Simulate Celery .delay() throwing connection error
+    with patch.object(youtube_service, "upload_resumable_chunk", return_value=mock_200_res):
+        with patch.object(poll_youtube_video_processing, "delay", side_effect=Exception("Redis connection refused")):
+            res = client.put(f"/api/v1/youtube/upload/{upload.upload_id}/chunk", data=b"x" * 1048576, headers=req_headers)
+
+    assert res.status_code == 200
+    db_session.refresh(upload)
+    assert upload.upload_status == YouTubeUploadStatus.PROCESSING.value
+
+    # Simulate time elapsed > 15 seconds
+    upload.updated_at = datetime.now(timezone.utc) - timedelta(seconds=20)
+    db_session.commit()
+
+    mock_youtube_ready = {
+        "upload_status": "processed",
+        "processing_status": "succeeded",
+        "is_ready": True,
+        "privacy_status": "private",
+        "published_at": datetime.now(timezone.utc).isoformat(),
+        "video_url": "https://www.youtube.com/watch?v=vid_fallback_999",
+    }
+
+    with patch.object(poll_youtube_video_processing, "delay", side_effect=Exception("Redis connection refused")):
+        with patch.object(youtube_service, "fetch_video_processing_status", return_value=mock_youtube_ready):
+            results = process_pending_youtube_processing_uploads(db_session, limit=5)
+
+    assert len(results) == 1
+    assert results[0]["action"] == "executed_fallback"
+
+    db_session.refresh(upload)
+    assert upload.upload_status == YouTubeUploadStatus.READY.value
+    assert upload.processing_status == "succeeded"
+
+

@@ -45,11 +45,15 @@ async def background_automation_execution_poller():
             await asyncio.sleep(10)
             from app.core.database import SessionLocal
             from app.services.automation_execution_service import automation_execution_service
+            from app.tasks.youtube_tasks import process_pending_youtube_processing_uploads
             db = SessionLocal()
             try:
                 processed = automation_execution_service.process_pending_executions(db, limit=25)
                 if processed:
                     logger.info(f"[EXECUTION_WORKER] Reliability poller processed {len(processed)} pending execution(s).")
+                yt_processed = process_pending_youtube_processing_uploads(db, limit=10)
+                if yt_processed:
+                    logger.info(f"[EXECUTION_WORKER] YouTube reliability poller checked {len(yt_processed)} processing upload(s).")
             finally:
                 db.close()
         except asyncio.CancelledError:

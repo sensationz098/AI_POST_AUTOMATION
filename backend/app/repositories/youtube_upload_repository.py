@@ -172,5 +172,15 @@ class YouTubeUploadRepository:
         db.refresh(upload)
         return upload
 
+    def list_pending_processing(self, db: Session, older_than_seconds: int = 15, limit: int = 10) -> List[YouTubeUpload]:
+        """Fetch uploads in PROCESSING state that have not been checked recently (fallback poller)."""
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)
+        return db.query(YouTubeUpload).filter(
+            YouTubeUpload.upload_status == YouTubeUploadStatus.PROCESSING.value,
+            YouTubeUpload.video_id.isnot(None),
+            YouTubeUpload.updated_at <= cutoff
+        ).order_by(YouTubeUpload.updated_at.asc()).limit(limit).all()
+
 youtube_upload_repo = YouTubeUploadRepository()
 youtube_upload_repository = youtube_upload_repo

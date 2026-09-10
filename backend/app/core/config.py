@@ -57,7 +57,32 @@ class Settings(BaseSettings):
     DB_POOL_RECYCLE: int = Field(default=1800, env="DB_POOL_RECYCLE")
     
     # Cache / Celery Redis
-    REDIS_URL: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
+    REDIS_URL: Optional[str] = Field(default=None, env="REDIS_URL")
+    REDIS_TLS_URL: Optional[str] = Field(default=None, env="REDIS_TLS_URL")
+    CELERY_BROKER_URL: Optional[str] = Field(default=None, env="CELERY_BROKER_URL")
+    CELERY_RESULT_BACKEND: Optional[str] = Field(default=None, env="CELERY_RESULT_BACKEND")
+
+    def get_redis_url(self) -> str:
+        """Resolve active Redis connection string from REDIS_URL, REDIS_TLS_URL, or fallback."""
+        if self.REDIS_URL:
+            return self.REDIS_URL
+        if self.REDIS_TLS_URL:
+            return self.REDIS_TLS_URL
+        if self.CELERY_BROKER_URL:
+            return self.CELERY_BROKER_URL
+        return "redis://localhost:6379/0"
+
+    def get_celery_broker_url(self) -> str:
+        """Resolve Celery broker connection string."""
+        if self.CELERY_BROKER_URL:
+            return self.CELERY_BROKER_URL
+        return self.get_redis_url()
+
+    def get_celery_result_backend(self) -> str:
+        """Resolve Celery result backend connection string."""
+        if self.CELERY_RESULT_BACKEND:
+            return self.CELERY_RESULT_BACKEND
+        return self.get_redis_url()
     
     # OpenAI / OpenRouter API
     OPENAI_API_KEY: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
