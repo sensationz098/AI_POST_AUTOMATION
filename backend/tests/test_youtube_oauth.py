@@ -31,6 +31,12 @@ def test_youtube_oauth_start_requires_authentication(client):
     res = client.get("/api/v1/youtube/oauth/start", follow_redirects=False)
     assert res.status_code == 401
 
+def test_youtube_oauth_scopes_configuration():
+    """Verify that REQUIRED_YOUTUBE_SCOPES includes both upload and readonly scopes."""
+    assert "https://www.googleapis.com/auth/youtube.upload" in youtube_service.REQUIRED_YOUTUBE_SCOPES
+    assert "https://www.googleapis.com/auth/youtube.readonly" in youtube_service.REQUIRED_YOUTUBE_SCOPES
+    assert len(youtube_service.REQUIRED_YOUTUBE_SCOPES) >= 2
+
 def test_youtube_oauth_start_generates_state_and_redirects(client):
     """GET /api/v1/youtube/oauth/start generates state in Redis and redirects to Google OAuth endpoint."""
     headers = get_auth_headers(client, "yt_start@socialai.com")
@@ -40,7 +46,8 @@ def test_youtube_oauth_start_generates_state_and_redirects(client):
     location = res.headers.get("location", "")
 
     assert "https://accounts.google.com/o/oauth2/v2/auth" in location
-    assert "https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fyoutube.upload" in location or "youtube.upload" in location
+    assert "youtube.upload" in location
+    assert "youtube.readonly" in location
     assert "access_type=offline" in location
     assert "prompt=consent" in location
     assert "response_type=code" in location
@@ -56,6 +63,10 @@ def test_youtube_oauth_start_json_mode(client):
     assert "authorization_url" in data
     assert "state" in data
     assert "https://accounts.google.com/o/oauth2/v2/auth" in data["authorization_url"]
+    assert "youtube.upload" in data["authorization_url"]
+    assert "youtube.readonly" in data["authorization_url"]
+    assert "access_type=offline" in data["authorization_url"]
+    assert "prompt=consent" in data["authorization_url"]
     assert len(data["state"]) > 20
 
 def test_youtube_oauth_callback_rejects_invalid_or_expired_state(client):

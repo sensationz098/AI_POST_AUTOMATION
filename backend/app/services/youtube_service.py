@@ -37,6 +37,7 @@ class YouTubeService:
 
     REQUIRED_YOUTUBE_SCOPES = [
         "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/youtube.readonly",
     ]
 
     def get_authorization_url(self, state: str) -> str:
