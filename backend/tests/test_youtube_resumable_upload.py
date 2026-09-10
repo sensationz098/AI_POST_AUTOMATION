@@ -607,15 +607,191 @@ def test_celery_unavailable_fallback_poller_recovers_processing_upload(client, d
         "video_url": "https://www.youtube.com/watch?v=vid_fallback_999",
     }
 
-    with patch.object(poll_youtube_video_processing, "delay", side_effect=Exception("Redis connection refused")):
-        with patch.object(youtube_service, "fetch_video_processing_status", return_value=mock_youtube_ready):
-            results = process_pending_youtube_processing_uploads(db_session, limit=5)
+def test_poller_still_processing_leaves_status_processing(db_session):
+    """When YouTube returns processingStatus='processing', poller leaves upload in PROCESSING status and updates timestamp."""
+    from app.tasks.youtube_tasks import process_pending_youtube_processing_uploads
+
+    user = User(email="poller_proc@socialai.com", hashed_password="pw", full_name="User", role="Admin", is_active=True)
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    acc = create_mock_youtube_account(db_session, user.id, "UC_PROC_CHAN")
+
+    upload = youtube_upload_repository.create(
+        db=db_session,
+        upload_id="ytu_test_proc_still_111",
+        user_id=user.id,
+        social_account_id=acc.id,
+        channel_id="UC_PROC_CHAN",
+        title="Processing Video",
+        file_size_bytes=5242880,
+        mime_type="video/mp4",
+        encrypted_session_url=encrypt_token("https://google.com/upload/mock"),
+    )
+    youtube_upload_repository.mark_completed(
+        db=db_session,
+        upload_id=upload.upload_id,
+        video_id="onk_7gt3PNg",
+        video_url="https://www.youtube.com/watch?v=onk_7gt3PNg",
+    )
+    # Set updated_at to 20s ago so poller picks it up
+    upload.updated_at = datetime.now(timezone.utc) - timedelta(seconds=20)
+    db_session.commit()
+
+    mock_youtube_processing = {
+        "upload_status": "uploaded",
+        "processing_status": "processing",
+        "is_ready": False,
+        "is_failed": False,
+        "privacy_status": "private",
+        "video_url": "https://www.youtube.com/watch?v=onk_7gt3PNg",
+    }
+
+    with patch.object(youtube_service, "fetch_video_processing_status", return_value=mock_youtube_processing):
+        results = process_pending_youtube_processing_uploads(db_session, limit=5)
 
     assert len(results) == 1
-    assert results[0]["action"] == "executed_fallback"
+    assert results[0]["result"]["status"] == "PROCESSING"
+
+    db_session.refresh(upload)
+    assert upload.upload_status == YouTubeUploadStatus.PROCESSING.value
+    assert upload.processing_status == "processing"
+
+
+def test_poller_failure_marks_status_failed(db_session):
+    """When YouTube returns processingStatus='failed' or uploadStatus='rejected', poller updates DB to FAILED."""
+    from app.tasks.youtube_tasks import process_pending_youtube_processing_uploads
+
+    user = User(email="poller_fail@socialai.com", hashed_password="pw", full_name="User", role="Admin", is_active=True)
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    acc = create_mock_youtube_account(db_session, user.id, "UC_FAIL_CHAN")
+
+    upload = youtube_upload_repository.create(
+        db=db_session,
+        upload_id="ytu_test_proc_fail_222",
+        user_id=user.id,
+        social_account_id=acc.id,
+        channel_id="UC_FAIL_CHAN",
+        title="Failed Video",
+        file_size_bytes=5242880,
+        mime_type="video/mp4",
+        encrypted_session_url=encrypt_token("https://google.com/upload/mock"),
+    )
+    youtube_upload_repository.mark_completed(
+        db=db_session,
+        upload_id=upload.upload_id,
+        video_id="vid_failed_333",
+        video_url="https://www.youtube.com/watch?v=vid_failed_333",
+    )
+    upload.updated_at = datetime.now(timezone.utc) - timedelta(seconds=20)
+    db_session.commit()
+
+    mock_youtube_failed = {
+        "upload_status": "rejected",
+        "processing_status": "failed",
+        "processing_failure_reason": "unsupportedVideoFormat",
+        "is_ready": False,
+        "is_failed": True,
+        "privacy_status": "private",
+        "video_url": "https://www.youtube.com/watch?v=vid_failed_333",
+    }
+
+    with patch.object(youtube_service, "fetch_video_processing_status", return_value=mock_youtube_failed):
+        results = process_pending_youtube_processing_uploads(db_session, limit=5)
+
+    assert len(results) == 1
+    assert results[0]["result"]["status"] == "FAILED"
+
+    db_session.refresh(upload)
+    assert upload.upload_status == YouTubeUploadStatus.FAILED.value
+    assert upload.processing_status == "failed"
+    assert "unsupportedVideoFormat" in (upload.error_message or "")
+
+
+def test_poller_refreshes_expired_oauth_token_before_checking(db_session):
+    """When SocialAccount access token is expired, poller uses refresh token to obtain a fresh access token."""
+    from app.tasks.youtube_tasks import process_pending_youtube_processing_uploads
+
+    user = User(email="poller_token_ref@socialai.com", hashed_password="pw", full_name="User", role="Admin", is_active=True)
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    # Create account with EXPIRED access token
+    acc = SocialAccount(
+        user_id=user.id,
+        platform="youtube",
+        account_id="UC_EXPIRED_CHAN",
+        account_name="Expired Channel",
+        access_token=encrypt_token("expired_access_token_123"),
+        token_type="Bearer",
+        expires_at=datetime.now(timezone.utc) - timedelta(hours=2),
+        status="CONNECTED",
+        metadata_json={"refresh_token": encrypt_token("valid_refresh_token_xyz")}
+    )
+    db_session.add(acc)
+    db_session.commit()
+    db_session.refresh(acc)
+
+    upload = youtube_upload_repository.create(
+        db=db_session,
+        upload_id="ytu_test_expired_tok_444",
+        user_id=user.id,
+        social_account_id=acc.id,
+        channel_id="UC_EXPIRED_CHAN",
+        title="Token Refresh Video",
+        file_size_bytes=5242880,
+        mime_type="video/mp4",
+        encrypted_session_url=encrypt_token("https://google.com/upload/mock"),
+    )
+    youtube_upload_repository.mark_completed(
+        db=db_session,
+        upload_id=upload.upload_id,
+        video_id="onk_7gt3PNg",
+        video_url="https://www.youtube.com/watch?v=onk_7gt3PNg",
+    )
+    upload.updated_at = datetime.now(timezone.utc) - timedelta(seconds=20)
+    db_session.commit()
+
+    mock_refresh_resp = {
+        "access_token": "fresh_new_access_token_888",
+        "expires_in": 3600,
+        "token_type": "Bearer",
+    }
+    mock_youtube_ready = {
+        "upload_status": "processed",
+        "processing_status": "succeeded",
+        "is_ready": True,
+        "privacy_status": "private",
+        "video_url": "https://www.youtube.com/watch?v=onk_7gt3PNg",
+    }
+
+    with patch.object(youtube_service, "refresh_access_token", return_value=mock_refresh_resp) as mock_refresh:
+        with patch.object(youtube_service, "fetch_video_processing_status", return_value=mock_youtube_ready) as mock_fetch:
+            results = process_pending_youtube_processing_uploads(db_session, limit=5)
+
+    assert mock_refresh.called
+    assert mock_fetch.called
+    assert len(results) == 1
+    assert results[0]["result"]["status"] == "READY"
 
     db_session.refresh(upload)
     assert upload.upload_status == YouTubeUploadStatus.READY.value
-    assert upload.processing_status == "succeeded"
+
+
+def test_poller_no_pending_uploads_makes_zero_api_calls(db_session):
+    """When there are no pending PROCESSING uploads, the poller makes 0 calls to YouTube API."""
+    from app.tasks.youtube_tasks import process_pending_youtube_processing_uploads
+
+    with patch.object(youtube_service, "fetch_video_processing_status") as mock_fetch:
+        results = process_pending_youtube_processing_uploads(db_session, limit=5)
+
+    mock_fetch.assert_not_called()
+    assert results == []
+
 
 

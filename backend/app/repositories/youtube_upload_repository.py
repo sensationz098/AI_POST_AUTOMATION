@@ -139,6 +139,10 @@ class YouTubeUploadRepository:
         now = datetime.now(timezone.utc)
         upload.processing_status = processing_status
         upload.upload_status = upload_status
+        if upload_status == YouTubeUploadStatus.READY.value:
+            upload.completed_at = now
+            if upload.video_id and not upload.video_url:
+                upload.video_url = f"https://www.youtube.com/watch?v={upload.video_id}"
         if failure_reason:
             upload.processing_failure_reason = failure_reason
             upload.error_message = failure_reason
