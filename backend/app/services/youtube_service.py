@@ -277,6 +277,9 @@ class YouTubeService:
         privacy_status: str = "private",
         mime_type: str = "video/mp4",
         file_size_bytes: Optional[int] = None,
+        tags: Optional[List[str]] = None,
+        category_id: Optional[str] = None,
+        made_for_kids: Optional[bool] = False,
     ) -> str:
         """
         Create a YouTube resumable upload session on Google servers.
@@ -291,14 +294,24 @@ class YouTubeService:
         if file_size_bytes:
             headers["X-Upload-Content-Length"] = str(file_size_bytes)
 
+        snippet_data: Dict[str, Any] = {
+            "title": title,
+            "description": description or "",
+        }
+        if tags and len(tags) > 0:
+            snippet_data["tags"] = tags
+        if category_id:
+            snippet_data["categoryId"] = str(category_id)
+
+        status_data: Dict[str, Any] = {
+            "privacyStatus": privacy_status or "private",
+        }
+        if made_for_kids is not None:
+            status_data["selfDeclaredMadeForKids"] = bool(made_for_kids)
+
         body = {
-            "snippet": {
-                "title": title,
-                "description": description or "",
-            },
-            "status": {
-                "privacyStatus": privacy_status or "private",
-            }
+            "snippet": snippet_data,
+            "status": status_data,
         }
 
         try:

@@ -283,6 +283,9 @@ def initiate_youtube_upload(
             privacy_status=payload.privacy_status or "private",
             mime_type=payload.mime_type or "video/mp4",
             file_size_bytes=payload.file_size_bytes,
+            tags=payload.tags,
+            category_id=payload.category_id,
+            made_for_kids=payload.made_for_kids,
         )
     except YouTubeAPIException as e:
         logger.error(f"[YOUTUBE_UPLOAD] Resumable init API error: {e.message}")

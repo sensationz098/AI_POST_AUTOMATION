@@ -519,7 +519,10 @@ export interface YouTubeUploadInitiateRequest {
   social_account_id: number;
   title: string;
   description?: string;
+  tags?: string[];
+  category_id?: string;
   privacy_status?: 'private' | 'unlisted' | 'public';
+  made_for_kids?: boolean;
   filename?: string;
   mime_type?: string;
   file_size_bytes: number;

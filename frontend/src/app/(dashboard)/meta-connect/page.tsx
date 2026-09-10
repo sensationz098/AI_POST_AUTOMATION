@@ -11,17 +11,12 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { SocialAccount, MetaAdAccount, MetaAd } from '@/lib/types';
-import { YouTubeUploadModal } from '@/components/YouTubeUploadModal';
 
 export default function MetaConnectPage() {
   // Connected Accounts State
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [disconnectingId, setDisconnectingId] = useState<number | string | 'all' | null>(null);
-
-  // YouTube Upload Modal State (Milestone 2B)
-  const [isYtUploadModalOpen, setIsYtUploadModalOpen] = useState(false);
-  const [activeYtChannelId, setActiveYtChannelId] = useState<number | undefined>(undefined);
 
 
   // Meta Ad Accounts State
@@ -787,17 +782,6 @@ export default function MetaConnectPage() {
                           ● Connected
                         </span>
                         <button
-                          onClick={() => {
-                            setActiveYtChannelId(acc.id);
-                            setIsYtUploadModalOpen(true);
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-800/80 text-red-300 hover:text-white transition flex items-center space-x-1.5 text-[11px] font-semibold"
-                          title="Upload Video to YouTube"
-                        >
-                          <UploadCloud className="w-3.5 h-3.5 text-red-400" />
-                          <span>Upload Video</span>
-                        </button>
-                        <button
                           onClick={() => handleDisconnectAccount(acc.id)}
                           disabled={disconnectingId === acc.id || disconnectingId === 'all'}
                           className="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-white transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
@@ -1387,14 +1371,6 @@ export default function MetaConnectPage() {
           </div>
         </form>
       )}
-
-      {/* YouTube Resumable Video Upload Modal (Milestone 2B) */}
-      <YouTubeUploadModal
-        isOpen={isYtUploadModalOpen}
-        onClose={() => setIsYtUploadModalOpen(false)}
-        channels={ytChannels}
-        defaultChannelId={activeYtChannelId}
-      />
     </div>
   );
 }

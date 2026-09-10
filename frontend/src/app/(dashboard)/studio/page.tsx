@@ -25,11 +25,13 @@ import {
   Share2,
   Film,
   Camera,
-  Upload
+  Upload,
+  Youtube
 } from 'lucide-react';
 import { FacebookPostPreview } from '@/components/FacebookPostPreview';
 import { InstagramPostPreview } from '@/components/InstagramPostPreview';
 import { StoryComposer } from '@/components/StoryComposer';
+import { YouTubeComposer } from '@/components/YouTubeComposer';
 import axios from 'axios';
 import { apiClient, PUBLISHING_TIMEOUT_MS, MEDIA_UPLOAD_TIMEOUT_MS } from '@/lib/api';
 import {
@@ -167,8 +169,8 @@ function MusicCard({
 }
 
 export default function AIStudioPage() {
-  // Content Format: 'post' (standard feed post) vs 'story' (24h vertical story)
-  const [contentFormat, setContentFormat] = useState<'post' | 'story'>('post');
+  // Content Format: 'post' (standard feed post) vs 'story' (24h vertical story) vs 'youtube' (video / shorts)
+  const [contentFormat, setContentFormat] = useState<'post' | 'story' | 'youtube'>('post');
 
   // Creation Mode: 'premade' = Upload Custom Pre-Made Post Mode
   const [creationMode, setCreationMode] = useState<'ai' | 'premade'>('premade');
@@ -256,6 +258,11 @@ export default function AIStudioPage() {
     }
     loadSocialAccounts();
   }, []);
+
+  const youtubeAccounts = React.useMemo(
+    () => socialAccounts.filter((a) => a.platform === 'youtube'),
+    [socialAccounts]
+  );
 
   // Auto-poll active batch status when batch modal is open and batch is processing
   useEffect(() => {
@@ -900,7 +907,7 @@ export default function AIStudioPage() {
         </div>
       </div>
 
-      {/* Content Format Switcher: Feed Post vs 24h Story */}
+      {/* Content Format Switcher: Feed Post vs 24h Story vs YouTube */}
       <div className="flex items-center space-x-2 border-b border-slate-800/80 pb-3">
         <button
           type="button"
@@ -927,6 +934,19 @@ export default function AIStudioPage() {
           <Camera className="w-3.5 h-3.5" />
           <span>Story (24h)</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setContentFormat('youtube')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            contentFormat === 'youtube'
+              ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-lg shadow-red-600/20'
+              : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-800'
+          }`}
+        >
+          <Youtube className="w-3.5 h-3.5 text-red-400" />
+          <span>YouTube (Video / Shorts)</span>
+        </button>
       </div>
 
       {contentFormat === 'story' ? (
@@ -935,6 +955,10 @@ export default function AIStudioPage() {
           selectedBrand={selectedBrand}
           onSelectBrand={setSelectedBrand}
           socialAccounts={socialAccounts}
+        />
+      ) : contentFormat === 'youtube' ? (
+        <YouTubeComposer
+          channels={youtubeAccounts}
         />
       ) : (
         /* Main Grid: Left Upload Form | Right Rich Social Preview */
