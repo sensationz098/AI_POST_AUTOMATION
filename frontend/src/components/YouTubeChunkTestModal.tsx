@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Youtube,
@@ -55,6 +55,19 @@ export function YouTubeChunkTestModal({
   const [statusResult, setStatusResult] = useState<YouTubeUploadStatusResponse | null>(null);
   const [isQueryingStatus, setIsQueryingStatus] = useState<boolean>(false);
 
+  // Synchronize selected channel state when modal opens or channel list / defaultChannelId changes
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (defaultChannelId && channels.some((c) => c.id === defaultChannelId)) {
+      setSelectedAccountId(defaultChannelId);
+    } else if (channels.length > 0) {
+      setSelectedAccountId((prev) => (channels.some((c) => c.id === prev) ? prev : channels[0].id));
+    } else {
+      setSelectedAccountId(0);
+    }
+  }, [isOpen, defaultChannelId, channels]);
+
   if (!isOpen) return null;
 
   const CHUNK_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB test chunk (8 * 256 KB)
@@ -74,7 +87,8 @@ export function YouTubeChunkTestModal({
   };
 
   const handleStartProofOfConcept = async () => {
-    if (!selectedAccountId) {
+    const selectedChannel = channels.find((c) => c.id === selectedAccountId);
+    if (!selectedAccountId || !selectedChannel) {
       setErrorMsg('Please select a connected YouTube channel.');
       return;
     }
@@ -220,16 +234,26 @@ export function YouTubeChunkTestModal({
                 Target YouTube Channel
               </label>
               <select
-                value={selectedAccountId}
-                onChange={(e) => setSelectedAccountId(Number(e.target.value))}
-                disabled={isProcessing}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 text-xs focus:ring-1 focus:ring-red-500 focus:outline-none"
+                value={selectedAccountId || ''}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setSelectedAccountId(val);
+                  if (errorMsg === 'Please select a connected YouTube channel.') {
+                    setErrorMsg(null);
+                  }
+                }}
+                disabled={isProcessing || channels.length === 0}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 text-xs focus:ring-1 focus:ring-red-500 focus:outline-none disabled:opacity-50"
               >
-                {channels.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.account_name} ({c.account_id})
-                  </option>
-                ))}
+                {channels.length === 0 ? (
+                  <option value="">No connected YouTube channel found</option>
+                ) : (
+                  channels.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.account_name} ({c.account_id})
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
@@ -454,7 +478,7 @@ export function YouTubeChunkTestModal({
           <button
             type="button"
             onClick={handleStartProofOfConcept}
-            disabled={isProcessing || !selectedFile || channels.length === 0}
+            disabled={isProcessing || !selectedFile || channels.length === 0 || !selectedAccountId}
             className="px-5 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs transition flex items-center space-x-2 shadow-lg shadow-red-500/25 disabled:opacity-50"
           >
             {isProcessing ? (
