@@ -17,6 +17,7 @@ from app.models.automation import Automation, AutomationStatus, TriggerType, Pos
 from app.models.automation_execution import AutomationExecution, ExecutionStatus, ActionExecutionStatus
 
 from app.models.story import Story, StoryStatus
+from app.models.youtube_upload import YouTubeUpload, YouTubeUploadStatus
 
 __all__ = [
     "User", 
@@ -46,7 +47,9 @@ __all__ = [
     "PostTargetType",
     "AutomationExecution",
     "ExecutionStatus",
-    "ActionExecutionStatus"
+    "ActionExecutionStatus",
+    "YouTubeUpload",
+    "YouTubeUploadStatus"
 ]
 
 

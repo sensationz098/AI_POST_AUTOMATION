@@ -383,7 +383,11 @@ export function YouTubeChunkTestModal({
                   <div className="flex items-center justify-between">
                     <div className="text-emerald-400 font-bold flex items-center space-x-1.5">
                       <Check className="w-3.5 h-3.5" />
-                      <span>2. Chunk 1 Uploaded ({formatBytes(chunkSizeSent)})</span>
+                      <span>
+                        {chunkResult.is_complete
+                          ? `2. Upload Completed (${formatBytes(chunkResult.total_bytes || (selectedFile?.size ?? chunkSizeSent))})`
+                          : `2. Chunk 1 Uploaded (${formatBytes(chunkSizeSent)})`}
+                      </span>
                     </div>
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -399,20 +403,28 @@ export function YouTubeChunkTestModal({
                   <div className="text-slate-400 space-y-1 pt-1">
                     <div className="flex justify-between">
                       <span>YouTube Range Header:</span>
-                      <span className="text-amber-300 font-bold">{chunkResult.range_header || 'None'}</span>
+                      <span className={chunkResult.range_header ? 'text-amber-300 font-bold' : 'text-slate-400'}>
+                        {chunkResult.range_header || (chunkResult.is_complete ? 'None (Upload Completed)' : 'None')}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Confirmed Bytes Stored:</span>
-                      <span className="text-slate-200">
-                        {chunkResult.last_byte_received !== null && chunkResult.last_byte_received !== undefined
+                      <span className="text-slate-200 font-bold">
+                        {chunkResult.is_complete
+                          ? formatBytes(chunkResult.total_bytes || (selectedFile?.size ?? 0))
+                          : chunkResult.last_byte_received !== null && chunkResult.last_byte_received !== undefined
                           ? formatBytes(chunkResult.last_byte_received + 1)
                           : '0 B'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Authoritative Next Offset:</span>
-                      <span className="text-emerald-400 font-bold">
-                        {chunkResult.next_byte_offset ?? 'N/A'} (Byte {chunkResult.next_byte_offset ?? 'N/A'})
+                      <span className={chunkResult.is_complete ? 'text-slate-400' : 'text-emerald-400 font-bold'}>
+                        {chunkResult.is_complete
+                          ? 'N/A'
+                          : chunkResult.next_byte_offset !== null && chunkResult.next_byte_offset !== undefined
+                          ? `${chunkResult.next_byte_offset} (Byte ${chunkResult.next_byte_offset})`
+                          : 'N/A'}
                       </span>
                     </div>
                     {chunkResult.is_complete && chunkResult.video_id && (
@@ -454,10 +466,11 @@ export function YouTubeChunkTestModal({
               )}
 
               {statusResult && (
-                <div className="text-[10px] font-mono bg-slate-900 p-2 rounded border border-slate-800 text-slate-300 space-y-1">
-                  <div>Live YouTube Status: <span className="text-amber-300">{statusResult.status} (HTTP {statusResult.http_status})</span></div>
-                  <div>Confirmed Range: <span className="text-emerald-400">{statusResult.range_header || 'None'}</span></div>
-                  <div>Next Expected Byte: <span className="text-slate-100">{statusResult.next_byte_offset}</span></div>
+                <div className="text-[10px] font-mono bg-slate-900 p-2.5 rounded border border-slate-800 text-slate-300 space-y-1">
+                  <div>Live YouTube Status: <span className="text-amber-300 font-bold">{statusResult.status} (HTTP {statusResult.http_status})</span></div>
+                  <div>Confirmed Range: <span className="text-emerald-400">{statusResult.range_header || (statusResult.is_complete ? 'None (Upload Completed)' : 'None')}</span></div>
+                  <div>Confirmed Bytes Stored: <span className="text-slate-100">{statusResult.is_complete ? formatBytes(statusResult.file_size_bytes) : (statusResult.last_byte_received !== null && statusResult.last_byte_received !== undefined ? formatBytes(statusResult.last_byte_received + 1) : '0 B')}</span></div>
+                  <div>Next Expected Byte: <span className="text-slate-100">{statusResult.is_complete ? 'N/A' : (statusResult.next_byte_offset ?? 'N/A')}</span></div>
                 </div>
               )}
             </div>

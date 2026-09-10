@@ -453,4 +453,98 @@ class YouTubeService:
 
         raise YouTubeAPIException(f"Unexpected status response: HTTP {response.status_code}", status_code=response.status_code)
 
+    def fetch_video_processing_status(self, access_token: str, video_id: str) -> Dict[str, Any]:
+        """
+        Query YouTube Data API v3 (videos.list with part=processingDetails,status,snippet)
+        to monitor background video processing (encoding/quality check) after upload completion.
+        Never logs access_token.
+        """
+        url = f"{self.YOUTUBE_API_BASE_URL}/videos"
+        params = {
+            "part": "processingDetails,status,snippet",
+            "id": video_id,
+        }
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        }
+
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=20)
+            data = response.json()
+        except Exception as e:
+            logger.error(f"[YOUTUBE_PROCESSING] Error querying video processing status for {video_id}: {e}")
+            raise YouTubeAPIException(f"Failed to query video processing details: {str(e)}")
+
+        if response.status_code != 200:
+            err_msg = data.get("error", {}).get("message") or f"HTTP {response.status_code}"
+            logger.error(f"[YOUTUBE_PROCESSING] videos.list error ({response.status_code}): {err_msg}")
+            raise YouTubeAPIException(f"YouTube processing query error: {err_msg}", status_code=response.status_code)
+
+        items = data.get("items", [])
+        if not items:
+            logger.warning(f"[YOUTUBE_PROCESSING] Video {video_id} not found in videos.list.")
+            return {
+                "video_id": video_id,
+                "found": False,
+                "processing_status": "unknown",
+                "upload_status": "unknown",
+                "is_ready": False,
+                "is_failed": False,
+                "video_url": f"https://www.youtube.com/watch?v={video_id}",
+            }
+
+        item = items[0]
+        processing_details = item.get("processingDetails", {})
+        status_info = item.get("status", {})
+        snippet = item.get("snippet", {})
+
+        proc_status = processing_details.get("processingStatus")  # "processing", "succeeded", "failed", "terminated"
+        proc_failure_reason = processing_details.get("processingFailureReason")
+        upload_status = status_info.get("uploadStatus")  # "uploaded", "processed", "failed", "rejected"
+        rejection_reason = status_info.get("rejectionReason")
+        privacy_status = status_info.get("privacyStatus")
+
+        is_ready = proc_status == "succeeded" or upload_status == "processed"
+        is_failed = proc_status in ("failed", "terminated") or upload_status in ("failed", "rejected")
+        failure_reason = proc_failure_reason or rejection_reason
+
+        return {
+            "video_id": video_id,
+            "found": True,
+            "title": snippet.get("title"),
+            "processing_status": proc_status or upload_status or "processing",
+            "processing_failure_reason": failure_reason,
+            "upload_status": upload_status,
+            "privacy_status": privacy_status,
+            "is_ready": is_ready,
+            "is_failed": is_failed,
+            "video_url": f"https://www.youtube.com/watch?v={video_id}",
+        }
+
+    def cancel_resumable_upload_session(
+        self,
+        resumable_session_url: str,
+        total_file_size: int,
+        access_token: Optional[str] = None,
+    ) -> bool:
+        """
+        Best-effort remote notification to Google's resumable session URI via DELETE (Google resumable upload spec).
+        Does not raise on 4xx/5xx because application-level cancellation is authoritative.
+        """
+        headers = {
+            "Content-Length": "0",
+            "Content-Range": f"bytes */{total_file_size}",
+        }
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
+
+        try:
+            response = requests.delete(resumable_session_url, headers=headers, timeout=10)
+            logger.info(f"[YOUTUBE_UPLOAD] Remote session cancellation returned HTTP {response.status_code}")
+            return response.status_code in (200, 404, 410)
+        except Exception as e:
+            logger.warning(f"[YOUTUBE_UPLOAD] Remote session cancellation request failed (best-effort): {e}")
+            return False
+
 youtube_service = YouTubeService()

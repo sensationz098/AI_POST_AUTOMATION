@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { SocialAccount, MetaAdAccount, MetaAd } from '@/lib/types';
-import { YouTubeChunkTestModal } from '@/components/YouTubeChunkTestModal';
+import { YouTubeUploadModal } from '@/components/YouTubeUploadModal';
 
 export default function MetaConnectPage() {
   // Connected Accounts State
@@ -19,9 +19,9 @@ export default function MetaConnectPage() {
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [disconnectingId, setDisconnectingId] = useState<number | string | 'all' | null>(null);
 
-  // YouTube Chunk Test Modal State (Milestone 2A)
-  const [isYtChunkTestModalOpen, setIsYtChunkTestModalOpen] = useState(false);
-  const [activeYtTestChannelId, setActiveYtTestChannelId] = useState<number | undefined>(undefined);
+  // YouTube Upload Modal State (Milestone 2B)
+  const [isYtUploadModalOpen, setIsYtUploadModalOpen] = useState(false);
+  const [activeYtChannelId, setActiveYtChannelId] = useState<number | undefined>(undefined);
 
 
   // Meta Ad Accounts State
@@ -788,14 +788,14 @@ export default function MetaConnectPage() {
                         </span>
                         <button
                           onClick={() => {
-                            setActiveYtTestChannelId(acc.id);
-                            setIsYtChunkTestModalOpen(true);
+                            setActiveYtChannelId(acc.id);
+                            setIsYtUploadModalOpen(true);
                           }}
                           className="px-2.5 py-1 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-800/80 text-red-300 hover:text-white transition flex items-center space-x-1.5 text-[11px] font-semibold"
-                          title="Test 1-Chunk Resumable Upload (POC)"
+                          title="Upload Video to YouTube"
                         >
                           <UploadCloud className="w-3.5 h-3.5 text-red-400" />
-                          <span>Test Chunk (POC)</span>
+                          <span>Upload Video</span>
                         </button>
                         <button
                           onClick={() => handleDisconnectAccount(acc.id)}
@@ -1388,12 +1388,12 @@ export default function MetaConnectPage() {
         </form>
       )}
 
-      {/* YouTube 1-Chunk Resumable Upload POC Modal (Milestone 2A) */}
-      <YouTubeChunkTestModal
-        isOpen={isYtChunkTestModalOpen}
-        onClose={() => setIsYtChunkTestModalOpen(false)}
+      {/* YouTube Resumable Video Upload Modal (Milestone 2B) */}
+      <YouTubeUploadModal
+        isOpen={isYtUploadModalOpen}
+        onClose={() => setIsYtUploadModalOpen(false)}
         channels={ytChannels}
-        defaultChannelId={activeYtTestChannelId}
+        defaultChannelId={activeYtChannelId}
       />
     </div>
   );

@@ -20,6 +20,9 @@ from app.core.redis import (
 from app.core.security_encryption import encrypt_token, decrypt_token
 from app.repositories.social_account_repository import social_account_repo
 from app.repositories.brand_repository import brand_repo
+from app.repositories.youtube_upload_repository import youtube_upload_repo
+from app.models.youtube_upload import YouTubeUpload, YouTubeUploadStatus
+from app.tasks.youtube_tasks import poll_youtube_video_processing_task
 from app.services.youtube_service import (
     youtube_service,
     YouTubeOAuthException,
@@ -34,13 +37,13 @@ from app.schemas.youtube import (
     YouTubeUploadInitiateResponse,
     YouTubeUploadChunkResponse,
     YouTubeUploadStatusResponse,
+    YouTubeUploadDetailResponse,
+    YouTubeUploadCancelResponse,
+    YouTubeUploadListResponse,
 )
 from app.schemas.social_account import SocialAccountResponse
 from app.api.v1.deps import get_current_user
 from app.models.user import User
-
-MAX_PROOF_OF_CONCEPT_CHUNK_BYTES = 5 * 1024 * 1024  # 5 MB maximum bound for proof-of-concept chunk
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/youtube", tags=["YouTube Integration"])
@@ -48,23 +51,39 @@ router = APIRouter(prefix="/youtube", tags=["YouTube Integration"])
 @router.get("/oauth/start")
 def start_youtube_oauth(
     redirect: bool = Query(True),
-    current_user: User = Depends(get_current_user)
+    brand_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Generate Google OAuth 2.0 Authorization URL for connecting YouTube Channel.
-    Includes cryptographically secure CSRF state token tied to current user session in Redis.
+    Start YouTube OAuth flow.
+    Generates cryptographically secure CSRF state token stored in Redis with 10-minute TTL,
+    and returns or redirects to Google OAuth 2.0 authorization URL.
     """
-    state_token = secrets.token_urlsafe(32)
-    set_oauth_state(state_token, current_user.id, ttl_seconds=900)
+    if not settings.YOUTUBE_CLIENT_ID or not settings.YOUTUBE_CLIENT_SECRET:
+        if not settings.YOUTUBE_MOCK_MODE:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="YouTube OAuth is not configured on this server (missing YOUTUBE_CLIENT_ID or YOUTUBE_CLIENT_SECRET)."
+            )
 
-    auth_url = youtube_service.get_authorization_url(state_token)
+    # 1. Generate secure CSRF state
+    state = secrets.token_urlsafe(32)
+    set_oauth_state(state, current_user.id, ttl_seconds=600)
+
+    # 2. Build authorization URL
+    auth_url = youtube_service.get_authorization_url(state=state)
+
+    logger.info(f"[YOUTUBE_OAUTH] Initiated OAuth flow for user {current_user.id}, state={state[:8]}...")
+
     if redirect:
-        return RedirectResponse(url=auth_url, status_code=307)
-    return {
-        "authorization_url": auth_url,
-        "state": state_token,
-        "client_id_configured": bool(settings.YOUTUBE_CLIENT_ID and not settings.YOUTUBE_CLIENT_ID.startswith("your-"))
-    }
+        return RedirectResponse(url=auth_url)
+    
+    return YouTubeOAuthStartResponse(
+        authorization_url=auth_url,
+        state=state,
+        client_id_configured=bool(settings.YOUTUBE_CLIENT_ID and settings.YOUTUBE_CLIENT_SECRET)
+    )
 
 @router.get("/oauth/callback")
 def youtube_oauth_callback(
@@ -72,20 +91,23 @@ def youtube_oauth_callback(
     state: Optional[str] = Query(None),
     error: Optional[str] = Query(None),
     error_description: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
-    Server-side Google OAuth Callback endpoint registered in Google Cloud Console.
-    Exchanges code for access & refresh tokens, discovers authenticated YouTube channel
-    via YouTube Data API v3 channels.list (mine=true), and saves credentials securely.
+    Google OAuth 2.0 Callback Handler.
+    1. Validates CSRF state against Redis (one-time pop).
+    2. Exchanges authorization code server-side for access token & refresh token.
+    3. Fetches authenticated YouTube channel info via YouTube Data API v3.
+    4. Encrypts and persists tokens in social_accounts table.
+    5. Redirects to frontend /meta-connect with success/error query params.
     """
     frontend_base = settings.FRONTEND_URL.rstrip('/')
-
-    # 1. Handle user cancellation or Google authorization errors
-    if error or error_description:
-        err_msg = error_description or error or "Google authorization cancelled by user"
-        logger.warning(f"[YOUTUBE_OAUTH] OAuth Callback Error: {err_msg}")
-        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(err_msg)}")
+    
+    # 1. Handle user cancellation or Google error
+    if error:
+        err_msg = error_description or error
+        logger.warning(f"[YOUTUBE_OAUTH] OAuth callback error from Google: {error} ({err_msg})")
+        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(f'Google authorization failed: {err_msg}')}")
 
     # 2. Verify CSRF State from Redis
     user_id = pop_oauth_state(state) if state else None
@@ -145,38 +167,42 @@ def youtube_oauth_callback(
             token_type=token_type,
             expires_at=expires_at,
             logo_url=logo_url,
-            metadata_json=meta_json
+            metadata_json=meta_json,
         )
 
-        # 7. Auto-create matching Brand Profile if one doesn't exist
-        brand_repo.ensure_brand_profile_exists(db, user_id, channel_title, logo_url)
+        # 7. Ensure brand profile exists for this YouTube channel
+        brand_repo.ensure_brand_profile_exists(
+            db=db,
+            user_id=user_id,
+            account_name=channel_title,
+            logo_url=logo_url,
+        )
 
         logger.info(
-            f"[YOUTUBE_OAUTH] Successfully connected YouTube channel '{channel_title}' ({channel_id}) "
-            f"for user {user_id} (SocialAccount ID: {account.id})."
+            f"[YOUTUBE_OAUTH] Successfully connected YouTube channel '{channel_title}' "
+            f"(id={channel_id}) for user {user_id}."
         )
 
         return RedirectResponse(
-            url=f"{frontend_base}/meta-connect?youtube_connected=true&channel_title={quote(channel_title)}&channel_id={quote(channel_id)}"
+            url=f"{frontend_base}/meta-connect?youtube_connected=true&channel_id={quote(channel_id)}&channel_title={quote(channel_title)}"
         )
 
     except YouTubeChannelNotFoundException as e:
-        logger.warning(f"[YOUTUBE_OAUTH] Channel not found for user {user_id}: {e}")
-        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(str(e))}")
+        err_text = getattr(e, "message", str(e))
+        logger.error(f"[YOUTUBE_OAUTH] No YouTube channel found on Google account for user {user_id}: {err_text}")
+        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(err_text)}")
     except YouTubeOAuthException as e:
-        logger.error(f"[YOUTUBE_OAUTH] OAuth error during callback for user {user_id}: {e.message}")
-        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(e.message)}")
-    except YouTubeAPIException as e:
-        logger.error(f"[YOUTUBE_OAUTH] YouTube API error during callback for user {user_id}: {e.message}")
-        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(e.message)}")
+        err_text = getattr(e, "message", str(e))
+        logger.error(f"[YOUTUBE_OAUTH] OAuth exchange failed for user {user_id}: {err_text}")
+        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote(f'Failed to connect YouTube: {err_text}')}")
     except Exception as e:
-        logger.error(f"[YOUTUBE_OAUTH] Unexpected error during callback processing for user {user_id}: {e}")
-        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote('An unexpected error occurred while connecting your YouTube channel.')}")
+        logger.error(f"[YOUTUBE_OAUTH] Unexpected error in callback for user {user_id}: {e}")
+        return RedirectResponse(url=f"{frontend_base}/meta-connect?error={quote('An unexpected error occurred while connecting your YouTube account.')}")
 
 @router.get("/channels", response_model=List[SocialAccountResponse])
-def get_connected_youtube_channels(
+def list_connected_youtube_channels(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Retrieve list of connected YouTube Channels for current authenticated user.
@@ -185,6 +211,8 @@ def get_connected_youtube_channels(
     accounts = social_account_repo.get_by_user_and_platform(db, current_user.id, "youtube")
     return accounts
 
+# ─── Resumable Upload Endpoints (Milestone 2B) ───────────────────────────────
+
 @router.post("/upload/initiate", response_model=YouTubeUploadInitiateResponse)
 def initiate_youtube_upload(
     payload: YouTubeUploadInitiateRequest,
@@ -192,12 +220,35 @@ def initiate_youtube_upload(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Initiate YouTube Resumable Upload Session (Milestone 2A Proof-of-Concept).
+    Initiate a production YouTube Resumable Upload Session.
+    Enforces idempotency (reuses active session if matching client_mutation_id is passed).
     Verifies user ownership of YouTube SocialAccount, obtains server-side access token,
-    and calls Google Resumable Upload endpoint.
-    Returns upload session ID (tokens/credentials are never exposed).
+    creates YouTube resumable session URL with Google, and creates persistent YouTubeUpload record.
+    Returns opaque upload_id and configured chunk_size_bytes.
     """
-    # 1. Validate SocialAccount ownership & platform
+    # 1. Idempotency Check: if client provided mutation key, check for existing active upload
+    if payload.client_mutation_id:
+        existing_upload = youtube_upload_repo.get_by_mutation_id(
+            db, user_id=current_user.id, client_mutation_id=payload.client_mutation_id
+        )
+        if existing_upload and existing_upload.encrypted_session_url:
+            logger.info(f"[YOUTUBE_UPLOAD] Idempotent request: reusing existing upload {existing_upload.upload_id} for mutation key {payload.client_mutation_id}")
+            return YouTubeUploadInitiateResponse(
+                upload_id=existing_upload.upload_id,
+                client_mutation_id=existing_upload.client_mutation_id,
+                channel_id=existing_upload.channel_id,
+                channel_title=existing_upload.social_account.account_name if existing_upload.social_account else "YouTube Channel",
+                title=existing_upload.title,
+                file_size_bytes=existing_upload.file_size_bytes,
+                chunk_size_bytes=settings.YOUTUBE_UPLOAD_CHUNK_SIZE,
+                mime_type=existing_upload.mime_type,
+                privacy_status=existing_upload.privacy_status,
+                status=existing_upload.upload_status,
+                next_byte_offset=existing_upload.bytes_uploaded,
+                message="Resumed existing active upload session."
+            )
+
+    # 2. Validate SocialAccount ownership & platform
     account = social_account_repo.get_by_id(db, payload.social_account_id)
     if not account or account.user_id != current_user.id:
         raise HTTPException(
@@ -210,7 +261,7 @@ def initiate_youtube_upload(
             detail=f"Account is not a YouTube platform account (found: {account.platform})."
         )
 
-    # 2. Get valid access token (refreshes automatically if near expiry)
+    # 3. Get valid access token (refreshes automatically if near expiry)
     try:
         access_token = youtube_service.get_valid_access_token_for_account(db, account)
     except Exception as e:
@@ -220,7 +271,7 @@ def initiate_youtube_upload(
             detail=f"Failed to authenticate with YouTube: {str(e)}"
         )
 
-    # 3. Call Google Resumable Upload initiate endpoint
+    # 4. Call Google Resumable Upload initiate endpoint
     try:
         session_url = youtube_service.initiate_resumable_upload(
             access_token=access_token,
@@ -243,8 +294,28 @@ def initiate_youtube_upload(
             detail="An error occurred while creating YouTube upload session."
         )
 
-    # 4. Generate unique upload_id & store session securely in Redis (with encrypted session_url)
+    # 5. Generate unique upload_id & persist YouTubeUpload record in PostgreSQL
     upload_id = f"ytu_{secrets.token_urlsafe(24)}"
+    encrypted_url = encrypt_token(session_url)
+
+    upload_record = youtube_upload_repo.create(
+        db=db,
+        upload_id=upload_id,
+        user_id=current_user.id,
+        social_account_id=account.id,
+        channel_id=account.account_id,
+        title=payload.title,
+        description=payload.description or "",
+        privacy_status=payload.privacy_status or "private",
+        original_filename=payload.filename,
+        mime_type=payload.mime_type or "video/mp4",
+        file_size_bytes=payload.file_size_bytes,
+        encrypted_session_url=encrypted_url,
+        client_mutation_id=payload.client_mutation_id,
+        metadata_json={"channel_title": account.account_name},
+    )
+
+    # Cache session in Redis for fast access
     session_data = {
         "upload_id": upload_id,
         "user_id": current_user.id,
@@ -255,8 +326,8 @@ def initiate_youtube_upload(
         "file_size_bytes": payload.file_size_bytes,
         "mime_type": payload.mime_type or "video/mp4",
         "privacy_status": payload.privacy_status or "private",
-        "encrypted_session_url": encrypt_token(session_url),
-        "status": "INITIATED",
+        "encrypted_session_url": encrypted_url,
+        "status": YouTubeUploadStatus.INITIATED.value,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     set_upload_session(upload_id, session_data, ttl_seconds=86400)
@@ -265,12 +336,16 @@ def initiate_youtube_upload(
 
     return YouTubeUploadInitiateResponse(
         upload_id=upload_id,
+        client_mutation_id=payload.client_mutation_id,
         channel_id=account.account_id,
         channel_title=account.account_name,
         title=payload.title,
         file_size_bytes=payload.file_size_bytes,
+        chunk_size_bytes=settings.YOUTUBE_UPLOAD_CHUNK_SIZE,
         mime_type=payload.mime_type or "video/mp4",
-        status="INITIATED",
+        privacy_status=payload.privacy_status or "private",
+        status=upload_record.upload_status,
+        next_byte_offset=0,
         message="Resumable upload session initiated successfully."
     )
 
@@ -278,53 +353,78 @@ def initiate_youtube_upload(
 async def upload_youtube_chunk(
     upload_id: str,
     request: Request,
-    content_range: str = Header(..., alias="Content-Range", description="e.g. bytes 0-2097151/5242880"),
+    content_range: str = Header(..., alias="Content-Range", description="e.g. bytes 0-8388607/20971520"),
     content_type: str = Header("video/mp4", alias="Content-Type"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Proxy a single binary video chunk to YouTube Resumable Upload Session (Milestone 2A Proof-of-Concept).
-    Enforces maximum chunk size, validates user ownership, and uses server-side OAuth credentials.
-    Returns confirmed Range and next byte offset from YouTube response.
+    Proxy a single binary video chunk to YouTube Resumable Upload Session.
+    Enforces maximum chunk size, validates user ownership, checks for cancellation,
+    and forwards bounded chunk via server-side OAuth credentials.
+    On HTTP 308: updates byte progress and returns authoritative next offset.
+    On HTTP 200/201: marks upload complete and kicks off background Celery video processing polling.
     """
-    # 1. Retrieve session and verify tenant ownership
-    session_data = get_upload_session(upload_id)
-    if not session_data or session_data.get("user_id") != current_user.id:
+    # 1. Retrieve persistent upload record & verify tenant ownership
+    upload = youtube_upload_repo.get_by_upload_id_and_user(db, upload_id, current_user.id)
+    if not upload:
+        # Check fallback in redis
+        session_data = get_upload_session(upload_id)
+        if not session_data or session_data.get("user_id") != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Upload session not found or access denied."
+            )
+        social_acc_id = session_data["social_account_id"]
+        total_file_size = session_data.get("file_size_bytes", 0)
+        encrypted_url = session_data.get("encrypted_session_url")
+        current_status = session_data.get("status", YouTubeUploadStatus.INITIATED.value)
+    else:
+        social_acc_id = upload.social_account_id
+        total_file_size = upload.file_size_bytes
+        encrypted_url = upload.encrypted_session_url
+        current_status = upload.upload_status
+
+    # 2. Check upload status lifecycle
+    if current_status == YouTubeUploadStatus.CANCELLED.value:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Upload session not found or access denied."
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Upload session was cancelled and cannot accept further chunks."
+        )
+    if current_status == YouTubeUploadStatus.FAILED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Upload session has failed and cannot accept further chunks."
         )
 
-    # 2. Read request body bytes & validate bounded chunk size
+    # 3. Read bounded request body bytes (Never load full multi-GB video into memory)
     chunk_bytes = await request.body()
     if not chunk_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Chunk payload cannot be empty."
         )
-    if len(chunk_bytes) > MAX_PROOF_OF_CONCEPT_CHUNK_BYTES:
+    if len(chunk_bytes) > settings.YOUTUBE_UPLOAD_CHUNK_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Chunk size {len(chunk_bytes)} bytes exceeds maximum allowed chunk size ({MAX_PROOF_OF_CONCEPT_CHUNK_BYTES} bytes)."
+            detail=f"Chunk size {len(chunk_bytes)} bytes exceeds maximum configured chunk size ({settings.YOUTUBE_UPLOAD_CHUNK_SIZE} bytes)."
         )
 
-    # 3. Decrypt session URL
-    encrypted_url = session_data.get("encrypted_session_url")
+    # 4. Decrypt session URL
     if not encrypted_url:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Corrupted upload session data."
+            detail="Corrupted upload session data (missing session URL)."
         )
     session_url = decrypt_token(encrypted_url)
     if not session_url:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to decrypt upload session URL."
+            detail="Failed to decrypt upload session capability URL."
         )
 
-    # 4. Get valid server-side access token
-    account = social_account_repo.get_by_id(db, session_data["social_account_id"])
+    # 5. Get valid server-side access token
+    account = social_account_repo.get_by_id(db, social_acc_id)
     if not account or account.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -332,7 +432,7 @@ async def upload_youtube_chunk(
         )
     access_token = youtube_service.get_valid_access_token_for_account(db, account)
 
-    # 5. Forward chunk to YouTube
+    # 6. Forward chunk to YouTube
     try:
         result = youtube_service.upload_resumable_chunk(
             resumable_session_url=session_url,
@@ -343,40 +443,71 @@ async def upload_youtube_chunk(
         )
     except YouTubeAPIException as e:
         logger.error(f"[YOUTUBE_UPLOAD] Chunk upload API error for {upload_id}: {e.message}")
+        if upload:
+            youtube_upload_repo.mark_failed(db, upload_id, f"YouTube chunk transmission failed: {e.message}")
         raise HTTPException(
             status_code=e.status_code if e.status_code and e.status_code >= 400 else 502,
             detail=f"YouTube chunk transmission failed: {e.message}"
         )
     except Exception as e:
         logger.error(f"[YOUTUBE_UPLOAD] Unexpected error during chunk proxy for {upload_id}: {e}")
+        if upload:
+            youtube_upload_repo.mark_failed(db, upload_id, "Failed to forward video chunk to YouTube.")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to forward video chunk to YouTube."
         )
 
-    # Update session in Redis
-    if result.get("is_complete"):
+    is_complete = result.get("is_complete", False)
+    last_byte_received = (total_file_size - 1) if (is_complete and total_file_size > 0) else result.get("last_byte_received")
+    next_byte_offset = None if is_complete else result.get("next_byte_offset")
+    bytes_uploaded = total_file_size if is_complete else ((last_byte_received + 1) if last_byte_received is not None else 0)
+    pct = round((bytes_uploaded / total_file_size * 100.0), 2) if total_file_size > 0 else (100.0 if is_complete else 0.0)
+
+    # 7. Update DB and Redis records
+    if is_complete:
+        video_id = result.get("video_id")
+        video_url = result.get("video_url")
+        if upload:
+            youtube_upload_repo.mark_completed(db, upload_id, video_id or "", video_url or "")
+        
         update_upload_session(upload_id, {
-            "status": "COMPLETED",
-            "video_id": result.get("video_id"),
-            "video_url": result.get("video_url"),
+            "status": YouTubeUploadStatus.PROCESSING.value,
+            "video_id": video_id,
+            "video_url": video_url,
+            "last_byte_received": last_byte_received,
         })
+
+        # Trigger background Celery task for processing status tracking
+        try:
+            poll_youtube_video_processing_task.delay(upload_id=upload_id, attempt=1)
+            logger.info(f"[YOUTUBE_UPLOAD] Enqueued Celery video processing polling for upload {upload_id}, video_id={video_id}")
+        except Exception as e:
+            logger.warning(f"[YOUTUBE_UPLOAD] Failed to enqueue Celery task for {upload_id} (will rely on polling): {e}")
+
     else:
+        if upload:
+            youtube_upload_repo.update_progress(
+                db, upload_id, bytes_uploaded=bytes_uploaded, total_bytes=total_file_size, status=YouTubeUploadStatus.UPLOADING.value
+            )
+
         update_upload_session(upload_id, {
-            "status": "RESUME_INCOMPLETE",
-            "last_byte_received": result.get("last_byte_received"),
-            "next_byte_offset": result.get("next_byte_offset"),
+            "status": YouTubeUploadStatus.UPLOADING.value,
+            "last_byte_received": last_byte_received,
+            "next_byte_offset": next_byte_offset,
         })
 
     return YouTubeUploadChunkResponse(
         upload_id=upload_id,
-        status=result["status"],
+        status=YouTubeUploadStatus.PROCESSING.value if is_complete else result["status"],
         http_status=result["http_status"],
         range_header=result.get("range_header"),
-        last_byte_received=result.get("last_byte_received"),
-        next_byte_offset=result.get("next_byte_offset"),
-        total_bytes=session_data.get("file_size_bytes", 0),
-        is_complete=result.get("is_complete", False),
+        last_byte_received=last_byte_received,
+        next_byte_offset=next_byte_offset,
+        total_bytes=total_file_size,
+        bytes_uploaded=bytes_uploaded,
+        progress_percentage=min(pct, 100.0),
+        is_complete=is_complete,
         video_id=result.get("video_id"),
         video_url=result.get("video_url"),
     )
@@ -384,70 +515,195 @@ async def upload_youtube_chunk(
 @router.get("/upload/{upload_id}/status", response_model=YouTubeUploadStatusResponse)
 def get_youtube_upload_status(
     upload_id: str,
+    refresh: bool = Query(False, description="Explicitly query Google YouTube API instead of returning DB cache"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Query YouTube upload session status to determine confirmed byte range and next offset.
+    Get YouTube upload status and confirmed byte range.
     Strictly tenant-isolated.
+    By default, reads database state directly to avoid hitting YouTube rate limits.
+    If refresh=True, performs a controlled live query against YouTube and updates DB.
     """
-    session_data = get_upload_session(upload_id)
-    if not session_data or session_data.get("user_id") != current_user.id:
+    upload = youtube_upload_repo.get_by_upload_id_and_user(db, upload_id, current_user.id)
+    if not upload:
+        # Check fallback session cache
+        session_data = get_upload_session(upload_id)
+        if not session_data or session_data.get("user_id") != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Upload session not found or access denied."
+            )
+        total_size = session_data.get("file_size_bytes", 0)
+        is_finished = session_data.get("status") in (
+            YouTubeUploadStatus.PROCESSING.value,
+            YouTubeUploadStatus.READY.value
+        )
+        return YouTubeUploadStatusResponse(
+            upload_id=upload_id,
+            channel_id=session_data["channel_id"],
+            title=session_data["title"],
+            file_size_bytes=total_size,
+            bytes_uploaded=total_size if is_finished else (session_data.get("last_byte_received", 0) + 1 if session_data.get("last_byte_received") is not None else 0),
+            progress_percentage=100.0 if is_finished else 0.0,
+            mime_type=session_data["mime_type"],
+            status=session_data.get("status", "INITIATED"),
+            http_status=200 if is_finished else 308,
+            range_header=None,
+            last_byte_received=(total_size - 1) if is_finished and total_size > 0 else session_data.get("last_byte_received"),
+            next_byte_offset=None if is_finished else session_data.get("next_byte_offset"),
+            is_complete=is_finished,
+            video_id=session_data.get("video_id"),
+            video_url=session_data.get("video_url"),
+        )
+
+    # Controlled live refresh if client requested it
+    if refresh:
+        account = social_account_repo.get_by_id(db, upload.social_account_id)
+        access_token = youtube_service.get_valid_access_token_for_account(db, account) if account else None
+
+        # Case A: In PROCESSING state -> query videos.list for video encoding completion
+        if upload.upload_status == YouTubeUploadStatus.PROCESSING.value and upload.video_id and access_token:
+            try:
+                proc_data = youtube_service.fetch_video_processing_status(access_token, upload.video_id)
+                if proc_data.get("is_ready"):
+                    youtube_upload_repo.mark_processing_status(
+                        db, upload_id, processing_status="succeeded", upload_status=YouTubeUploadStatus.READY.value
+                    )
+                elif proc_data.get("is_failed"):
+                    youtube_upload_repo.mark_processing_status(
+                        db, upload_id, processing_status="failed", upload_status=YouTubeUploadStatus.FAILED.value,
+                        failure_reason=proc_data.get("processing_failure_reason")
+                    )
+                else:
+                    youtube_upload_repo.mark_processing_status(
+                        db, upload_id, processing_status=proc_data.get("processing_status", "processing"),
+                        upload_status=YouTubeUploadStatus.PROCESSING.value
+                    )
+                db.refresh(upload)
+            except Exception as e:
+                logger.warning(f"[YOUTUBE_STATUS] Live processing query failed for {upload_id}: {e}")
+
+        # Case B: In UPLOADING / INITIATED state -> query resumable session Range
+        elif upload.upload_status in (YouTubeUploadStatus.INITIATED.value, YouTubeUploadStatus.UPLOADING.value) and upload.encrypted_session_url:
+            session_url = decrypt_token(upload.encrypted_session_url)
+            if session_url:
+                try:
+                    status_res = youtube_service.query_resumable_status(
+                        resumable_session_url=session_url,
+                        total_file_size=upload.file_size_bytes,
+                        mime_type=upload.mime_type,
+                        access_token=access_token,
+                    )
+                    if status_res.get("is_complete"):
+                        youtube_upload_repo.mark_completed(
+                            db, upload_id, status_res.get("video_id") or "", status_res.get("video_url") or ""
+                        )
+                    elif status_res.get("last_byte_received") is not None:
+                        bytes_up = status_res["last_byte_received"] + 1
+                        youtube_upload_repo.update_progress(
+                            db, upload_id, bytes_uploaded=bytes_up, total_bytes=upload.file_size_bytes, status=YouTubeUploadStatus.UPLOADING.value
+                        )
+                    db.refresh(upload)
+                except Exception as e:
+                    logger.warning(f"[YOUTUBE_STATUS] Live Range query failed for {upload_id}: {e}")
+
+    # Build safe response strictly from DB record
+    is_complete = upload.upload_status in (
+        YouTubeUploadStatus.PROCESSING.value,
+        YouTubeUploadStatus.READY.value,
+    )
+    last_byte = (upload.file_size_bytes - 1) if is_complete else (upload.bytes_uploaded - 1 if upload.bytes_uploaded > 0 else None)
+    next_offset = None if is_complete else (upload.bytes_uploaded if upload.bytes_uploaded < upload.file_size_bytes else None)
+
+    return YouTubeUploadStatusResponse(
+        upload_id=upload.upload_id,
+        channel_id=upload.channel_id,
+        title=upload.title,
+        file_size_bytes=upload.file_size_bytes,
+        bytes_uploaded=upload.bytes_uploaded,
+        progress_percentage=upload.progress_percentage,
+        mime_type=upload.mime_type,
+        status=upload.upload_status,
+        http_status=200 if is_complete else 308,
+        range_header=None,
+        last_byte_received=last_byte,
+        next_byte_offset=next_offset,
+        is_complete=is_complete,
+        processing_status=upload.processing_status,
+        processing_failure_reason=upload.processing_failure_reason,
+        video_id=upload.video_id,
+        video_url=upload.video_url,
+        error_message=upload.error_message,
+        created_at=upload.created_at,
+        updated_at=upload.updated_at,
+        completed_at=upload.completed_at,
+    )
+
+@router.post("/upload/{upload_id}/cancel", response_model=YouTubeUploadCancelResponse)
+def cancel_youtube_upload(
+    upload_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cancel an active YouTube video upload.
+    Marks application-level upload status as CANCELLED, preventing further chunk uploads and background processing.
+    Attempts best-effort remote notification to Google capability URI.
+    """
+    upload = youtube_upload_repo.get_by_upload_id_and_user(db, upload_id, current_user.id)
+    if not upload:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Upload session not found or access denied."
         )
 
-    # If already marked completed in session
-    if session_data.get("status") == "COMPLETED" and session_data.get("video_id"):
-        return YouTubeUploadStatusResponse(
+    if upload.upload_status in (
+        YouTubeUploadStatus.READY.value,
+        YouTubeUploadStatus.FAILED.value,
+        YouTubeUploadStatus.CANCELLED.value,
+    ):
+        return YouTubeUploadCancelResponse(
+            success=True,
             upload_id=upload_id,
-            channel_id=session_data["channel_id"],
-            title=session_data["title"],
-            file_size_bytes=session_data["file_size_bytes"],
-            mime_type=session_data["mime_type"],
-            status="COMPLETED",
-            http_status=200,
-            last_byte_received=session_data["file_size_bytes"] - 1,
-            next_byte_offset=session_data["file_size_bytes"],
-            is_complete=True,
-            video_id=session_data.get("video_id"),
-            video_url=session_data.get("video_url"),
+            status=upload.upload_status,
+            message=f"Upload is already in {upload.upload_status} state."
         )
 
-    # Query YouTube for live Range status
-    encrypted_url = session_data.get("encrypted_session_url")
-    session_url = decrypt_token(encrypted_url) if encrypted_url else None
-    if not session_url:
-        raise HTTPException(status_code=500, detail="Corrupted upload session.")
+    # 1. Mark CANCELLED in DB
+    youtube_upload_repo.mark_cancelled(db, upload_id)
+    delete_upload_session(upload_id)
 
-    account = social_account_repo.get_by_id(db, session_data["social_account_id"])
-    access_token = youtube_service.get_valid_access_token_for_account(db, account) if account else None
+    # 2. Best-effort remote notification to Google (does not raise if unsupported)
+    if upload.encrypted_session_url:
+        session_url = decrypt_token(upload.encrypted_session_url)
+        account = social_account_repo.get_by_id(db, upload.social_account_id)
+        access_token = youtube_service.get_valid_access_token_for_account(db, account) if account else None
+        if session_url:
+            youtube_service.cancel_resumable_upload_session(session_url, upload.file_size_bytes, access_token)
 
-    try:
-        status_res = youtube_service.query_resumable_status(
-            resumable_session_url=session_url,
-            total_file_size=session_data["file_size_bytes"],
-            mime_type=session_data["mime_type"],
-            access_token=access_token,
-        )
-    except Exception as e:
-        logger.error(f"[YOUTUBE_UPLOAD] Error querying status from YouTube: {e}")
-        raise HTTPException(status_code=502, detail=f"Failed to query YouTube upload status: {str(e)}")
+    logger.info(f"[YOUTUBE_UPLOAD] User {current_user.id} cancelled upload {upload_id}.")
 
-    return YouTubeUploadStatusResponse(
+    return YouTubeUploadCancelResponse(
+        success=True,
         upload_id=upload_id,
-        channel_id=session_data["channel_id"],
-        title=session_data["title"],
-        file_size_bytes=session_data["file_size_bytes"],
-        mime_type=session_data["mime_type"],
-        status=status_res["status"],
-        http_status=status_res["http_status"],
-        range_header=status_res.get("range_header"),
-        last_byte_received=status_res.get("last_byte_received"),
-        next_byte_offset=status_res.get("next_byte_offset"),
-        is_complete=status_res.get("is_complete", False),
-        video_id=status_res.get("video_id"),
-        video_url=status_res.get("video_url"),
+        status=YouTubeUploadStatus.CANCELLED.value,
+        message="Upload session was cancelled successfully."
     )
 
+@router.get("/uploads", response_model=YouTubeUploadListResponse)
+def list_user_youtube_uploads(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List historical and active YouTube uploads for the current authenticated user.
+    Strictly user-isolated.
+    """
+    items = youtube_upload_repo.list_by_user(db, current_user.id, limit=limit, offset=offset)
+    return YouTubeUploadListResponse(
+        items=[YouTubeUploadDetailResponse.from_orm(it) for it in items],
+        total=len(items)
+    )

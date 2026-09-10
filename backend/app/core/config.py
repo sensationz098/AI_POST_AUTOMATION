@@ -88,6 +88,12 @@ class Settings(BaseSettings):
     YOUTUBE_REDIRECT_URI: str = Field(default="http://localhost:8000/api/v1/youtube/oauth/callback", env="YOUTUBE_REDIRECT_URI")
     YOUTUBE_MOCK_MODE: bool = Field(default=False, env="YOUTUBE_MOCK_MODE")
     
+    # YouTube Resumable Upload Chunking & Processing Configurations
+    YOUTUBE_UPLOAD_CHUNK_SIZE: int = Field(default=8 * 1024 * 1024, env="YOUTUBE_UPLOAD_CHUNK_SIZE")  # 8 MB default (multiple of 256 KB)
+    YOUTUBE_PROCESSING_POLL_INITIAL_SECONDS: int = Field(default=15, env="YOUTUBE_PROCESSING_POLL_INITIAL_SECONDS")
+    YOUTUBE_PROCESSING_POLL_MAX_SECONDS: int = Field(default=120, env="YOUTUBE_PROCESSING_POLL_MAX_SECONDS")
+    YOUTUBE_PROCESSING_MAX_ATTEMPTS: int = Field(default=30, env="YOUTUBE_PROCESSING_MAX_ATTEMPTS")
+    
     # Meta Long Video Processing & Polling Configurations
     META_VIDEO_PROCESSING_MAX_SECONDS: int = Field(default=300, env="META_VIDEO_PROCESSING_MAX_SECONDS")
     META_VIDEO_POLL_INITIAL_SECONDS: int = Field(default=3, env="META_VIDEO_POLL_INITIAL_SECONDS")

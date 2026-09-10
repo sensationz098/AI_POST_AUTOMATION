@@ -5,7 +5,7 @@ celery_app = Celery(
     "social_ai_worker",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["app.tasks.publish_task"]
+    include=["app.tasks.publish_task", "app.tasks.youtube_tasks"]
 )
 
 celery_app.conf.update(

@@ -523,44 +523,86 @@ export interface YouTubeUploadInitiateRequest {
   filename?: string;
   mime_type?: string;
   file_size_bytes: number;
+  client_mutation_id?: string;
 }
 
 export interface YouTubeUploadInitiateResponse {
   upload_id: string;
+  client_mutation_id?: string | null;
   channel_id: string;
   channel_title: string;
   title: string;
   file_size_bytes: number;
+  chunk_size_bytes: number;
   mime_type: string;
   status: string;
+  next_byte_offset: number;
   message: string;
 }
 
 export interface YouTubeUploadChunkResponse {
   upload_id: string;
-  status: 'RESUME_INCOMPLETE' | 'COMPLETED' | string;
+  status: 'RESUME_INCOMPLETE' | 'PROCESSING' | 'UPLOADING' | 'CANCELLED' | 'FAILED' | string;
   http_status: number;
   range_header?: string | null;
   last_byte_received?: number | null;
   next_byte_offset?: number | null;
   total_bytes: number;
+  bytes_uploaded: number;
+  progress_percentage: number;
   is_complete: boolean;
   video_id?: string | null;
   video_url?: string | null;
+  processing_status?: string | null;
 }
 
 export interface YouTubeUploadStatusResponse {
   upload_id: string;
+  client_mutation_id?: string | null;
   channel_id: string;
+  channel_title?: string | null;
   title: string;
   file_size_bytes: number;
+  bytes_uploaded: number;
+  progress_percentage: number;
   mime_type: string;
-  status: string;
-  http_status: number;
+  status: 'INITIATED' | 'UPLOADING' | 'PROCESSING' | 'READY' | 'FAILED' | 'CANCELLED' | string;
+  processing_status?: 'uploaded' | 'processing' | 'succeeded' | 'failed' | 'terminated' | string | null;
+  http_status?: number;
   range_header?: string | null;
   last_byte_received?: number | null;
   next_byte_offset?: number | null;
   is_complete: boolean;
   video_id?: string | null;
   video_url?: string | null;
+  error_message?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface YouTubeUploadCancelResponse {
+  upload_id: string;
+  status: string;
+  message: string;
+  remote_cancelled: boolean;
+}
+
+export interface YouTubeUploadItem {
+  id: number;
+  upload_id: string;
+  client_mutation_id?: string | null;
+  social_account_id: number;
+  channel_id: string;
+  channel_title?: string | null;
+  title: string;
+  file_size_bytes: number;
+  bytes_uploaded: number;
+  progress_percentage: number;
+  status: string;
+  processing_status?: string | null;
+  video_id?: string | null;
+  video_url?: string | null;
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
 }

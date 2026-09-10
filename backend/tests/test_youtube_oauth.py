@@ -41,7 +41,9 @@ def test_youtube_oauth_start_generates_state_and_redirects(client):
     """GET /api/v1/youtube/oauth/start generates state in Redis and redirects to Google OAuth endpoint."""
     headers = get_auth_headers(client, "yt_start@socialai.com")
 
-    res = client.get("/api/v1/youtube/oauth/start", headers=headers, follow_redirects=False)
+    with patch("app.core.config.settings.YOUTUBE_CLIENT_ID", "mock_id_123"), \
+         patch("app.core.config.settings.YOUTUBE_CLIENT_SECRET", "mock_secret_456"):
+        res = client.get("/api/v1/youtube/oauth/start", headers=headers, follow_redirects=False)
     assert res.status_code == 307
     location = res.headers.get("location", "")
 
@@ -57,7 +59,9 @@ def test_youtube_oauth_start_json_mode(client):
     """GET /api/v1/youtube/oauth/start?redirect=false returns JSON with authorization URL and state token."""
     headers = get_auth_headers(client, "yt_json@socialai.com")
 
-    res = client.get("/api/v1/youtube/oauth/start?redirect=false", headers=headers)
+    with patch("app.core.config.settings.YOUTUBE_CLIENT_ID", "mock_id_123"), \
+         patch("app.core.config.settings.YOUTUBE_CLIENT_SECRET", "mock_secret_456"):
+        res = client.get("/api/v1/youtube/oauth/start?redirect=false", headers=headers)
     assert res.status_code == 200
     data = res.json()
     assert "authorization_url" in data
