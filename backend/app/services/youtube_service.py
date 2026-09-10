@@ -33,6 +33,7 @@ class YouTubeAPIException(Exception):
 class YouTubeService:
     GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
     GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+    GOOGLE_UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
     YOUTUBE_API_BASE_URL = "https://www.googleapis.com/youtube/v3"
 
     REQUIRED_YOUTUBE_SCOPES = [
@@ -267,5 +268,189 @@ class YouTubeService:
 
         logger.info(f"[YOUTUBE_SERVICE] Successfully updated refreshed access token for account {account.id}")
         return new_access_token
+
+    def initiate_resumable_upload(
+        self,
+        access_token: str,
+        title: str,
+        description: str = "",
+        privacy_status: str = "private",
+        mime_type: str = "video/mp4",
+        file_size_bytes: Optional[int] = None,
+    ) -> str:
+        """
+        Create a YouTube resumable upload session on Google servers.
+        Never logs or leaks access_token. Returns the session Location URL.
+        """
+        url = f"{self.GOOGLE_UPLOAD_URL}?uploadType=resumable&part=snippet,status"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json; charset=UTF-8",
+            "X-Upload-Content-Type": mime_type,
+        }
+        if file_size_bytes:
+            headers["X-Upload-Content-Length"] = str(file_size_bytes)
+
+        body = {
+            "snippet": {
+                "title": title,
+                "description": description or "",
+            },
+            "status": {
+                "privacyStatus": privacy_status or "private",
+            }
+        }
+
+        try:
+            response = requests.post(url, json=body, headers=headers, timeout=30)
+        except Exception as e:
+            logger.error(f"[YOUTUBE_UPLOAD] Network error initiating resumable upload: {e}")
+            raise YouTubeAPIException(f"Failed to connect to YouTube upload service: {str(e)}")
+
+        if response.status_code != 200:
+            err_text = response.text[:200]
+            try:
+                err_data = response.json()
+                err_text = err_data.get("error", {}).get("message") or err_text
+            except Exception:
+                pass
+            logger.error(f"[YOUTUBE_UPLOAD] Resumable upload init failed ({response.status_code}): {err_text}")
+            raise YouTubeAPIException(f"YouTube upload initialization error: {err_text}", status_code=response.status_code)
+
+        location = response.headers.get("Location")
+        if not location:
+            logger.error("[YOUTUBE_UPLOAD] YouTube returned HTTP 200 without Location header.")
+            raise YouTubeAPIException("YouTube did not return a Location header for resumable upload session.", status_code=502)
+
+        logger.info(f"[YOUTUBE_UPLOAD] Successfully created resumable upload session for video '{title}'.")
+        return location
+
+    def upload_resumable_chunk(
+        self,
+        resumable_session_url: str,
+        chunk_bytes: bytes,
+        content_range: str,
+        mime_type: str = "video/mp4",
+        access_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Forward a single binary chunk to YouTube resumable session URL.
+        Handles HTTP 308 (Resume Incomplete) with Range header, and HTTP 200/201 (Completed).
+        """
+        headers = {
+            "Content-Type": mime_type,
+            "Content-Range": content_range,
+            "Content-Length": str(len(chunk_bytes)),
+        }
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
+
+        try:
+            response = requests.put(resumable_session_url, data=chunk_bytes, headers=headers, timeout=60)
+        except Exception as e:
+            logger.error(f"[YOUTUBE_UPLOAD] Network error during chunk upload: {e}")
+            raise YouTubeAPIException(f"Failed to transmit chunk to YouTube: {str(e)}")
+
+        # HTTP 308: Resume Incomplete (Standard YouTube resumable response for intermediate chunks)
+        if response.status_code == 308:
+            range_header = response.headers.get("Range", "")
+            last_byte = None
+            if range_header and "-" in range_header:
+                parts = range_header.replace("bytes=", "").split("-")
+                if len(parts) == 2 and parts[1].isdigit():
+                    last_byte = int(parts[1])
+            next_offset = (last_byte + 1) if last_byte is not None else None
+
+            logger.info(f"[YOUTUBE_UPLOAD] Chunk accepted (HTTP 308). Range: {range_header}, next_byte_offset: {next_offset}")
+            return {
+                "status": "RESUME_INCOMPLETE",
+                "http_status": 308,
+                "range_header": range_header,
+                "last_byte_received": last_byte,
+                "next_byte_offset": next_offset,
+                "is_complete": False,
+            }
+
+        # HTTP 200 or 201: Final chunk completed
+        if response.status_code in (200, 201):
+            try:
+                data = response.json()
+            except Exception:
+                data = {}
+            video_id = data.get("id")
+            logger.info(f"[YOUTUBE_UPLOAD] Upload complete (HTTP {response.status_code}). Video ID: {video_id}")
+            return {
+                "status": "COMPLETED",
+                "http_status": response.status_code,
+                "video_id": video_id,
+                "video_url": f"https://www.youtube.com/watch?v={video_id}" if video_id else None,
+                "is_complete": True,
+            }
+
+        # Other status codes: 4xx, 5xx
+        err_msg = f"HTTP {response.status_code}"
+        try:
+            err_data = response.json()
+            err_msg = err_data.get("error", {}).get("message") or err_msg
+        except Exception:
+            pass
+        logger.error(f"[YOUTUBE_UPLOAD] Chunk upload rejected by YouTube ({response.status_code}): {err_msg}")
+        raise YouTubeAPIException(f"YouTube upload rejected: {err_msg}", status_code=response.status_code)
+
+    def query_resumable_status(
+        self,
+        resumable_session_url: str,
+        total_file_size: int,
+        mime_type: str = "video/mp4",
+        access_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Query YouTube for current confirmed uploaded range (Google Resumable Upload protocol).
+        Uses PUT with Content-Range: bytes */total_size and empty body.
+        """
+        headers = {
+            "Content-Type": mime_type,
+            "Content-Range": f"bytes */{total_file_size}",
+            "Content-Length": "0",
+        }
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
+
+        try:
+            response = requests.put(resumable_session_url, headers=headers, timeout=30)
+        except Exception as e:
+            logger.error(f"[YOUTUBE_UPLOAD] Error querying upload status: {e}")
+            raise YouTubeAPIException(f"Failed to query upload status: {str(e)}")
+
+        if response.status_code == 308:
+            range_header = response.headers.get("Range", "")
+            last_byte = None
+            if range_header and "-" in range_header:
+                parts = range_header.replace("bytes=", "").split("-")
+                if len(parts) == 2 and parts[1].isdigit():
+                    last_byte = int(parts[1])
+            next_offset = (last_byte + 1) if last_byte is not None else 0
+
+            return {
+                "status": "RESUME_INCOMPLETE",
+                "http_status": 308,
+                "range_header": range_header,
+                "last_byte_received": last_byte,
+                "next_byte_offset": next_offset,
+                "is_complete": False,
+            }
+
+        if response.status_code in (200, 201):
+            data = response.json() if response.text else {}
+            video_id = data.get("id")
+            return {
+                "status": "COMPLETED",
+                "http_status": response.status_code,
+                "video_id": video_id,
+                "video_url": f"https://www.youtube.com/watch?v={video_id}" if video_id else None,
+                "is_complete": True,
+            }
+
+        raise YouTubeAPIException(f"Unexpected status response: HTTP {response.status_code}", status_code=response.status_code)
 
 youtube_service = YouTubeService()

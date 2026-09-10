@@ -58,3 +58,55 @@ def pop_oauth_state(state_token: str) -> Optional[int]:
     if data:
         return data.get("user_id")
     return None
+
+_in_memory_upload_sessions = {}
+
+def set_upload_session(upload_id: str, session_data: dict, ttl_seconds: int = 86400) -> None:
+    """Store YouTube resumable upload session data with TTL (default 24h)."""
+    r = get_redis_client()
+    if r:
+        try:
+            r.setex(f"yt_upload:{upload_id}", ttl_seconds, json.dumps(session_data))
+            return
+        except Exception as e:
+            logger.error(f"Redis set_upload_session error: {e}")
+    
+    _in_memory_upload_sessions[upload_id] = session_data
+
+def get_upload_session(upload_id: str) -> Optional[dict]:
+    """Retrieve YouTube resumable upload session data."""
+    if not upload_id:
+        return None
+    r = get_redis_client()
+    if r:
+        try:
+            raw = r.get(f"yt_upload:{upload_id}")
+            if raw:
+                return json.loads(raw)
+            return None
+        except Exception as e:
+            logger.error(f"Redis get_upload_session error: {e}")
+    
+    return _in_memory_upload_sessions.get(upload_id)
+
+def update_upload_session(upload_id: str, updates: dict, ttl_seconds: int = 86400) -> Optional[dict]:
+    """Update fields in an existing YouTube upload session."""
+    session = get_upload_session(upload_id)
+    if not session:
+        return None
+    session.update(updates)
+    set_upload_session(upload_id, session, ttl_seconds=ttl_seconds)
+    return session
+
+def delete_upload_session(upload_id: str) -> None:
+    """Delete a YouTube upload session once completed or expired."""
+    if not upload_id:
+        return
+    r = get_redis_client()
+    if r:
+        try:
+            r.delete(f"yt_upload:{upload_id}")
+        except Exception as e:
+            logger.error(f"Redis delete_upload_session error: {e}")
+    _in_memory_upload_sessions.pop(upload_id, None)
+

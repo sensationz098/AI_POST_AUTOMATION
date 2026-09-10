@@ -515,5 +515,52 @@ export interface SchedulerItem {
   updated_at: string;
 }
 
+export interface YouTubeUploadInitiateRequest {
+  social_account_id: number;
+  title: string;
+  description?: string;
+  privacy_status?: 'private' | 'unlisted' | 'public';
+  filename?: string;
+  mime_type?: string;
+  file_size_bytes: number;
+}
 
+export interface YouTubeUploadInitiateResponse {
+  upload_id: string;
+  channel_id: string;
+  channel_title: string;
+  title: string;
+  file_size_bytes: number;
+  mime_type: string;
+  status: string;
+  message: string;
+}
 
+export interface YouTubeUploadChunkResponse {
+  upload_id: string;
+  status: 'RESUME_INCOMPLETE' | 'COMPLETED' | string;
+  http_status: number;
+  range_header?: string | null;
+  last_byte_received?: number | null;
+  next_byte_offset?: number | null;
+  total_bytes: number;
+  is_complete: boolean;
+  video_id?: string | null;
+  video_url?: string | null;
+}
+
+export interface YouTubeUploadStatusResponse {
+  upload_id: string;
+  channel_id: string;
+  title: string;
+  file_size_bytes: number;
+  mime_type: string;
+  status: string;
+  http_status: number;
+  range_header?: string | null;
+  last_byte_received?: number | null;
+  next_byte_offset?: number | null;
+  is_complete: boolean;
+  video_id?: string | null;
+  video_url?: string | null;
+}
