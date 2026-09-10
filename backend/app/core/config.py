@@ -82,6 +82,12 @@ class Settings(BaseSettings):
     META_CONFIG_ID: Optional[str] = Field(default=None, env="META_CONFIG_ID")
     META_WEBHOOK_VERIFY_TOKEN: Optional[str] = Field(default=None, env="META_WEBHOOK_VERIFY_TOKEN")
     
+    # YouTube Data API v3 & OAuth
+    YOUTUBE_CLIENT_ID: Optional[str] = Field(default=None, env="YOUTUBE_CLIENT_ID")
+    YOUTUBE_CLIENT_SECRET: Optional[str] = Field(default=None, env="YOUTUBE_CLIENT_SECRET")
+    YOUTUBE_REDIRECT_URI: str = Field(default="http://localhost:8000/api/v1/youtube/oauth/callback", env="YOUTUBE_REDIRECT_URI")
+    YOUTUBE_MOCK_MODE: bool = Field(default=False, env="YOUTUBE_MOCK_MODE")
+    
     # Meta Long Video Processing & Polling Configurations
     META_VIDEO_PROCESSING_MAX_SECONDS: int = Field(default=300, env="META_VIDEO_PROCESSING_MAX_SECONDS")
     META_VIDEO_POLL_INITIAL_SECONDS: int = Field(default=3, env="META_VIDEO_POLL_INITIAL_SECONDS")

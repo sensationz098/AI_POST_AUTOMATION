@@ -97,8 +97,8 @@ export function StoryComposer({
     return Array.from(
       new Set(
         capableAccounts
-          .filter(a => selectedAccountIds.includes(a.id))
-          .map(a => a.platform)
+          .filter(a => selectedAccountIds.includes(a.id) && (a.platform === 'facebook' || a.platform === 'instagram'))
+          .map(a => a.platform as ('facebook' | 'instagram'))
       )
     );
   }, [capableAccounts, selectedAccountIds]);

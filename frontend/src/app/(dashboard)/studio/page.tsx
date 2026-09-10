@@ -926,9 +926,6 @@ export default function AIStudioPage() {
         >
           <Camera className="w-3.5 h-3.5" />
           <span>Story (24h)</span>
-          <span className="text-[9px] bg-fuchsia-500/20 text-fuchsia-300 px-1.5 py-0.5 rounded-full font-mono font-bold">
-            NEW
-          </span>
         </button>
       </div>
 

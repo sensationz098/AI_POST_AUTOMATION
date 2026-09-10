@@ -56,7 +56,7 @@ interface AccountInsight {
   id: number;
   account_id: string;
   account_name: string;
-  platform: 'facebook' | 'instagram';
+  platform: 'facebook' | 'instagram' | 'youtube' | string;
   logo_url?: string;
   followers_count: number;
   fan_count?: number;

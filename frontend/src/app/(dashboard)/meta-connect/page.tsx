@@ -7,7 +7,7 @@ import {
   ChevronRight, ExternalLink, RefreshCw, AlertCircle,
   Loader2, Unlink, Link2, Edit3, Sparkles, Key, Lock, ArrowRight,
   Megaphone, Globe, DollarSign, ChevronDown, Layers, FileText, Check, HelpCircle,
-  Search, ChevronLeft, Filter, X, MessageSquare
+  Search, ChevronLeft, Filter, X, MessageSquare, Youtube
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { SocialAccount, MetaAdAccount, MetaAd } from '@/lib/types';
@@ -110,6 +110,7 @@ export default function MetaConnectPage() {
 
   // OAuth State
   const [isOAuthStarting, setIsOAuthStarting] = useState(false);
+  const [isYouTubeOAuthStarting, setIsYouTubeOAuthStarting] = useState(false);
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [oauthSuccess, setOauthSuccess] = useState<string | null>(null);
 
@@ -363,8 +364,11 @@ export default function MetaConnectPage() {
         const pagesCount = searchParams.get('pages') || '0';
         const igCount = searchParams.get('ig') || '0';
         setOauthSuccess(`✓ Meta connected successfully! Discovered ${pagesCount} Facebook Page(s) & ${igCount} Instagram Professional account(s).`);
+      } else if (searchParams.get('youtube_connected') === 'true') {
+        const channelTitle = searchParams.get('channel_title') || 'YouTube Channel';
+        setOauthSuccess(`✓ YouTube connected successfully! Connected channel: "${decodeURIComponent(channelTitle)}".`);
       } else if (searchParams.get('error')) {
-        setOauthError(decodeURIComponent(searchParams.get('error') || 'Meta OAuth authorization failed.'));
+        setOauthError(decodeURIComponent(searchParams.get('error') || 'OAuth authorization failed.'));
       }
     }
   }, []);
@@ -386,6 +390,30 @@ export default function MetaConnectPage() {
       console.error('Meta OAuth start error:', e);
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
       window.location.href = `${apiUrl}/meta/oauth/start`;
+    } finally {
+      setIsOAuthStarting(false);
+    }
+  };
+
+  // Initiate Real YouTube OAuth Flow
+  const handleConnectYouTubeOAuth = async () => {
+    setIsYouTubeOAuthStarting(true);
+    setOauthError(null);
+    setOauthSuccess(null);
+    try {
+      const res = await apiClient.get('/youtube/oauth/start?redirect=false');
+      if (res.data?.authorization_url) {
+        window.location.href = res.data.authorization_url;
+      } else {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+        window.location.href = `${apiUrl}/youtube/oauth/start`;
+      }
+    } catch (e: any) {
+      console.error('YouTube OAuth start error:', e);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      window.location.href = `${apiUrl}/youtube/oauth/start`;
+    } finally {
+      setIsYouTubeOAuthStarting(false);
     }
   };
 
@@ -491,6 +519,7 @@ export default function MetaConnectPage() {
 
   const fbPages = socialAccounts.filter(a => a.platform === 'facebook');
   const igAccounts = socialAccounts.filter(a => a.platform === 'instagram');
+  const ytChannels = socialAccounts.filter(a => a.platform === 'youtube');
 
   return (
     <div className="space-y-8 max-w-4xl select-none font-sans text-xs">
@@ -503,27 +532,27 @@ export default function MetaConnectPage() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-slate-100 tracking-tight">
-                Connect Meta Accounts
+                Connect Social Accounts
               </h1>
               <p className="text-xs text-slate-400 mt-1">
-                Authorize your Facebook Pages & Instagram Professional accounts seamlessly through Meta.
+                Authorize your Facebook Pages, Instagram Professional, and YouTube channels seamlessly.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2.5 flex-shrink-0">
+          <div className="flex items-center flex-wrap gap-2.5 flex-shrink-0">
             {socialAccounts.length > 0 && (
               <button
                 onClick={handleDisconnectAll}
                 disabled={disconnectingId === 'all'}
-                className="px-4 py-3 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-200 hover:text-white font-bold text-xs transition flex items-center space-x-2 shadow-lg disabled:opacity-50"
+                className="px-3.5 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-200 hover:text-white font-bold text-xs transition flex items-center space-x-2 shadow-lg disabled:opacity-50"
               >
                 {disconnectingId === 'all' ? (
                   <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
                 ) : (
                   <Unlink className="w-4 h-4 text-rose-400" />
                 )}
-                <span>Disconnect Meta</span>
+                <span>Disconnect All</span>
               </button>
             )}
 
@@ -531,15 +560,30 @@ export default function MetaConnectPage() {
             <button
               onClick={handleConnectMetaOAuth}
               disabled={isOAuthStarting}
-              className="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition flex items-center space-x-2.5 shadow-lg shadow-indigo-500/25 disabled:opacity-50"
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition flex items-center space-x-2 shadow-lg shadow-indigo-500/25 disabled:opacity-50"
             >
               {isOAuthStarting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <Facebook className="w-4 h-4 text-white fill-white" />
               )}
-              <span>Connect with Meta</span>
+              <span>Connect Meta</span>
               <ArrowRight className="w-3.5 h-3.5 text-blue-200" />
+            </button>
+
+            {/* Primary YouTube OAuth Connect Button */}
+            <button
+              onClick={handleConnectYouTubeOAuth}
+              disabled={isYouTubeOAuthStarting}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs transition flex items-center space-x-2 shadow-lg shadow-red-500/25 disabled:opacity-50"
+            >
+              {isYouTubeOAuthStarting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Youtube className="w-4 h-4 text-white fill-white" />
+              )}
+              <span>Connect YouTube</span>
+              <ArrowRight className="w-3.5 h-3.5 text-red-200" />
             </button>
           </div>
         </div>
@@ -699,8 +743,63 @@ export default function MetaConnectPage() {
                 </div>
               )}
             </div>
-          </div>
 
+            {/* YouTube Connected Channels Card */}
+            <div className="linear-panel p-5 rounded-xl space-y-3 border border-slate-800">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                <span className="font-bold text-xs text-rose-300 flex items-center space-x-2">
+                  <Youtube className="w-4 h-4 text-red-400" />
+                  <span>YouTube Channels ({ytChannels.length})</span>
+                </span>
+                <span className="text-[10px] font-mono text-slate-400">Target for YouTube Videos & Shorts</span>
+              </div>
+
+              {ytChannels.length === 0 ? (
+                <div className="p-4 rounded bg-slate-900/40 border border-slate-800 text-slate-400 text-xs text-center">
+                  No YouTube channels connected yet. Click <strong>&quot;Connect YouTube&quot;</strong> above to authorize your YouTube channel.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {ytChannels.map((acc) => (
+                    <div key={acc.id} className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <img
+                          src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
+                          alt={acc.account_name}
+                          className="w-8 h-8 rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-semibold text-slate-100 truncate">{acc.account_name}</h4>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {acc.metadata_json?.custom_url ? `${acc.metadata_json.custom_url} • ` : ''}ID: {acc.account_id}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2 flex-shrink-0">
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono">
+                          ● Connected
+                        </span>
+                        <button
+                          onClick={() => handleDisconnectAccount(acc.id)}
+                          disabled={disconnectingId === acc.id || disconnectingId === 'all'}
+                          className="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-white transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
+                          title="Disconnect Channel"
+                        >
+                          {disconnectingId === acc.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                          ) : (
+                            <Unlink className="w-3.5 h-3.5 text-rose-400" />
+                          )}
+                          <span>Disconnect</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 

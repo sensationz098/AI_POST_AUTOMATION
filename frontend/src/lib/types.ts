@@ -110,7 +110,7 @@ export interface SocialAccount {
   id: number;
   user_id: number;
   brand_id?: number;
-  platform: 'facebook' | 'instagram';
+  platform: 'facebook' | 'instagram' | 'youtube';
   account_id: string;
   account_name: string;
   token_type?: string;
