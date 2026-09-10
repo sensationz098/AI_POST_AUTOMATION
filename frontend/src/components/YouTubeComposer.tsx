@@ -32,7 +32,8 @@ import {
   Clock,
   Flame,
   HelpCircle,
-  X
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import {
@@ -42,6 +43,12 @@ import {
   YouTubeUploadStatusResponse,
   YouTubeUploadCancelResponse
 } from '@/lib/types';
+import {
+  YouTubeContentType,
+  validateYouTubeContent,
+  YouTubeValidationResult,
+  MAX_SHORT_DURATION_SECONDS,
+} from '@/lib/youtubeShortsValidator';
 import toast from 'react-hot-toast';
 
 export interface YouTubeComposerProps {
@@ -83,6 +90,9 @@ export function YouTubeComposer({
   defaultChannelId,
   onUploadSuccess,
 }: YouTubeComposerProps) {
+  // Explicit Content Type: 'video' (standard widescreen/longform) vs 'short' (vertical <= 60s)
+  const [contentType, setContentType] = useState<YouTubeContentType>('video');
+
   // Channel Selection
   const [selectedAccountId, setSelectedAccountId] = useState<number>(
     defaultChannelId || (channels.length > 0 ? channels[0].id : 0)
@@ -147,14 +157,15 @@ export function YouTubeComposer({
     };
   }, [videoPreviewUrl]);
 
-  // Determine if video qualifies as a YouTube Short
-  const isShortsDetected = useMemo(() => {
-    if (!videoDuration && !videoWidth && !videoHeight) return false;
-    const isUnder60 = videoDuration !== null ? videoDuration <= 61 : true;
-    const isVerticalOrSquare =
-      videoWidth !== null && videoHeight !== null ? videoWidth <= videoHeight : false;
-    return isUnder60 && (isVerticalOrSquare || (videoDuration !== null && videoDuration <= 60));
-  }, [videoDuration, videoWidth, videoHeight]);
+  // Validation result derived from current selection and video technical properties
+  const validationResult: YouTubeValidationResult = useMemo(() => {
+    return validateYouTubeContent(contentType, {
+      durationSeconds: videoDuration,
+      width: videoWidth,
+      height: videoHeight,
+      fileSizeBytes: selectedFile?.size ?? null,
+    });
+  }, [contentType, videoDuration, videoWidth, videoHeight, selectedFile]);
 
   const selectedChannel = useMemo(() => {
     return channels.find((c) => c.id === selectedAccountId) || null;
@@ -200,9 +211,23 @@ export function YouTubeComposer({
   // Extract video dimensions and duration when loaded in hidden/preview video
   const handleVideoMetadataLoaded = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const vid = e.currentTarget;
-    setVideoDuration(vid.duration || null);
-    setVideoWidth(vid.videoWidth || null);
-    setVideoHeight(vid.videoHeight || null);
+    const dur = vid.duration || null;
+    const w = vid.videoWidth || null;
+    const h = vid.videoHeight || null;
+
+    setVideoDuration(dur);
+    setVideoWidth(w);
+    setVideoHeight(h);
+
+    // Auto-detection suggestion: If vertical and <= 180s (3 mins), suggest/auto-switch to Short
+    if (dur && dur <= MAX_SHORT_DURATION_SECONDS + 0.5 && w && h && w <= h) {
+      setContentType('short');
+      if (!tags.includes('Shorts')) {
+        setTags((prev) => [...prev, 'Shorts']);
+      }
+    } else {
+      setContentType('video');
+    }
   };
 
   // Tag Management
@@ -248,6 +273,14 @@ export function YouTubeComposer({
       return;
     }
 
+    // Validate Shorts compliance before initiating upload
+    if (contentType === 'short' && !validationResult.isValid) {
+      const firstErr = validationResult.errors[0] || 'Selected video does not meet YouTube Shorts requirements.';
+      setErrorMsg(firstErr);
+      toast.error(firstErr);
+      return;
+    }
+
     // Reset runtime flags
     isCancelledRef.current = false;
     isPausedRef.current = false;
@@ -263,11 +296,17 @@ export function YouTubeComposer({
     setClientMutationId(mutationId);
 
     try {
+      // If Short, ensure #Shorts is part of tags if not already present
+      const finalTags =
+        contentType === 'short' && !tags.includes('Shorts')
+          ? [...tags, 'Shorts']
+          : tags;
+
       const initPayload = {
         social_account_id: selectedAccountId,
         title: title.trim(),
         description: description.trim(),
-        tags: tags.length > 0 ? tags : undefined,
+        tags: finalTags.length > 0 ? finalTags : undefined,
         category_id: category,
         privacy_status: privacyStatus,
         made_for_kids: madeForKids,
@@ -358,7 +397,11 @@ export function YouTubeComposer({
           if (resData.is_complete || resData.http_status === 200 || resData.http_status === 201) {
             setBytesUploaded(totalSize);
             setUploadPhase('processing');
-            toast.success('Upload complete! YouTube is now processing the video.');
+            toast.success(
+              contentType === 'short'
+                ? 'Upload complete! YouTube is now processing your Short.'
+                : 'Upload complete! YouTube is now processing your video.'
+            );
             startProcessingPolling(currentUploadId);
             return;
           } else if (resData.http_status === 308) {
@@ -441,7 +484,11 @@ export function YouTubeComposer({
         if (data.status === 'READY' || data.processing_status === 'succeeded') {
           setUploadPhase('ready');
           if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-          toast.success('🎉 Video is live and ready on YouTube!');
+          toast.success(
+            contentType === 'short'
+              ? '🎉 Your YouTube Short is live and ready!'
+              : '🎉 Your YouTube Video is live and ready!'
+          );
           if (onUploadSuccess) onUploadSuccess(data);
         } else if (
           data.status === 'FAILED' ||
@@ -634,6 +681,141 @@ export function YouTubeComposer({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* ── Left Column: Media & Metadata Form (7 Cols) ───────────────────── */}
         <div className="lg:col-span-7 space-y-6">
+          {/* Explicit Content Type Selector (Video vs Shorts) */}
+          <div className="glass-panel p-5 rounded-2xl space-y-3 border border-slate-800 shadow-xl">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+                <Sliders className="w-4 h-4 text-red-400" />
+                <span>Choose Content Type</span>
+              </label>
+              {contentType === 'short' ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-red-600/30 to-rose-600/30 text-red-300 border border-red-500/50 text-[10px] font-bold flex items-center space-x-1">
+                  <Zap className="w-3 h-3 text-red-400" />
+                  <span>Shorts Publishing Mode</span>
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-semibold flex items-center space-x-1">
+                  <Film className="w-3 h-3 text-indigo-400" />
+                  <span>Standard Video Mode</span>
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Option 1: YouTube Video */}
+              <button
+                type="button"
+                onClick={() => setContentType('video')}
+                disabled={uploadPhase !== 'idle'}
+                className={`p-4 rounded-xl border text-left transition-all flex items-start space-x-3.5 ${
+                  contentType === 'video'
+                    ? 'bg-gradient-to-br from-indigo-950/60 to-slate-900 border-indigo-500 text-white shadow-lg ring-1 ring-indigo-500/50'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+              >
+                <div
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    contentType === 'video'
+                      ? 'bg-indigo-600 text-white shadow-md'
+                      : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  <Film className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-100 block">YouTube Video</span>
+                    {contentType === 'video' && <Check className="w-4 h-4 text-indigo-400" />}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                    Standard 16:9 widescreen or longform content for desktop, mobile & TV.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: YouTube Short */}
+              <button
+                type="button"
+                onClick={() => {
+                  setContentType('short');
+                  if (!tags.includes('Shorts')) {
+                    setTags((prev) => [...prev, 'Shorts']);
+                  }
+                }}
+                disabled={uploadPhase !== 'idle'}
+                className={`p-4 rounded-xl border text-left transition-all flex items-start space-x-3.5 ${
+                  contentType === 'short'
+                    ? 'bg-gradient-to-br from-red-950/60 to-rose-950/60 border-red-500 text-white shadow-lg ring-1 ring-red-500/50'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+              >
+                <div
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    contentType === 'short'
+                      ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md'
+                      : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  <Zap className="w-4 h-4 fill-current" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-100 block">YouTube Short</span>
+                    {contentType === 'short' && <Check className="w-4 h-4 text-red-400" />}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                    Vertical 9:16 video (≤ 3 mins / 180s) featured in the YouTube Shorts mobile feed.
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {/* Shorts Validation Error Banner */}
+            {contentType === 'short' && selectedFile && !validationResult.isValid && (
+              <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-200 text-xs space-y-1.5 animate-in fade-in">
+                <div className="flex items-center space-x-2 font-bold text-rose-300">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                  <span>Shorts Requirements Validation Warning:</span>
+                </div>
+                <ul className="list-disc list-inside space-y-1 text-[11px] text-rose-300/90 pl-1">
+                  {validationResult.errors.map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                </ul>
+                <div className="pt-1 text-[11px] text-slate-400">
+                  <span>💡 Tip: You can switch to </span>
+                  <button
+                    type="button"
+                    onClick={() => setContentType('video')}
+                    className="text-indigo-400 hover:underline font-semibold"
+                  >
+                    YouTube Video mode
+                  </button>
+                  <span> to publish this asset without duration or aspect ratio restrictions.</span>
+                </div>
+              </div>
+            )}
+
+            {/* Video Mode Suggestion when Vertical asset detected */}
+            {contentType === 'video' && validationResult.warnings.length > 0 && (
+              <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 text-xs flex items-center justify-between gap-2 animate-in fade-in">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <Sparkles className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                  <span className="text-[11px] leading-snug">
+                    {validationResult.warnings[0]}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setContentType('short')}
+                  className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] transition flex-shrink-0 shadow-sm"
+                >
+                  Switch to Short
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* File Picker & Drag-Drop Card */}
           <div className="glass-panel p-6 rounded-2xl space-y-4 border-l-4 border-red-500 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -667,7 +849,9 @@ export function YouTubeComposer({
                   </p>
                 </div>
                 <span className="inline-block px-3 py-1 rounded-full bg-slate-800 text-[10px] font-mono text-slate-300 border border-slate-700">
-                  ⚡ Automatic Shorts & Widescreen Detection
+                  {contentType === 'short'
+                    ? '⚡ YouTube Short Mode (Vertical 9:16 ≤ 3 mins)'
+                    : '🎬 YouTube Video Mode (16:9 widescreen or longform)'}
                 </span>
                 <input
                   type="file"
@@ -687,14 +871,16 @@ export function YouTubeComposer({
                       <p className="text-xs font-bold text-slate-100 truncate">{selectedFile.name}</p>
                       <p className="text-[11px] text-slate-400 font-mono">
                         {formatBytes(selectedFile.size)} • {selectedFile.type || 'video/mp4'}
+                        {videoWidth && videoHeight ? ` • ${videoWidth}×${videoHeight}` : ''}
+                        {videoDuration ? ` • ${Math.round(videoDuration)}s` : ''}
                       </p>
                     </div>
                   </div>
 
                   {/* Shorts vs Video Badge */}
                   <div>
-                    {isShortsDetected ? (
-                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-red-600/30 to-pink-600/30 text-red-300 border border-red-500/40 text-[10px] font-bold shadow-sm">
+                    {contentType === 'short' ? (
+                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-red-600/30 to-rose-600/30 text-red-300 border border-red-500/40 text-[10px] font-bold shadow-sm">
                         <Zap className="w-3 h-3 text-red-400" />
                         <span>YouTube Short</span>
                       </span>
@@ -707,11 +893,11 @@ export function YouTubeComposer({
                   </div>
                 </div>
 
-                {isShortsDetected && (
-                  <div className="p-2.5 rounded-lg bg-red-950/30 border border-red-500/20 text-[11px] text-red-200 flex items-center space-x-2">
-                    <Sparkles className="w-4 h-4 text-red-400 flex-shrink-0" />
+                {contentType === 'short' && validationResult.isValid && (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/30 text-[11px] text-emerald-300 flex items-center space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                     <span>
-                      <strong>Shorts Detected:</strong> Video is under 60 seconds with vertical/square framing. It will be indexed as a YouTube Short.
+                      <strong>Shorts Validated:</strong> Aspect ratio and duration qualify for YouTube Shorts distribution.
                     </span>
                   </div>
                 )}
@@ -744,7 +930,11 @@ export function YouTubeComposer({
                 maxLength={100}
                 onChange={(e) => setTitle(e.target.value)}
                 disabled={uploadPhase !== 'idle'}
-                placeholder="Add a title that describes your video (e.g. Next-Gen Social AI Automation Demo)"
+                placeholder={
+                  contentType === 'short'
+                    ? 'Add a catchy title for your Short (e.g. Quick AI Automation Hack #Shorts)'
+                    : 'Add a title that describes your video (e.g. Next-Gen Social AI Automation Demo)'
+                }
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 disabled:opacity-50 transition"
               />
             </div>
@@ -772,7 +962,10 @@ export function YouTubeComposer({
               {/* Quick Hashtag Inserters */}
               <div className="flex items-center flex-wrap gap-1.5 pt-1">
                 <span className="text-[10px] text-slate-500 font-semibold mr-1">Insert:</span>
-                {['#Shorts', '#Automation', '#AI', '#Viral', '#Marketing'].map((ht) => (
+                {(contentType === 'short'
+                  ? ['#Shorts', '#Viral', '#Trending', '#QuickTip', '#AI']
+                  : ['#Tutorial', '#Automation', '#AI', '#Tech', '#Marketing']
+                ).map((ht) => (
                   <button
                     key={ht}
                     type="button"
@@ -991,17 +1184,23 @@ export function YouTubeComposer({
                 <Film className="w-4 h-4 text-red-400" />
                 <span>Live YouTube Preview</span>
               </h3>
-              {isShortsDetected && (
-                <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 font-mono text-[9px] font-bold">
-                  9:16 Shorts Mode
+              {contentType === 'short' ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-300 font-mono text-[9px] font-bold flex items-center space-x-1">
+                  <Zap className="w-3 h-3 text-red-400" />
+                  <span>9:16 Shorts Mode</span>
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono text-[9px] font-bold flex items-center space-x-1">
+                  <Film className="w-3 h-3 text-indigo-400" />
+                  <span>16:9 Video Mode</span>
                 </span>
               )}
             </div>
 
-            {/* Video Container */}
+            {/* Video Container (Adapts between 9:16 vertical Short and 16:9 widescreen Video) */}
             <div
-              className={`relative rounded-xl overflow-hidden bg-black border border-slate-800 flex items-center justify-center mx-auto ${
-                isShortsDetected ? 'max-w-[240px] aspect-[9/16]' : 'w-full aspect-video'
+              className={`relative rounded-xl overflow-hidden bg-black border border-slate-800 flex items-center justify-center mx-auto transition-all duration-300 ${
+                contentType === 'short' ? 'max-w-[240px] aspect-[9/16]' : 'w-full aspect-video'
               }`}
             >
               {videoPreviewUrl ? (
@@ -1013,7 +1212,11 @@ export function YouTubeComposer({
               ) : (
                 <div className="flex flex-col items-center justify-center p-6 text-center space-y-2 text-slate-500">
                   <FileVideo className="w-10 h-10 text-slate-600 animate-pulse" />
-                  <span className="text-xs font-medium">Select a video file to generate live preview</span>
+                  <span className="text-xs font-medium">
+                    {contentType === 'short'
+                      ? 'Select vertical video for Shorts preview'
+                      : 'Select video file for standard player preview'}
+                  </span>
                 </div>
               )}
             </div>
@@ -1036,6 +1239,8 @@ export function YouTubeComposer({
                     <span className="font-mono">{Math.round(videoDuration)}s</span>
                   </>
                 )}
+                <span>•</span>
+                <span className="font-bold text-slate-300">{contentType === 'short' ? 'Short' : 'Video'}</span>
               </div>
 
               {description && (
@@ -1076,7 +1281,7 @@ export function YouTubeComposer({
                       {uploadPhase === 'uploading' && `Uploading (${currentChunkIndex}/${totalChunks} chunks)`}
                       {uploadPhase === 'paused' && 'Upload Paused'}
                       {uploadPhase === 'processing' && 'YouTube Processing Status...'}
-                      {uploadPhase === 'ready' && 'Video Published & Live!'}
+                      {uploadPhase === 'ready' && (contentType === 'short' ? 'Short Published & Live!' : 'Video Published & Live!')}
                       {uploadPhase === 'failed' && 'Upload Failed'}
                       {uploadPhase === 'cancelled' && 'Upload Cancelled'}
                     </span>
@@ -1123,7 +1328,7 @@ export function YouTubeComposer({
                 {/* Processing State Details */}
                 {uploadPhase === 'processing' && (
                   <p className="text-[11px] text-amber-300/90 font-medium bg-amber-950/30 p-2.5 rounded-lg border border-amber-500/20">
-                    ⏳ Chunk transfer complete! YouTube background poller is checking video processing status...
+                    ⏳ Chunk transfer complete! YouTube background poller is checking {contentType === 'short' ? 'Short' : 'video'} processing status...
                   </p>
                 )}
 
@@ -1170,11 +1375,15 @@ export function YouTubeComposer({
               <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-950/60 to-slate-900 border border-emerald-500/50 space-y-3 shadow-2xl animate-in fade-in">
                 <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                  <span>Video Successfully Published on YouTube!</span>
+                  <span>
+                    {contentType === 'short'
+                      ? 'YouTube Short Published Successfully!'
+                      : 'YouTube Video Published Successfully!'}
+                  </span>
                 </div>
 
                 <p className="text-[11px] text-slate-300">
-                  Your video is ready to view and share across the web.
+                  Your {contentType === 'short' ? 'Short' : 'video'} is ready to view and share across the web.
                 </p>
 
                 {statusDetail.video_url && (
@@ -1234,11 +1443,18 @@ export function YouTubeComposer({
               <button
                 type="button"
                 onClick={handleStartUpload}
-                disabled={!selectedFile || !selectedAccountId || !title.trim()}
+                disabled={
+                  !selectedFile ||
+                  !selectedAccountId ||
+                  !title.trim() ||
+                  (contentType === 'short' && !validationResult.isValid)
+                }
                 className="w-full py-3 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs transition flex items-center justify-center space-x-2 shadow-xl shadow-red-600/25 disabled:opacity-40"
               >
                 <UploadCloud className="w-4 h-4" />
-                <span>Upload to YouTube</span>
+                <span>
+                  {contentType === 'short' ? 'Upload YouTube Short' : 'Upload YouTube Video'}
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             )}
