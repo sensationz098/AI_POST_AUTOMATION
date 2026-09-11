@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
   Youtube,
@@ -16,6 +16,8 @@ import {
   EyeOff,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Check,
   UploadCloud,
   CheckCircle2,
   Calendar,
@@ -43,6 +45,7 @@ export default function YouTubeVideosPage() {
   // Loading & Error States
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isAccountsLoading, setIsAccountsLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Pagination State
@@ -56,24 +59,45 @@ export default function YouTubeVideosPage() {
   // Channel Accounts
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Edit Modal State
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
 
+  // Close account dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsAccountDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Load connected YouTube channels on mount
   useEffect(() => {
+    setIsAccountsLoading(true);
     apiClient
       .get<SocialAccount[]>('/social-accounts/')
       .then((res) => {
         const ytAccounts = res.data.filter((acc) => acc.platform === 'youtube');
         setAccounts(ytAccounts);
-        if (ytAccounts.length > 0 && selectedAccountId === null) {
-          setSelectedAccountId(ytAccounts[0].id);
+        if (ytAccounts.length > 0) {
+          setSelectedAccountId((prev) => (prev !== null ? prev : ytAccounts[0].id));
+        } else {
+          setIsLoading(false);
         }
       })
       .catch((err) => {
         console.error('Failed to load social accounts:', err);
+        setErrorMsg('Failed to load connected YouTube accounts.');
+        setIsLoading(false);
+      })
+      .finally(() => {
+        setIsAccountsLoading(false);
       });
   }, []);
 
@@ -115,11 +139,31 @@ export default function YouTubeVideosPage() {
   );
 
   useEffect(() => {
-    // Reset pagination when channel changes
-    setTokenStack([]);
-    setCurrentPageToken(null);
-    fetchVideos(null);
+    if (selectedAccountId !== null) {
+      setTokenStack([]);
+      setCurrentPageToken(null);
+      fetchVideos(null);
+    }
   }, [selectedAccountId, fetchVideos]);
+
+  // Handle account switching
+  const handleAccountChange = (newAccountId: number) => {
+    if (newAccountId === selectedAccountId) {
+      setIsAccountDropdownOpen(false);
+      return;
+    }
+    setIsAccountDropdownOpen(false);
+    setVideos([]); // Immediately clear previous account's videos while loading
+    setSearchQuery(''); // Reset search
+    setTokenStack([]); // Clear pagination stack
+    setCurrentPageToken(null); // Reset page token
+    setSelectedAccountId(newAccountId);
+  };
+
+  // Find currently active account object
+  const selectedAccount = useMemo(() => {
+    return accounts.find((a) => a.id === selectedAccountId) || accounts[0] || null;
+  }, [accounts, selectedAccountId]);
 
   // Handlers for pagination
   const handleNextPage = () => {
@@ -228,38 +272,108 @@ export default function YouTubeVideosPage() {
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-lg font-bold text-white tracking-tight">YouTube Videos</h1>
-              {channelTitle && (
-                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700/80 font-medium">
-                  {channelTitle}
-                </span>
-              )}
             </div>
             <p className="text-xs text-slate-400">
-              Browse, manage, and edit videos from your connected YouTube channel.
+              Browse, manage, and edit videos from your connected YouTube channels.
             </p>
           </div>
         </div>
 
         <div className="flex items-center space-x-2.5 flex-wrap">
-          {/* Channel selector if user has multiple YouTube channels */}
-          {accounts.length > 1 && (
-            <select
-              value={selectedAccountId || ''}
-              onChange={(e) => setSelectedAccountId(Number(e.target.value))}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-red-500 transition"
-            >
-              {accounts.map((acc) => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.account_name || acc.account_id}
-                </option>
-              ))}
-            </select>
-          )}
+          {/* Multi-Account Selector / Account Display */}
+          {accounts.length > 1 ? (
+            <div className="relative" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsAccountDropdownOpen((prev) => !prev)}
+                className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-slate-950 hover:bg-slate-800/80 border border-slate-700/80 hover:border-slate-600 text-xs text-slate-200 font-medium transition shadow-sm"
+                title="Switch YouTube Account"
+                aria-haspopup="true"
+                aria-expanded={isAccountDropdownOpen}
+              >
+                <div className="w-5 h-5 rounded-full bg-red-600/20 text-red-400 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {selectedAccount?.logo_url ? (
+                    <img src={selectedAccount.logo_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Youtube className="w-3 h-3" />
+                  )}
+                </div>
+                <span className="text-slate-400 font-normal">YouTube Account:</span>
+                <span className="font-semibold text-white max-w-[140px] sm:max-w-[200px] truncate">
+                  {selectedAccount?.account_name || channelTitle || 'Select Account'}
+                </span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                    isAccountDropdownOpen ? 'rotate-180 text-red-400' : ''
+                  }`}
+                />
+              </button>
+
+              {isAccountDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl shadow-black/80 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md">
+                  <div className="px-3.5 py-1.5 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                    <span>Connected Channels</span>
+                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">
+                      {accounts.length}
+                    </span>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto py-1">
+                    {accounts.map((acc) => {
+                      const isSelected = acc.id === selectedAccountId;
+                      return (
+                        <button
+                          key={acc.id}
+                          type="button"
+                          onClick={() => handleAccountChange(acc.id)}
+                          className={`w-full flex items-center justify-between px-3.5 py-2.5 text-left text-xs transition ${
+                            isSelected
+                              ? 'bg-red-950/40 text-white font-semibold border-l-2 border-red-500'
+                              : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3 min-w-0 pr-2">
+                            <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+                              {acc.logo_url ? (
+                                <img src={acc.logo_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <Youtube className="w-4 h-4 text-red-400" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-xs font-semibold">{acc.account_name || 'YouTube Channel'}</div>
+                              {acc.account_id && (
+                                <div className="text-[10px] text-slate-500 font-mono truncate">{acc.account_id}</div>
+                              )}
+                            </div>
+                          </div>
+                          {isSelected && <Check className="w-4 h-4 text-red-400 flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : accounts.length === 1 ? (
+            <div className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 shadow-sm">
+              <div className="w-5 h-5 rounded-full bg-red-600/20 text-red-400 flex items-center justify-center overflow-hidden flex-shrink-0">
+                {selectedAccount?.logo_url ? (
+                  <img src={selectedAccount.logo_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <Youtube className="w-3 h-3" />
+                )}
+              </div>
+              <span className="text-slate-400 font-normal">YouTube Account:</span>
+              <span className="font-semibold text-white max-w-[180px] truncate">
+                {selectedAccount?.account_name || channelTitle || 'Connected Channel'}
+              </span>
+            </div>
+          ) : null}
 
           <button
             type="button"
             onClick={handleRefresh}
-            disabled={isLoading || isRefreshing}
+            disabled={isLoading || isRefreshing || accounts.length === 0}
             className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center space-x-1.5 border border-slate-700 disabled:opacity-50"
             title="Refresh videos from YouTube"
           >
@@ -348,6 +462,26 @@ export default function YouTubeVideosPage() {
               </div>
             </div>
           ))}
+        </div>
+      ) : accounts.length === 0 && !isAccountsLoading ? (
+        /* Zero Connected Accounts Empty State */
+        <div className="py-16 text-center rounded-2xl bg-slate-900/40 border border-slate-800/60 p-8 space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-red-600/10 text-red-400 border border-red-500/20 flex items-center justify-center mx-auto shadow-inner">
+            <Youtube className="w-7 h-7" />
+          </div>
+          <div className="space-y-1 max-w-sm mx-auto">
+            <h3 className="text-sm font-bold text-white">No YouTube Account Connected</h3>
+            <p className="text-xs text-slate-400">
+              Connect your YouTube channel in Meta & Social Connections to view, manage, and edit your videos.
+            </p>
+          </div>
+          <Link
+            href="/meta-connect"
+            className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-bold transition shadow-md shadow-red-600/20"
+          >
+            <Youtube className="w-4 h-4" />
+            <span>Connect YouTube Account</span>
+          </Link>
         </div>
       ) : !errorMsg && filteredVideos.length === 0 ? (
         /* Empty State */
