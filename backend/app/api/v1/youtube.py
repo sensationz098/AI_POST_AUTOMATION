@@ -47,6 +47,8 @@ from app.schemas.youtube import (
     YouTubeThumbnailRetryResponse,
     YouTubeUploadCancelResponse,
     YouTubeUploadListResponse,
+    YouTubeVideoDetailResponse,
+    YouTubeVideoUpdateRequest,
 )
 from app.schemas.social_account import SocialAccountResponse
 from app.api.v1.deps import get_current_user
@@ -892,4 +894,199 @@ def list_user_youtube_uploads(
     return YouTubeUploadListResponse(
         items=[YouTubeUploadDetailResponse.from_orm(it) for it in items],
         total=len(items)
+    )
+
+# ─── Post-Upload Video Editing Endpoints ─────────────────────────────────────
+
+def _resolve_youtube_account_for_video(
+    db: Session,
+    user_id: int,
+    video_id: str,
+    social_account_id: Optional[int] = None,
+):
+    """
+    Resolve and verify that the authenticated user owns a connected YouTube channel
+    associated with the requested video_id.
+    Prevents cross-tenant access to unauthorized YouTube videos.
+    """
+    # 1. If explicit social_account_id passed, verify user owns it
+    if social_account_id:
+        acc = social_account_repo.get_by_id(db, social_account_id)
+        if not acc or acc.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Connected YouTube channel not found or access denied."
+            )
+        if acc.platform != "youtube":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Specified account is not a YouTube channel."
+            )
+        return acc
+
+    # 2. Check if a local youtube_upload record exists for this user and video_id
+    upload = youtube_upload_repo.get_by_video_id_and_user(db, video_id, user_id)
+    if upload:
+        acc = social_account_repo.get_by_id(db, upload.social_account_id)
+        if acc and acc.user_id == user_id:
+            return acc
+
+    # 3. Otherwise check user's connected YouTube channels
+    user_accounts = social_account_repo.get_by_user_and_platform(db, user_id, "youtube")
+    if not user_accounts:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No connected YouTube account found for your profile. Please connect your YouTube channel first."
+        )
+
+    # If single connected account, return it
+    if len(user_accounts) == 1:
+        return user_accounts[0]
+
+    # For multiple channels without explicit account_id or DB record, test channel ID match
+    for acc in user_accounts:
+        try:
+            token = youtube_service.get_valid_access_token_for_account(db, acc)
+            details = youtube_service.get_video_details(token, video_id)
+            if details.get("channel_id") == acc.account_id:
+                return acc
+        except Exception:
+            continue
+
+    return user_accounts[0]
+
+@router.get("/videos/{video_id}", response_model=YouTubeVideoDetailResponse)
+def get_youtube_video(
+    video_id: str,
+    social_account_id: Optional[int] = Query(None, description="Optional SocialAccount ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Fetch existing YouTube video metadata for viewing and editing.
+    Strictly tenant-isolated. Validates user ownership of the associated YouTube channel.
+    Calls YouTube Data API v3 (GET videos.list with part=snippet,status).
+    """
+    account = _resolve_youtube_account_for_video(db, current_user.id, video_id, social_account_id)
+    try:
+        access_token = youtube_service.get_valid_access_token_for_account(db, account)
+    except Exception as e:
+        logger.error(f"[YOUTUBE_VIDEO] Authentication resolution failed for user {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Failed to authenticate with YouTube: {str(e)}"
+        )
+
+    try:
+        video_data = youtube_service.get_video_details(access_token, video_id)
+    except YouTubeAPIException as e:
+        logger.error(f"[YOUTUBE_VIDEO] Error fetching video details for {video_id}: {e.message}")
+        raise HTTPException(
+            status_code=e.status_code if e.status_code and e.status_code >= 400 else 502,
+            detail=f"YouTube video retrieval failed: {e.message}"
+        )
+    except Exception as e:
+        logger.error(f"[YOUTUBE_VIDEO] Unexpected error fetching video {video_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve video details from YouTube."
+        )
+
+    return YouTubeVideoDetailResponse(
+        video_id=video_data["video_id"],
+        channel_id=video_data["channel_id"],
+        channel_title=video_data.get("channel_title") or account.account_name,
+        title=video_data["title"],
+        description=video_data.get("description", ""),
+        tags=video_data.get("tags", []),
+        category_id=video_data.get("category_id"),
+        privacy_status=video_data.get("privacy_status", "private"),
+        made_for_kids=video_data.get("made_for_kids", False),
+        thumbnail_url=video_data.get("thumbnail_url"),
+        video_url=video_data.get("video_url"),
+    )
+
+@router.put("/videos/{video_id}", response_model=YouTubeVideoDetailResponse)
+def update_youtube_video(
+    video_id: str,
+    payload: YouTubeVideoUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update metadata for an already-published YouTube video (title, description, tags, category, privacy, made-for-kids, thumbnail).
+    Strictly tenant-isolated. Preserves video_id and never invokes the video upload/chunk engine.
+    Fetches full resource first to ensure all required fields are safely merged before calling PUT videos.update.
+    """
+    account = _resolve_youtube_account_for_video(db, current_user.id, video_id, payload.social_account_id)
+    try:
+        access_token = youtube_service.get_valid_access_token_for_account(db, account)
+    except Exception as e:
+        logger.error(f"[YOUTUBE_VIDEO] Authentication resolution failed for user {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Failed to authenticate with YouTube: {str(e)}"
+        )
+
+    # Validate privacy status if supplied
+    if payload.privacy_status and payload.privacy_status not in ("public", "private", "unlisted"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid privacy status. Allowed values are 'public', 'private', or 'unlisted'."
+        )
+
+    # 1. Update Video Metadata via YouTube Data API v3 (videos.update)
+    update_dict = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
+    try:
+        updated_data = youtube_service.update_video_metadata(access_token, video_id, update_dict)
+    except YouTubeAPIException as e:
+        logger.error(f"[YOUTUBE_VIDEO] Error updating video metadata for {video_id}: {e.message}")
+        raise HTTPException(
+            status_code=e.status_code if e.status_code and e.status_code >= 400 else 502,
+            detail=f"YouTube video update failed: {e.message}"
+        )
+    except Exception as e:
+        logger.error(f"[YOUTUBE_VIDEO] Unexpected error updating video {video_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update video metadata on YouTube."
+        )
+
+    # 2. If a new trusted custom thumbnail was provided, apply it via existing thumbnail service
+    thumb_url = payload.thumbnail_url
+    if thumb_url:
+        try:
+            youtube_service.apply_thumbnail_from_storage(
+                access_token=access_token,
+                video_id=video_id,
+                thumbnail_url=thumb_url,
+            )
+            updated_data["thumbnail_url"] = thumb_url
+            logger.info(f"[YOUTUBE_VIDEO] Custom thumbnail updated for video {video_id}")
+        except Exception as e:
+            logger.warning(f"[YOUTUBE_VIDEO] Thumbnail application failed during video edit for {video_id}: {e}")
+
+    # 3. Synchronize local database record if present
+    youtube_upload_repo.update_metadata_by_video_id(
+        db=db,
+        video_id=video_id,
+        user_id=current_user.id,
+        title=updated_data.get("title"),
+        description=updated_data.get("description"),
+        privacy_status=updated_data.get("privacy_status"),
+        thumbnail_url=thumb_url or updated_data.get("thumbnail_url"),
+    )
+
+    return YouTubeVideoDetailResponse(
+        video_id=updated_data["video_id"],
+        channel_id=updated_data["channel_id"],
+        channel_title=updated_data.get("channel_title") or account.account_name,
+        title=updated_data["title"],
+        description=updated_data.get("description", ""),
+        tags=updated_data.get("tags", []),
+        category_id=updated_data.get("category_id"),
+        privacy_status=updated_data.get("privacy_status", "private"),
+        made_for_kids=updated_data.get("made_for_kids", False),
+        thumbnail_url=updated_data.get("thumbnail_url"),
+        video_url=updated_data.get("video_url"),
     )

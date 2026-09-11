@@ -52,6 +52,7 @@ import {
   YouTubeValidationResult,
   MAX_SHORT_DURATION_SECONDS,
 } from '@/lib/youtubeShortsValidator';
+import { YouTubeVideoEditModal } from '@/components/YouTubeVideoEditModal';
 import toast from 'react-hot-toast';
 
 export interface YouTubeComposerProps {
@@ -144,6 +145,7 @@ export function YouTubeComposer({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState<number>(0);
   const [statusDetail, setStatusDetail] = useState<YouTubeUploadStatusResponse | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
 
   // Controls & Timers
   const isCancelledRef = useRef<boolean>(false);
@@ -1805,6 +1807,17 @@ export function YouTubeComposer({
                         <ExternalLink className="w-3 h-3" />
                       </a>
 
+                      {statusDetail.video_id && (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditModalOpen(true)}
+                          className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center space-x-1 border border-slate-700"
+                        >
+                          <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Edit Video Details</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={handleResetForNewUpload}
@@ -1816,6 +1829,24 @@ export function YouTubeComposer({
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Edit Video Modal */}
+            {statusDetail?.video_id && isEditModalOpen && (
+              <YouTubeVideoEditModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                videoId={statusDetail.video_id}
+                channelTitle={selectedChannel?.account_name}
+                onVideoUpdated={(updated) => {
+                  setTitle(updated.title);
+                  setDescription(updated.description);
+                  setPrivacyStatus((updated.privacy_status as any) || 'public');
+                  if (updated.thumbnail_url) {
+                    setThumbnailUrl(updated.thumbnail_url);
+                  }
+                }}
+              />
             )}
 
             {/* Error Message */}

@@ -155,3 +155,26 @@ class YouTubeUploadCancelResponse(BaseModel):
 class YouTubeUploadListResponse(BaseModel):
     items: List[YouTubeUploadDetailResponse]
     total: int
+
+class YouTubeVideoDetailResponse(BaseModel):
+    video_id: str
+    channel_id: str
+    channel_title: Optional[str] = None
+    title: str
+    description: str = ""
+    tags: List[str] = []
+    category_id: Optional[str] = None
+    privacy_status: str = "private"
+    made_for_kids: Optional[bool] = False
+    thumbnail_url: Optional[str] = None
+    video_url: Optional[str] = None
+
+class YouTubeVideoUpdateRequest(BaseModel):
+    social_account_id: Optional[int] = Field(default=None, description="Optional SocialAccount ID to identify the YouTube channel")
+    title: Optional[str] = Field(default=None, min_length=1, max_length=100, description="Updated video title")
+    description: Optional[str] = Field(default=None, max_length=5000, description="Updated video description")
+    tags: Optional[List[str]] = Field(default=None, description="Updated video tags/keywords")
+    category_id: Optional[str] = Field(default=None, description="Updated YouTube Category ID")
+    privacy_status: Optional[str] = Field(default=None, description="Updated privacy: private, unlisted, public")
+    made_for_kids: Optional[bool] = Field(default=None, description="COPPA Made for kids declaration")
+    thumbnail_url: Optional[str] = Field(default=None, description="Updated trusted custom thumbnail URL")

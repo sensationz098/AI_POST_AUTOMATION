@@ -643,3 +643,46 @@ export interface YouTubeThumbnailRetryResponse {
   thumbnail_error?: string | null;
   message: string;
 }
+
+export interface YouTubeVideoDetailResponse {
+  video_id: string;
+  channel_id: string;
+  channel_title?: string | null;
+  title: string;
+  description: string;
+  tags: string[];
+  category_id?: string | null;
+  privacy_status: 'public' | 'unlisted' | 'private' | string;
+  made_for_kids?: boolean;
+  thumbnail_url?: string | null;
+  video_url?: string | null;
+}
+
+export interface YouTubeVideoUpdateRequest {
+  social_account_id?: number;
+  title?: string;
+  description?: string;
+  tags?: string[];
+  category_id?: string;
+  privacy_status?: 'public' | 'unlisted' | 'private';
+  made_for_kids?: boolean;
+  thumbnail_url?: string;
+}
+
+export const YOUTUBE_CATEGORIES = [
+  { id: '28', name: 'Science & Technology' },
+  { id: '27', name: 'Education' },
+  { id: '24', name: 'Entertainment' },
+  { id: '22', name: 'People & Blogs' },
+  { id: '26', name: 'Howto & Style' },
+  { id: '20', name: 'Gaming' },
+  { id: '10', name: 'Music' },
+  { id: '23', name: 'Comedy' },
+  { id: '17', name: 'Sports' },
+  { id: '1', name: 'Film & Animation' },
+  { id: '2', name: 'Autos & Vehicles' },
+  { id: '15', name: 'Pets & Animals' },
+  { id: '19', name: 'Travel & Events' },
+  { id: '25', name: 'News & Politics' },
+  { id: '29', name: 'Nonprofits & Activism' },
+];

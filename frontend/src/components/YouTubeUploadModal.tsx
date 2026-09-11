@@ -20,6 +20,7 @@ import {
   Film,
   Image as ImageIcon,
   AlertTriangle,
+  Sliders,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import {
@@ -31,6 +32,7 @@ import {
   YouTubeThumbnailUploadResponse,
   YouTubeThumbnailRetryResponse,
 } from '@/lib/types';
+import { YouTubeVideoEditModal } from '@/components/YouTubeVideoEditModal';
 
 interface YouTubeUploadModalProps {
   isOpen: boolean;
@@ -81,6 +83,7 @@ export function YouTubeUploadModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState<number>(0);
   const [statusDetail, setStatusDetail] = useState<YouTubeUploadStatusResponse | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
 
   // Cancellation and pause refs
   const isCancelledRef = useRef<boolean>(false);
@@ -887,7 +890,7 @@ export function YouTubeUploadModal({
               )}
 
               {statusDetail.video_url && (
-                <div className="pt-2 flex items-center space-x-3">
+                <div className="pt-2 flex flex-wrap items-center gap-2">
                   <a
                     href={statusDetail.video_url}
                     target="_blank"
@@ -898,17 +901,35 @@ export function YouTubeUploadModal({
                     <span>Watch on YouTube</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
-                  <a
-                    href={`https://studio.youtube.com/video/${statusDetail.video_id}/edit`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center space-x-1"
-                  >
-                    <span>Open in YouTube Studio</span>
-                  </a>
+
+                  {statusDetail.video_id && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditModalOpen(true)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center space-x-1 border border-slate-700"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Edit Details</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
+          )}
+
+          {/* Edit Video Modal */}
+          {statusDetail?.video_id && isEditModalOpen && (
+            <YouTubeVideoEditModal
+              isOpen={isEditModalOpen}
+              onClose={() => setIsEditModalOpen(false)}
+              videoId={statusDetail.video_id}
+              channelTitle={channels.find((c) => c.id === selectedAccountId)?.account_name}
+              onVideoUpdated={(updated) => {
+                setTitle(updated.title);
+                setDescription(updated.description);
+                setPrivacyStatus((updated.privacy_status as any) || 'private');
+              }}
+            />
           )}
 
           {/* Error Alert */}

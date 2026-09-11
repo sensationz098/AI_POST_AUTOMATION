@@ -101,6 +101,42 @@ class YouTubeUploadRepository:
             YouTubeUpload.upload_status.notin_([YouTubeUploadStatus.FAILED.value, YouTubeUploadStatus.CANCELLED.value])
         ).order_by(YouTubeUpload.created_at.desc()).first()
 
+    def get_by_video_id(self, db: Session, video_id: str) -> Optional[YouTubeUpload]:
+        return db.query(YouTubeUpload).filter(YouTubeUpload.video_id == video_id).first()
+
+    def get_by_video_id_and_user(self, db: Session, video_id: str, user_id: int) -> Optional[YouTubeUpload]:
+        return db.query(YouTubeUpload).filter(
+            YouTubeUpload.video_id == video_id,
+            YouTubeUpload.user_id == user_id
+        ).first()
+
+    def update_metadata_by_video_id(
+        self,
+        db: Session,
+        video_id: str,
+        user_id: int,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+        privacy_status: Optional[str] = None,
+        thumbnail_url: Optional[str] = None,
+    ) -> Optional[YouTubeUpload]:
+        upload = self.get_by_video_id_and_user(db, video_id, user_id)
+        if not upload:
+            return None
+
+        if title is not None:
+            upload.title = title
+        if description is not None:
+            upload.description = description
+        if privacy_status is not None:
+            upload.privacy_status = privacy_status
+        if thumbnail_url is not None:
+            upload.thumbnail_url = thumbnail_url
+        upload.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(upload)
+        return upload
+
     def list_by_user(self, db: Session, user_id: int, limit: int = 20, offset: int = 0) -> List[YouTubeUpload]:
         return db.query(YouTubeUpload).filter(
             YouTubeUpload.user_id == user_id

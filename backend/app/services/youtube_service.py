@@ -673,4 +673,150 @@ class YouTubeService:
 
         return self.set_video_thumbnail(access_token, video_id, image_bytes, mime_type=mime_type)
 
+    def get_video_details(self, access_token: str, video_id: str) -> Dict[str, Any]:
+        """
+        Query YouTube Data API v3 (GET videos.list with part=snippet,status)
+        to retrieve current video metadata for viewing/editing.
+        Never logs access_token.
+        """
+        url = f"{self.YOUTUBE_API_BASE_URL}/videos"
+        params = {
+            "part": "snippet,status",
+            "id": video_id,
+        }
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        }
+
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=20)
+            data = response.json()
+        except Exception as e:
+            logger.error(f"[YOUTUBE_VIDEO] Error fetching video details for {video_id}: {e}")
+            raise YouTubeAPIException(f"Failed to query video details: {str(e)}")
+
+        if response.status_code != 200:
+            err_msg = data.get("error", {}).get("message") or f"HTTP {response.status_code}"
+            logger.error(f"[YOUTUBE_VIDEO] videos.list error ({response.status_code}): {err_msg}")
+            raise YouTubeAPIException(f"YouTube API error: {err_msg}", status_code=response.status_code)
+
+        items = data.get("items", [])
+        if not items:
+            logger.warning(f"[YOUTUBE_VIDEO] Video {video_id} not found in videos.list.")
+            raise YouTubeAPIException(f"Video {video_id} not found on YouTube.", status_code=404)
+
+        item = items[0]
+        snippet = item.get("snippet", {})
+        status_info = item.get("status", {})
+
+        thumbnails = snippet.get("thumbnails", {})
+        thumbnail_url = (
+            thumbnails.get("maxres", {}).get("url")
+            or thumbnails.get("high", {}).get("url")
+            or thumbnails.get("medium", {}).get("url")
+            or thumbnails.get("default", {}).get("url")
+        )
+
+        return {
+            "video_id": video_id,
+            "channel_id": snippet.get("channelId", ""),
+            "channel_title": snippet.get("channelTitle"),
+            "title": snippet.get("title", ""),
+            "description": snippet.get("description", ""),
+            "tags": snippet.get("tags", []),
+            "category_id": snippet.get("categoryId"),
+            "privacy_status": status_info.get("privacyStatus", "private"),
+            "made_for_kids": status_info.get("selfDeclaredMadeForKids", False),
+            "thumbnail_url": thumbnail_url,
+            "video_url": f"https://www.youtube.com/watch?v={video_id}",
+            "raw_snippet": snippet,
+            "raw_status": status_info,
+        }
+
+    def update_video_metadata(
+        self,
+        access_token: str,
+        video_id: str,
+        update_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Update metadata of an existing YouTube video using YouTube Data API v3 (PUT videos.update).
+        Follows YouTube API requirement: fetches the full current resource representation first,
+        merges requested snippet/status edits, preserves required fields, and sends the complete updated object.
+        Never changes video_id.
+        """
+        # 1. Fetch current video resource to preserve required fields
+        current = self.get_video_details(access_token, video_id)
+        current_snippet = dict(current.get("raw_snippet", {}))
+        current_status = dict(current.get("raw_status", {}))
+
+        # 2. Merge Snippet changes
+        if "title" in update_data and update_data["title"] is not None:
+            current_snippet["title"] = update_data["title"]
+        if "description" in update_data and update_data["description"] is not None:
+            current_snippet["description"] = update_data["description"]
+        if "tags" in update_data and update_data["tags"] is not None:
+            current_snippet["tags"] = update_data["tags"]
+        if "category_id" in update_data and update_data["category_id"] is not None:
+            current_snippet["categoryId"] = str(update_data["category_id"])
+
+        # 3. Merge Status changes
+        if "privacy_status" in update_data and update_data["privacy_status"] is not None:
+            current_status["privacyStatus"] = update_data["privacy_status"]
+        if "made_for_kids" in update_data and update_data["made_for_kids"] is not None:
+            current_status["selfDeclaredMadeForKids"] = bool(update_data["made_for_kids"])
+
+        # 4. Build PUT payload with part=snippet,status
+        url = f"{self.YOUTUBE_API_BASE_URL}/videos?part=snippet,status"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json; charset=UTF-8",
+            "Accept": "application/json",
+        }
+        body = {
+            "id": video_id,
+            "snippet": current_snippet,
+            "status": current_status,
+        }
+
+        try:
+            response = requests.put(url, json=body, headers=headers, timeout=30)
+            data = response.json()
+        except Exception as e:
+            logger.error(f"[YOUTUBE_VIDEO] Error updating video metadata for {video_id}: {e}")
+            raise YouTubeAPIException(f"Failed to communicate with YouTube update service: {str(e)}")
+
+        if response.status_code != 200:
+            err_msg = data.get("error", {}).get("message") or f"HTTP {response.status_code}"
+            logger.error(f"[YOUTUBE_VIDEO] videos.update error ({response.status_code}): {err_msg}")
+            raise YouTubeAPIException(f"YouTube update rejected: {err_msg}", status_code=response.status_code)
+
+        updated_snippet = data.get("snippet", current_snippet)
+        updated_status = data.get("status", current_status)
+        thumbnails = updated_snippet.get("thumbnails", {})
+        thumbnail_url = (
+            thumbnails.get("maxres", {}).get("url")
+            or thumbnails.get("high", {}).get("url")
+            or thumbnails.get("medium", {}).get("url")
+            or thumbnails.get("default", {}).get("url")
+        )
+
+        logger.info(f"[YOUTUBE_VIDEO] Successfully updated metadata for video {video_id}")
+        return {
+            "video_id": video_id,
+            "channel_id": updated_snippet.get("channelId", current.get("channel_id")),
+            "channel_title": updated_snippet.get("channelTitle", current.get("channel_title")),
+            "title": updated_snippet.get("title", ""),
+            "description": updated_snippet.get("description", ""),
+            "tags": updated_snippet.get("tags", []),
+            "category_id": updated_snippet.get("categoryId"),
+            "privacy_status": updated_status.get("privacyStatus", "private"),
+            "made_for_kids": updated_status.get("selfDeclaredMadeForKids", False),
+            "thumbnail_url": thumbnail_url,
+            "video_url": f"https://www.youtube.com/watch?v={video_id}",
+            "raw_snippet": updated_snippet,
+            "raw_status": updated_status,
+        }
+
 youtube_service = YouTubeService()
