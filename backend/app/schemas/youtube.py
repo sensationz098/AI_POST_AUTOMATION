@@ -198,3 +198,9 @@ class YouTubeVideoListResponse(BaseModel):
     total_results: Optional[int] = Field(default=None, description="Estimated total number of uploaded videos in channel")
     channel_id: Optional[str] = Field(default=None, description="Channel ID")
     channel_title: Optional[str] = Field(default=None, description="Channel Title")
+
+class YouTubeVideoDeleteResponse(BaseModel):
+    success: bool = Field(default=True, description="Deletion success status")
+    video_id: str = Field(..., description="ID of the deleted YouTube video")
+    message: str = Field(default="Video successfully deleted from YouTube.", description="Status message")
+

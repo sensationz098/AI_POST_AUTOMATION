@@ -708,3 +708,10 @@ export interface YouTubeVideoListResponse {
   channel_id?: string | null;
   channel_title?: string | null;
 }
+
+export interface YouTubeVideoDeleteResponse {
+  success: boolean;
+  video_id: string;
+  message: string;
+}
+

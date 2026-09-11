@@ -137,6 +137,15 @@ class YouTubeUploadRepository:
         db.refresh(upload)
         return upload
 
+    def delete_by_video_id_and_user(self, db: Session, video_id: str, user_id: int) -> bool:
+        upload = self.get_by_video_id_and_user(db, video_id, user_id)
+        if not upload:
+            return False
+        db.delete(upload)
+        db.commit()
+        return True
+
+
     def list_by_user(self, db: Session, user_id: int, limit: int = 20, offset: int = 0) -> List[YouTubeUpload]:
         return db.query(YouTubeUpload).filter(
             YouTubeUpload.user_id == user_id

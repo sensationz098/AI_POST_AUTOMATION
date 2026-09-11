@@ -24,6 +24,7 @@ import {
   Layers,
   Sparkles,
   Info,
+  Trash2,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import {
@@ -33,6 +34,7 @@ import {
   SocialAccount,
 } from '@/lib/types';
 import { YouTubeVideoEditModal } from '@/components/YouTubeVideoEditModal';
+import { YouTubeVideoDeleteModal } from '@/components/YouTubeVideoDeleteModal';
 import toast, { Toaster } from 'react-hot-toast';
 
 export default function YouTubeVideosPage() {
@@ -65,6 +67,11 @@ export default function YouTubeVideosPage() {
   // Edit Modal State
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+
+  // Delete Modal State
+  const [deletingVideo, setDeletingVideo] = useState<YouTubeVideoItem | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+
 
   // Close account dropdown on outside click
   useEffect(() => {
@@ -187,6 +194,18 @@ export default function YouTubeVideosPage() {
   const handleOpenEdit = (videoId: string) => {
     setEditingVideoId(videoId);
     setIsEditModalOpen(true);
+  };
+
+  // Open Delete Modal
+  const handleOpenDelete = (video: YouTubeVideoItem) => {
+    setDeletingVideo(video);
+    setIsDeleteModalOpen(true);
+  };
+
+  // Handle successful video deletion
+  const handleVideoDeleted = (deletedVideoId: string) => {
+    setVideos((prev) => prev.filter((v) => v.video_id !== deletedVideoId));
+    setTotalResults((prev) => (prev !== null ? Math.max(0, prev - 1) : null));
   };
 
   // Update video in local list when editing succeeds
@@ -569,24 +588,34 @@ export default function YouTubeVideosPage() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-1.5">
                   <button
                     type="button"
                     onClick={() => handleOpenEdit(video.video_id)}
-                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center justify-center space-x-1 border border-slate-700 hover:border-slate-600"
+                    className="flex-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center justify-center space-x-1 border border-slate-700 hover:border-slate-600"
+                    title="Edit Video Details"
                   >
                     <Sliders className="w-3 h-3 text-red-400" />
                     <span>Edit</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenDelete(video)}
+                    className="py-1.5 px-2 rounded-lg bg-slate-800/60 hover:bg-rose-950/50 text-slate-400 hover:text-rose-300 text-xs font-semibold transition flex items-center justify-center space-x-1 border border-slate-700/60 hover:border-rose-800/60"
+                    title="Delete Video from YouTube"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                   </button>
 
                   <a
                     href={video.video_url || `https://www.youtube.com/watch?v=${video.video_id}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="py-1.5 px-2.5 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition flex items-center justify-center space-x-1 border border-slate-700/60"
+                    className="py-1.5 px-2 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-semibold transition flex items-center justify-center space-x-1 border border-slate-700/60"
                     title="Watch on YouTube"
                   >
-                    <ExternalLink className="w-3 h-3 text-slate-400" />
+                    <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
               </div>
@@ -637,6 +666,22 @@ export default function YouTubeVideosPage() {
           onVideoUpdated={handleVideoUpdated}
         />
       )}
+
+      {/* Delete Video Modal */}
+      {deletingVideo && isDeleteModalOpen && (
+        <YouTubeVideoDeleteModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => {
+            setIsDeleteModalOpen(false);
+            setDeletingVideo(null);
+          }}
+          video={deletingVideo}
+          channelTitle={channelTitle}
+          socialAccountId={selectedAccountId}
+          onVideoDeleted={handleVideoDeleted}
+        />
+      )}
     </div>
   );
 }
+

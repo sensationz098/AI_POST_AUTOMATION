@@ -51,6 +51,7 @@ from app.schemas.youtube import (
     YouTubeVideoUpdateRequest,
     YouTubeVideoItem,
     YouTubeVideoListResponse,
+    YouTubeVideoDeleteResponse,
 )
 from app.schemas.social_account import SocialAccountResponse
 from app.api.v1.deps import get_current_user
@@ -1168,3 +1169,96 @@ def update_youtube_video(
         thumbnail_url=updated_data.get("thumbnail_url"),
         video_url=updated_data.get("video_url"),
     )
+
+@router.delete("/videos/{video_id}", response_model=YouTubeVideoDeleteResponse)
+def delete_youtube_video(
+    video_id: str,
+    social_account_id: Optional[int] = Query(None, description="Optional SocialAccount ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Permanently delete a YouTube video from the connected channel.
+    Strictly tenant-isolated. Validates user ownership of the associated YouTube channel.
+    Verifies that the requested video belongs to the authenticated account before deleting.
+    Calls YouTube Data API v3 (DELETE /videos?id={video_id}) and handles HTTP 204.
+    Cleans up local database records only after successful YouTube deletion confirmation.
+    """
+    # 1. Resolve and validate account ownership
+    account = _resolve_youtube_account_for_video(db, current_user.id, video_id, social_account_id)
+    try:
+        access_token = youtube_service.get_valid_access_token_for_account(db, account)
+    except Exception as e:
+        logger.error(f"[YOUTUBE_DELETE] Authentication resolution failed for user {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Failed to authenticate with YouTube: {str(e)}"
+        )
+
+    # 2. Verify video exists and belongs to the authenticated channel on YouTube
+    try:
+        video_data = youtube_service.get_video_details(access_token, video_id)
+    except YouTubeAPIException as e:
+        logger.error(f"[YOUTUBE_DELETE] Error verifying video {video_id} before deletion: {e.message}")
+        if e.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Video not found or already unavailable on YouTube."
+            )
+        raise HTTPException(
+            status_code=e.status_code if e.status_code and e.status_code >= 400 else 502,
+            detail=f"Failed to verify video on YouTube: {e.message}"
+        )
+    except Exception as e:
+        logger.error(f"[YOUTUBE_DELETE] Unexpected error verifying video {video_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to verify video details on YouTube."
+        )
+
+    # Strict Channel ID validation
+    video_channel_id = video_data.get("channel_id")
+    if video_channel_id and account.account_id and video_channel_id != account.account_id:
+        logger.warning(
+            f"[YOUTUBE_DELETE] Unauthorized deletion attempt: video {video_id} channel ({video_channel_id}) "
+            f"does not match user's account channel ({account.account_id})"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to delete this video because it belongs to a different YouTube channel."
+        )
+
+    # 3. Call YouTube Data API v3 (DELETE /videos?id={video_id})
+    try:
+        youtube_service.delete_video(access_token, video_id)
+    except YouTubeAPIException as e:
+        logger.error(f"[YOUTUBE_DELETE] YouTube deletion failed for video {video_id}: {e.message}")
+        if e.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Video not found or already unavailable on YouTube."
+            )
+        raise HTTPException(
+            status_code=e.status_code if e.status_code and e.status_code >= 400 else 502,
+            detail=f"YouTube video deletion failed: {e.message}"
+        )
+    except Exception as e:
+        logger.error(f"[YOUTUBE_DELETE] Unexpected error deleting video {video_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete video from YouTube."
+        )
+
+    # 4. Clean up local database record ONLY after YouTube confirms 204 success
+    try:
+        youtube_upload_repo.delete_by_video_id_and_user(db, video_id, current_user.id)
+    except Exception as e:
+        logger.warning(f"[YOUTUBE_DELETE] Failed to delete local record for video {video_id}: {e}")
+
+    logger.info(f"[YOUTUBE_DELETE] Video {video_id} successfully deleted for user {current_user.id}")
+    return YouTubeVideoDeleteResponse(
+        success=True,
+        video_id=video_id,
+        message="Video successfully deleted from YouTube.",
+    )
+

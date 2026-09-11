@@ -426,3 +426,131 @@ def test_list_videos_no_token_exposure(client, db_session):
     assert "access_token" not in raw_text
     assert "client_secret" not in raw_text
     assert "refresh_token" not in raw_text
+
+
+# ─── 5. Video Deletion Tests ──────────────────────────────────────────────────
+
+def test_delete_video_requires_auth(client):
+    """DELETE /api/v1/youtube/videos/{video_id} returns 401 without authentication."""
+    res = client.delete("/api/v1/youtube/videos/vid_del_123")
+    assert res.status_code == 401
+
+
+def test_delete_video_cross_tenant_isolation(client, db_session):
+    """User B cannot delete a video belonging to User A's YouTube channel."""
+    user_a = User(email="user_a_del@socialai.com", hashed_password="pw", full_name="User A Del", role="Editor")
+    db_session.add(user_a)
+    db_session.commit()
+    db_session.refresh(user_a)
+
+    acc_a = create_mock_youtube_account(db_session, user_a.id, account_id="UC_USER_A_DEL")
+
+    # User B logs in
+    headers_b = get_auth_headers(client, "user_b_del@socialai.com")
+
+    # User B attempts to delete video passing User A's social_account_id
+    res = client.delete(f"/api/v1/youtube/videos/vid_test_del?social_account_id={acc_a.id}", headers=headers_b)
+    assert res.status_code == 404
+    assert "access denied" in res.json()["detail"].lower()
+
+
+def test_delete_video_different_channel_forbidden(client, db_session):
+    """Attempting to delete a video belonging to a different channel is rejected with 403."""
+    headers = get_auth_headers(client, "yt_del_mismatch@socialai.com")
+    user = db_session.query(User).filter(User.email == "yt_del_mismatch@socialai.com").first()
+    create_mock_youtube_account(db_session, user.id, account_id="UC_MY_CHANNEL")
+
+    # Mock get_video_details returning a different channel ID
+    mock_get_details = {
+        "video_id": "vid_mismatch_1",
+        "channel_id": "UC_OTHER_CHANNEL",
+        "title": "Other Channel Video",
+        "privacy_status": "public",
+    }
+
+    with patch.object(youtube_service, "get_video_details", return_value=mock_get_details):
+        res = client.delete("/api/v1/youtube/videos/vid_mismatch_1", headers=headers)
+
+    assert res.status_code == 403
+    assert "different youtube channel" in res.json()["detail"].lower()
+
+
+def test_delete_video_success_204(client, db_session):
+    """Successful deletion on YouTube (HTTP 204) cleans up local DB record and returns 200."""
+    from app.models.youtube_upload import YouTubeUpload
+    from app.repositories.youtube_upload_repository import youtube_upload_repo
+
+    headers = get_auth_headers(client, "yt_del_success@socialai.com")
+    user = db_session.query(User).filter(User.email == "yt_del_success@socialai.com").first()
+    acc = create_mock_youtube_account(db_session, user.id, account_id="UC_DEL_SUCCESS_CHAN")
+
+    # Create local upload record
+    upload = youtube_upload_repo.create(
+        db=db_session,
+        upload_id="ytu_del_test_01",
+        user_id=user.id,
+        social_account_id=acc.id,
+        channel_id=acc.account_id,
+        title="Video to Delete",
+        file_size_bytes=1024,
+    )
+    upload.video_id = "vid_to_delete_99"
+    db_session.commit()
+
+    mock_get_details = {
+        "video_id": "vid_to_delete_99",
+        "channel_id": "UC_DEL_SUCCESS_CHAN",
+        "title": "Video to Delete",
+        "privacy_status": "public",
+    }
+
+    with patch.object(youtube_service, "get_video_details", return_value=mock_get_details):
+        with patch.object(youtube_service, "delete_video", return_value=True) as mock_del:
+            res = client.delete("/api/v1/youtube/videos/vid_to_delete_99", headers=headers)
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    assert data["video_id"] == "vid_to_delete_99"
+    assert "successfully deleted" in data["message"]
+
+    mock_del.assert_called_once()
+
+    # Local DB record should be removed
+    local_rec = db_session.query(YouTubeUpload).filter(YouTubeUpload.video_id == "vid_to_delete_99").first()
+    assert local_rec is None
+
+
+def test_delete_video_404_not_found(client, db_session):
+    """If YouTube returns 404, endpoint returns 404 Video not found."""
+    headers = get_auth_headers(client, "yt_del_404@socialai.com")
+    user = db_session.query(User).filter(User.email == "yt_del_404@socialai.com").first()
+    create_mock_youtube_account(db_session, user.id)
+
+    with patch.object(youtube_service, "get_video_details", side_effect=YouTubeAPIException("Not Found", status_code=404)):
+        res = client.delete("/api/v1/youtube/videos/non_existent_vid", headers=headers)
+
+    assert res.status_code == 404
+    assert "not found" in res.json()["detail"].lower()
+
+
+def test_delete_video_403_quota_error(client, db_session):
+    """If YouTube returns 403 quota exceeded during deletion, endpoint propagates 403 cleanly."""
+    headers = get_auth_headers(client, "yt_del_403@socialai.com")
+    user = db_session.query(User).filter(User.email == "yt_del_403@socialai.com").first()
+    acc = create_mock_youtube_account(db_session, user.id, account_id="UC_QUOTA_CHAN")
+
+    mock_get_details = {
+        "video_id": "vid_quota_test",
+        "channel_id": "UC_QUOTA_CHAN",
+        "title": "Quota Video",
+        "privacy_status": "public",
+    }
+
+    with patch.object(youtube_service, "get_video_details", return_value=mock_get_details):
+        with patch.object(youtube_service, "delete_video", side_effect=YouTubeAPIException("The request cannot be completed because you have exceeded your quota.", status_code=403)):
+            res = client.delete("/api/v1/youtube/videos/vid_quota_test", headers=headers)
+
+    assert res.status_code == 403
+    assert "quota" in res.json()["detail"].lower()
+

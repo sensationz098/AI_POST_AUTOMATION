@@ -977,4 +977,40 @@ class YouTubeService:
             "channel_title": channel_title,
         }
 
+    def delete_video(self, access_token: str, video_id: str) -> bool:
+        """
+        Permanently delete a YouTube video via YouTube Data API v3 (DELETE /videos?id={video_id}).
+        YouTube officially returns HTTP 204 No Content on successful deletion.
+        Never exposes access token or client secrets in logs.
+        """
+        delete_url = f"{self.YOUTUBE_API_BASE_URL}/videos"
+        params = {"id": video_id}
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        }
+
+        try:
+            res = requests.delete(delete_url, params=params, headers=headers, timeout=25)
+        except Exception as e:
+            logger.error(f"[YOUTUBE_VIDEO] Error deleting video {video_id}: {e}")
+            raise YouTubeAPIException(f"Failed to communicate with YouTube API: {str(e)}")
+
+        if res.status_code in (204, 200):
+            logger.info(f"[YOUTUBE_VIDEO] Successfully deleted video {video_id} from YouTube (HTTP {res.status_code})")
+            return True
+
+        # Parse error message from YouTube API response
+        err_msg = f"HTTP {res.status_code}"
+        try:
+            data = res.json()
+            err_msg = data.get("error", {}).get("message") or err_msg
+        except Exception:
+            if res.text:
+                err_msg = res.text[:200]
+
+        logger.error(f"[YOUTUBE_VIDEO] Failed to delete video {video_id} ({res.status_code}): {err_msg}")
+        raise YouTubeAPIException(f"YouTube video deletion failed: {err_msg}", status_code=res.status_code)
+
 youtube_service = YouTubeService()
+
