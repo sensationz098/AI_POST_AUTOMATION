@@ -33,7 +33,8 @@ import {
   Flame,
   HelpCircle,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import {
@@ -41,7 +42,9 @@ import {
   YouTubeUploadInitiateResponse,
   YouTubeUploadChunkResponse,
   YouTubeUploadStatusResponse,
-  YouTubeUploadCancelResponse
+  YouTubeUploadCancelResponse,
+  YouTubeThumbnailUploadResponse,
+  YouTubeThumbnailRetryResponse,
 } from '@/lib/types';
 import {
   YouTubeContentType,
@@ -106,6 +109,18 @@ export function YouTubeComposer({
   const [videoHeight, setVideoHeight] = useState<number | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
 
+  // Custom Thumbnail State
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [thumbnailDimensions, setThumbnailDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [thumbnailUploading, setThumbnailUploading] = useState<boolean>(false);
+  const [thumbnailValidationError, setThumbnailValidationError] = useState<string | null>(null);
+  const [thumbnailStatus, setThumbnailStatus] = useState<string | null>(null);
+  const [thumbnailError, setThumbnailError] = useState<string | null>(null);
+  const [isRetryingThumbnail, setIsRetryingThumbnail] = useState<boolean>(false);
+  const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
+
   // Content Metadata
   const [title, setTitle] = useState<string>('');
   const [description, setDescription] = useState<string>('');
@@ -145,17 +160,20 @@ export function YouTubeComposer({
     }
   }, [defaultChannelId, channels]);
 
-  // Clean up object URL & polling timers on unmount
+  // Clean up object URLs & polling timers on unmount
   useEffect(() => {
     return () => {
       if (videoPreviewUrl && videoPreviewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(videoPreviewUrl);
       }
+      if (thumbnailPreviewUrl && thumbnailPreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(thumbnailPreviewUrl);
+      }
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
       }
     };
-  }, [videoPreviewUrl]);
+  }, [videoPreviewUrl, thumbnailPreviewUrl]);
 
   // Validation result derived from current selection and video technical properties
   const validationResult: YouTubeValidationResult = useMemo(() => {
@@ -255,6 +273,112 @@ export function YouTubeComposer({
     setDescription((prev) => prev + space + hashtag);
   };
 
+  // ── Thumbnail Handlers ───────────────────────────────────────────────────────
+  const handleThumbnailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setThumbnailValidationError(null);
+
+      // Validate MIME type
+      const validMimes = ['image/jpeg', 'image/png', 'image/jpg'];
+      const isValidExt = file.name.match(/\.(jpe?g|png)$/i);
+      if (!validMimes.includes(file.type) && !isValidExt) {
+        const err = 'Invalid image format. Custom thumbnails must be JPEG or PNG format.';
+        setThumbnailValidationError(err);
+        toast.error('Only JPEG and PNG images are supported.');
+        return;
+      }
+
+      // Validate size <= 2MB
+      const MAX_SIZE = 2 * 1024 * 1024;
+      if (file.size > MAX_SIZE) {
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+        const err = `Thumbnail size (${sizeMb} MB) exceeds maximum allowed limit of 2 MB.`;
+        setThumbnailValidationError(err);
+        toast.error(`Image exceeds 2 MB limit (${sizeMb} MB).`);
+        return;
+      }
+
+      setThumbnailFile(file);
+
+      // Revoke previous preview
+      if (thumbnailPreviewUrl && thumbnailPreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(thumbnailPreviewUrl);
+      }
+      const localUrl = URL.createObjectURL(file);
+      setThumbnailPreviewUrl(localUrl);
+
+      // Read natural dimensions
+      const img = new Image();
+      img.onload = () => {
+        setThumbnailDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.src = localUrl;
+
+      // Automatically upload thumbnail image to trusted application storage
+      try {
+        setThumbnailUploading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await apiClient.post<YouTubeThumbnailUploadResponse>('/youtube/upload-thumbnail', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setThumbnailUrl(res.data.thumbnail_url);
+        setThumbnailStatus('PENDING');
+        setThumbnailError(null);
+        toast.success('Thumbnail ready for publishing!');
+      } catch (uploadErr: any) {
+        console.error('[THUMBNAIL_UPLOAD_ERROR]', uploadErr);
+        const msg = uploadErr.response?.data?.detail || 'Failed to upload thumbnail image to storage.';
+        setThumbnailValidationError(msg);
+        toast.error(`Thumbnail upload failed: ${msg}`);
+      } finally {
+        setThumbnailUploading(false);
+      }
+    }
+  };
+
+  const handleRemoveThumbnail = () => {
+    if (thumbnailPreviewUrl && thumbnailPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(thumbnailPreviewUrl);
+    }
+    setThumbnailFile(null);
+    setThumbnailPreviewUrl(null);
+    setThumbnailUrl(null);
+    setThumbnailDimensions(null);
+    setThumbnailValidationError(null);
+    setThumbnailStatus(null);
+    setThumbnailError(null);
+    if (thumbnailInputRef.current) {
+      thumbnailInputRef.current.value = '';
+    }
+    toast('Custom thumbnail removed', { icon: '🗑️' });
+  };
+
+  const handleRetryThumbnail = async () => {
+    if (!uploadId) return;
+    setIsRetryingThumbnail(true);
+    try {
+      const res = await apiClient.post<YouTubeThumbnailRetryResponse>(`/youtube/upload/${uploadId}/thumbnail/retry`);
+      if (res.data.success) {
+        setThumbnailStatus('APPLIED');
+        setThumbnailError(null);
+        toast.success('Thumbnail applied successfully to your YouTube video!');
+      } else {
+        setThumbnailStatus('FAILED');
+        setThumbnailError(res.data.thumbnail_error || 'Thumbnail application failed.');
+        toast.error(res.data.message || 'Thumbnail retry failed.');
+      }
+    } catch (retryErr: any) {
+      const msg = retryErr.response?.data?.detail || retryErr.message || 'Failed to retry thumbnail application.';
+      setThumbnailStatus('FAILED');
+      setThumbnailError(msg);
+      toast.error(`Thumbnail retry error: ${msg}`);
+    } finally {
+      setIsRetryingThumbnail(false);
+    }
+  };
+
   // ── Step 1: Initiate Upload Session ──────────────────────────────────────────
   const handleStartUpload = async () => {
     if (!selectedAccountId || !selectedChannel) {
@@ -314,6 +438,7 @@ export function YouTubeComposer({
         mime_type: selectedFile.type || 'video/mp4',
         file_size_bytes: selectedFile.size,
         client_mutation_id: mutationId,
+        thumbnail_url: thumbnailUrl || undefined,
       };
 
       const initRes = await apiClient.post<YouTubeUploadInitiateResponse>(
@@ -481,6 +606,14 @@ export function YouTubeComposer({
         const data = res.data;
         setStatusDetail(data);
 
+        // Synchronize thumbnail status and error from server
+        if (data.thumbnail_status) {
+          setThumbnailStatus(data.thumbnail_status);
+        }
+        if (data.thumbnail_error) {
+          setThumbnailError(data.thumbnail_error);
+        }
+
         if (data.status === 'READY' || data.processing_status === 'succeeded') {
           setUploadPhase('ready');
           if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
@@ -562,10 +695,23 @@ export function YouTubeComposer({
     if (videoPreviewUrl && videoPreviewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(videoPreviewUrl);
     }
+    if (thumbnailPreviewUrl && thumbnailPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(thumbnailPreviewUrl);
+    }
     setVideoPreviewUrl(null);
     setVideoDuration(null);
     setVideoWidth(null);
     setVideoHeight(null);
+    setThumbnailFile(null);
+    setThumbnailPreviewUrl(null);
+    setThumbnailUrl(null);
+    setThumbnailDimensions(null);
+    setThumbnailValidationError(null);
+    setThumbnailStatus(null);
+    setThumbnailError(null);
+    if (thumbnailInputRef.current) {
+      thumbnailInputRef.current.value = '';
+    }
     setTitle('');
     setDescription('');
     setTags(['SocialAI', 'Automation']);
@@ -905,12 +1051,188 @@ export function YouTubeComposer({
             )}
           </div>
 
+          {/* ── 2. Dedicated Thumbnail Card ── */}
+          <div className="glass-panel p-6 rounded-2xl space-y-4 border border-slate-800 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <ImageIcon className="w-4 h-4 text-red-400" />
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                  2. Custom Thumbnail
+                </h3>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] text-slate-300 font-semibold">
+                  Recommended: 16:9
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] text-slate-300 font-semibold">
+                  JPEG / PNG • Max 2 MB
+                </span>
+              </div>
+            </div>
+
+            {/* Hidden Input for Thumbnail Picker */}
+            <input
+              ref={thumbnailInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/jpg"
+              onChange={handleThumbnailChange}
+              disabled={uploadPhase !== 'idle' || thumbnailUploading}
+              className="hidden"
+            />
+
+            {!thumbnailPreviewUrl ? (
+              <label
+                onClick={() => thumbnailInputRef.current?.click()}
+                className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-700 hover:border-red-500/80 rounded-xl bg-slate-900/50 cursor-pointer transition group space-y-2.5"
+              >
+                <div className="w-10 h-10 rounded-xl bg-slate-800 group-hover:bg-red-950/60 border border-slate-700 group-hover:border-red-800/60 flex items-center justify-center text-slate-400 group-hover:text-red-400 transition shadow-inner">
+                  {thumbnailUploading ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-red-400" />
+                  ) : (
+                    <ImageIcon className="w-5 h-5" />
+                  )}
+                </div>
+                <div className="text-center space-y-0.5">
+                  <span className="text-xs font-bold text-slate-200 block group-hover:text-white">
+                    {thumbnailUploading ? 'Uploading thumbnail...' : 'Upload custom thumbnail'}
+                  </span>
+                  <p className="text-[11px] text-slate-400">
+                    High-definition 1280×720 (16:9) image recommended • Max 2 MB
+                  </p>
+                </div>
+              </label>
+            ) : (
+              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  {/* Thumbnail Preview Thumbnail */}
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="relative w-24 h-14 rounded-lg overflow-hidden bg-black border border-slate-700 flex-shrink-0 shadow-md">
+                      <img
+                        src={thumbnailPreviewUrl}
+                        alt="Custom thumbnail preview"
+                        className="w-full h-full object-cover"
+                      />
+                      {thumbnailUploading && (
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center">
+                          <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-xs font-bold text-slate-100 truncate">
+                        {thumbnailFile?.name || 'Custom Thumbnail'}
+                      </p>
+                      <p className="text-[11px] text-slate-400 font-mono">
+                        {thumbnailFile ? formatBytes(thumbnailFile.size) : ''}
+                        {thumbnailDimensions ? ` • ${thumbnailDimensions.width}×${thumbnailDimensions.height}` : ''}
+                      </p>
+                      {/* 16:9 Recommendation Notice */}
+                      {thumbnailDimensions && (
+                        <div className="pt-0.5">
+                          {Math.abs(thumbnailDimensions.width / thumbnailDimensions.height - 16 / 9) < 0.08 ? (
+                            <span className="text-[10px] text-emerald-400 font-medium flex items-center space-x-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Standard 16:9 aspect ratio</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-amber-400 font-medium flex items-center space-x-1">
+                              <AlertTriangle className="w-3 h-3" />
+                              <span>Not 16:9 (recommended for best display on YouTube)</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center space-x-2 self-end sm:self-center">
+                    {uploadPhase === 'idle' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => thumbnailInputRef.current?.click()}
+                          disabled={thumbnailUploading}
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition"
+                        >
+                          Change
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveThumbnail}
+                          disabled={thumbnailUploading}
+                          className="px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 text-xs font-semibold transition flex items-center space-x-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Status Badges during/after upload */}
+                {thumbnailStatus && (
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-2">
+                      {thumbnailStatus === 'PENDING' && (
+                        <span className="text-amber-400 flex items-center space-x-1.5 text-[11px] font-semibold">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Thumbnail will be applied upon video creation</span>
+                        </span>
+                      )}
+                      {thumbnailStatus === 'APPLIED' && (
+                        <span className="text-emerald-400 flex items-center space-x-1.5 text-[11px] font-semibold">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Thumbnail applied</span>
+                        </span>
+                      )}
+                      {thumbnailStatus === 'FAILED' && (
+                        <span className="text-rose-400 flex items-center space-x-1.5 text-[11px] font-semibold">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>
+                            Thumbnail couldn&apos;t be applied
+                            {thumbnailError ? `: ${thumbnailError}` : ''}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+
+                    {thumbnailStatus === 'FAILED' && uploadId && (
+                      <button
+                        type="button"
+                        onClick={handleRetryThumbnail}
+                        disabled={isRetryingThumbnail}
+                        className="px-2.5 py-1 rounded-md bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 text-[11px] font-bold transition flex items-center space-x-1 shadow-sm"
+                      >
+                        {isRetryingThumbnail ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3 h-3" />
+                        )}
+                        <span>Retry</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Thumbnail Validation Error Message */}
+            {thumbnailValidationError && (
+              <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs flex items-start space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{thumbnailValidationError}</span>
+              </div>
+            )}
+          </div>
+
           {/* Details & Metadata Card */}
           <div className="glass-panel p-6 rounded-2xl space-y-5 border border-slate-800 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
                 <Sliders className="w-4 h-4 text-red-400" />
-                <span>2. Video Details & SEO Metadata</span>
+                <span>3. Video Details & SEO Metadata</span>
               </h3>
             </div>
 
@@ -1206,9 +1528,22 @@ export function YouTubeComposer({
               {videoPreviewUrl ? (
                 <video
                   src={videoPreviewUrl}
+                  poster={thumbnailPreviewUrl || undefined}
                   controls
                   className="w-full h-full object-contain"
                 />
+              ) : thumbnailPreviewUrl ? (
+                <div className="relative w-full h-full flex items-center justify-center bg-black">
+                  <img
+                    src={thumbnailPreviewUrl}
+                    alt="Selected custom thumbnail preview"
+                    className="w-full h-full object-contain"
+                  />
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-[10px] text-white font-semibold flex items-center space-x-1 border border-white/10 shadow-sm">
+                    <ImageIcon className="w-3 h-3 text-red-400" />
+                    <span>Thumbnail Preview</span>
+                  </div>
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center p-6 text-center space-y-2 text-slate-500">
                   <FileVideo className="w-10 h-10 text-slate-600 animate-pulse" />
@@ -1241,6 +1576,15 @@ export function YouTubeComposer({
                 )}
                 <span>•</span>
                 <span className="font-bold text-slate-300">{contentType === 'short' ? 'Short' : 'Video'}</span>
+                {thumbnailUrl && (
+                  <>
+                    <span>•</span>
+                    <span className="text-red-400 font-semibold flex items-center space-x-1">
+                      <ImageIcon className="w-3 h-3" />
+                      <span>Custom Thumb</span>
+                    </span>
+                  </>
+                )}
               </div>
 
               {description && (
@@ -1385,6 +1729,50 @@ export function YouTubeComposer({
                 <p className="text-[11px] text-slate-300">
                   Your {contentType === 'short' ? 'Short' : 'video'} is ready to view and share across the web.
                 </p>
+
+                {/* Thumbnail Status in Success Card */}
+                {(statusDetail.thumbnail_url || thumbnailUrl) && (
+                  <div className="p-2.5 rounded-lg bg-slate-900/80 border border-emerald-600/30 flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-2">
+                      <ImageIcon className="w-4 h-4 text-emerald-400" />
+                      {thumbnailStatus === 'APPLIED' ? (
+                        <span className="text-emerald-300 font-semibold flex items-center space-x-1 text-[11px]">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          <span>Thumbnail applied</span>
+                        </span>
+                      ) : thumbnailStatus === 'FAILED' ? (
+                        <span className="text-rose-300 font-semibold flex items-center space-x-1 text-[11px]">
+                          <AlertTriangle className="w-3 h-3 text-rose-400" />
+                          <span>
+                            Thumbnail couldn&apos;t be applied
+                            {thumbnailError ? `: ${thumbnailError}` : ''}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-amber-300 font-medium flex items-center space-x-1 text-[11px]">
+                          <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                          <span>Applying thumbnail...</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {thumbnailStatus === 'FAILED' && uploadId && (
+                      <button
+                        type="button"
+                        onClick={handleRetryThumbnail}
+                        disabled={isRetryingThumbnail}
+                        className="px-2.5 py-1 rounded-md bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 text-[11px] font-bold transition flex items-center space-x-1 shadow-sm"
+                      >
+                        {isRetryingThumbnail ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3 h-3" />
+                        )}
+                        <span>Retry</span>
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {statusDetail.video_url && (
                   <div className="space-y-2 pt-1">

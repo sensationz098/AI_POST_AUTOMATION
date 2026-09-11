@@ -527,6 +527,8 @@ export interface YouTubeUploadInitiateRequest {
   mime_type?: string;
   file_size_bytes: number;
   client_mutation_id?: string;
+  thumbnail_url?: string;
+  publish_at?: string;
 }
 
 export interface YouTubeUploadInitiateResponse {
@@ -538,7 +540,10 @@ export interface YouTubeUploadInitiateResponse {
   file_size_bytes: number;
   chunk_size_bytes: number;
   mime_type: string;
+  privacy_status?: string;
   status: string;
+  thumbnail_url?: string | null;
+  thumbnail_status?: string | null;
   next_byte_offset: number;
   message: string;
 }
@@ -556,6 +561,9 @@ export interface YouTubeUploadChunkResponse {
   is_complete: boolean;
   video_id?: string | null;
   video_url?: string | null;
+  thumbnail_url?: string | null;
+  thumbnail_status?: string | null;
+  thumbnail_error?: string | null;
   processing_status?: string | null;
 }
 
@@ -571,6 +579,7 @@ export interface YouTubeUploadStatusResponse {
   mime_type: string;
   status: 'INITIATED' | 'UPLOADING' | 'PROCESSING' | 'READY' | 'FAILED' | 'CANCELLED' | string;
   processing_status?: 'uploaded' | 'processing' | 'succeeded' | 'failed' | 'terminated' | string | null;
+  processing_failure_reason?: string | null;
   http_status?: number;
   range_header?: string | null;
   last_byte_received?: number | null;
@@ -578,9 +587,13 @@ export interface YouTubeUploadStatusResponse {
   is_complete: boolean;
   video_id?: string | null;
   video_url?: string | null;
+  thumbnail_url?: string | null;
+  thumbnail_status?: string | null;
+  thumbnail_error?: string | null;
   error_message?: string | null;
   created_at?: string;
   updated_at?: string;
+  completed_at?: string | null;
 }
 
 export interface YouTubeUploadCancelResponse {
@@ -605,7 +618,28 @@ export interface YouTubeUploadItem {
   processing_status?: string | null;
   video_id?: string | null;
   video_url?: string | null;
+  thumbnail_url?: string | null;
+  thumbnail_status?: string | null;
+  thumbnail_error?: string | null;
   error_message?: string | null;
   created_at: string;
   updated_at: string;
+  completed_at?: string | null;
+}
+
+export interface YouTubeThumbnailUploadResponse {
+  thumbnail_url: string;
+  filename: string;
+  file_size_bytes: number;
+  mime_type?: string;
+}
+
+export interface YouTubeThumbnailRetryResponse {
+  success: boolean;
+  upload_id: string;
+  video_id?: string | null;
+  thumbnail_url?: string | null;
+  thumbnail_status: string;
+  thumbnail_error?: string | null;
+  message: string;
 }

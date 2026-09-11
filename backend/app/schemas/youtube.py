@@ -42,6 +42,8 @@ class YouTubeUploadInitiateRequest(BaseModel):
     mime_type: Optional[str] = Field(default="video/mp4", description="MIME type, e.g. video/mp4")
     file_size_bytes: int = Field(..., gt=0, description="Total video file size in bytes")
     client_mutation_id: Optional[str] = Field(default=None, max_length=100, description="Client idempotency mutation key")
+    thumbnail_url: Optional[str] = Field(default=None, description="Custom thumbnail image URL")
+    publish_at: Optional[datetime] = Field(default=None, description="Scheduled publication timestamp (ISO 8601 UTC)")
 
 class YouTubeUploadInitiateResponse(BaseModel):
     upload_id: str = Field(..., description="Unique upload session identifier")
@@ -54,6 +56,8 @@ class YouTubeUploadInitiateResponse(BaseModel):
     mime_type: str
     privacy_status: str = "private"
     status: str = "INITIATED"
+    thumbnail_url: Optional[str] = None
+    thumbnail_status: Optional[str] = None
     next_byte_offset: int = 0
     message: str = "Resumable upload session initiated successfully."
 
@@ -70,6 +74,9 @@ class YouTubeUploadChunkResponse(BaseModel):
     is_complete: bool
     video_id: Optional[str] = None
     video_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    thumbnail_status: Optional[str] = None
+    thumbnail_error: Optional[str] = None
 
 class YouTubeUploadStatusResponse(BaseModel):
     upload_id: str
@@ -89,6 +96,9 @@ class YouTubeUploadStatusResponse(BaseModel):
     processing_failure_reason: Optional[str] = None
     video_id: Optional[str] = None
     video_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    thumbnail_status: Optional[str] = None
+    thumbnail_error: Optional[str] = None
     error_message: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -112,6 +122,9 @@ class YouTubeUploadDetailResponse(BaseModel):
     upload_status: str
     processing_status: Optional[str] = None
     processing_failure_reason: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    thumbnail_status: Optional[str] = None
+    thumbnail_error: Optional[str] = None
     error_message: Optional[str] = None
     video_url: Optional[str] = None
     created_at: datetime
@@ -120,6 +133,18 @@ class YouTubeUploadDetailResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class YouTubeThumbnailUploadResponse(BaseModel):
+    thumbnail_url: str
+    filename: str
+    file_size_bytes: int
+
+class YouTubeThumbnailRetryResponse(BaseModel):
+    success: bool
+    upload_id: str
+    thumbnail_status: str
+    thumbnail_error: Optional[str] = None
+    message: str
 
 class YouTubeUploadCancelResponse(BaseModel):
     success: bool

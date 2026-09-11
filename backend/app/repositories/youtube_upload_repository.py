@@ -19,6 +19,7 @@ class YouTubeUploadRepository:
         mime_type: str = "video/mp4",
         encrypted_session_url: Optional[str] = None,
         client_mutation_id: Optional[str] = None,
+        thumbnail_url: Optional[str] = None,
         metadata_json: Optional[dict] = None,
     ) -> YouTubeUpload:
         # Pre-check for existing active upload if client_mutation_id is given
@@ -42,6 +43,9 @@ class YouTubeUploadRepository:
             bytes_uploaded=0,
             progress_percentage=0.0,
             upload_status=YouTubeUploadStatus.INITIATED.value,
+            thumbnail_url=thumbnail_url,
+            thumbnail_status="PENDING" if thumbnail_url else None,
+            thumbnail_error=None,
             encrypted_session_url=encrypted_session_url,
             metadata_json=metadata_json or {},
         )
@@ -57,6 +61,29 @@ class YouTubeUploadRepository:
                 if existing:
                     return existing
             raise
+
+    def update_thumbnail_status(
+        self,
+        db: Session,
+        upload_id: str,
+        thumbnail_status: str,
+        thumbnail_error: Optional[str] = None,
+        thumbnail_url: Optional[str] = None,
+        error: Optional[str] = None,
+    ) -> Optional[YouTubeUpload]:
+        upload = self.get_by_upload_id(db, upload_id)
+        if not upload:
+            return None
+
+        effective_error = thumbnail_error if thumbnail_error is not None else error
+        upload.thumbnail_status = thumbnail_status
+        upload.thumbnail_error = effective_error
+        if thumbnail_url is not None:
+            upload.thumbnail_url = thumbnail_url
+        upload.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(upload)
+        return upload
 
     def get_by_upload_id(self, db: Session, upload_id: str) -> Optional[YouTubeUpload]:
         return db.query(YouTubeUpload).filter(YouTubeUpload.upload_id == upload_id).first()

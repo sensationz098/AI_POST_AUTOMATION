@@ -1,6 +1,7 @@
 import logging
+import base64
 import requests
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 from urllib.parse import urlencode
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
@@ -39,6 +40,7 @@ class YouTubeService:
     REQUIRED_YOUTUBE_SCOPES = [
         "https://www.googleapis.com/auth/youtube.upload",
         "https://www.googleapis.com/auth/youtube.readonly",
+        "https://www.googleapis.com/auth/youtube",
     ]
 
     def get_authorization_url(self, state: str) -> str:
@@ -280,6 +282,7 @@ class YouTubeService:
         tags: Optional[List[str]] = None,
         category_id: Optional[str] = None,
         made_for_kids: Optional[bool] = False,
+        publish_at: Optional[Union[datetime, str]] = None,
     ) -> str:
         """
         Create a YouTube resumable upload session on Google servers.
@@ -308,6 +311,13 @@ class YouTubeService:
         }
         if made_for_kids is not None:
             status_data["selfDeclaredMadeForKids"] = bool(made_for_kids)
+
+        if publish_at:
+            if isinstance(publish_at, datetime):
+                status_data["publishAt"] = publish_at.isoformat()
+            else:
+                status_data["publishAt"] = str(publish_at)
+            status_data["privacyStatus"] = "private"
 
         body = {
             "snippet": snippet_data,
@@ -559,5 +569,108 @@ class YouTubeService:
         except Exception as e:
             logger.warning(f"[YOUTUBE_UPLOAD] Remote session cancellation request failed (best-effort): {e}")
             return False
+
+    def set_video_thumbnail(
+        self,
+        access_token: str,
+        video_id: str,
+        image_bytes: bytes,
+        mime_type: str = "image/jpeg",
+    ) -> Dict[str, Any]:
+        """
+        Set a custom thumbnail for an uploaded YouTube video using YouTube Data API v3 thumbnails.set.
+        Endpoint: POST https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId={video_id}
+        Requires youtube.upload or youtube scope.
+        Never logs access_token.
+        """
+        url = f"https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId={video_id}"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": mime_type,
+            "Content-Length": str(len(image_bytes)),
+        }
+
+        try:
+            response = requests.post(url, data=image_bytes, headers=headers, timeout=30)
+        except Exception as e:
+            logger.error(f"[YOUTUBE_THUMBNAIL] Network error uploading thumbnail for video {video_id}: {e}")
+            raise YouTubeAPIException(f"Failed to connect to YouTube thumbnail service: {str(e)}")
+
+        if response.status_code not in (200, 201):
+            err_msg = f"HTTP {response.status_code}"
+            try:
+                err_data = response.json()
+                err_msg = err_data.get("error", {}).get("message") or err_msg
+            except Exception:
+                pass
+            logger.error(f"[YOUTUBE_THUMBNAIL] Thumbnail upload rejected for video {video_id} ({response.status_code}): {err_msg}")
+            raise YouTubeAPIException(f"YouTube thumbnail rejected: {err_msg}", status_code=response.status_code)
+
+        try:
+            data = response.json()
+        except Exception:
+            data = {"status": "success"}
+
+        logger.info(f"[YOUTUBE_THUMBNAIL] Successfully applied custom thumbnail to video {video_id}")
+        return data
+
+    def apply_thumbnail_from_storage(
+        self,
+        access_token: str,
+        video_id: str,
+        thumbnail_url: str,
+    ) -> Dict[str, Any]:
+        """
+        Fetch thumbnail image from trusted application storage and apply it to YouTube video.
+        Enforces security: restricts to trusted application domains (Cloudinary, Unsplash, local trusted origins, or base64 data URIs),
+        preventing arbitrary SSRF attacks.
+        """
+        if not thumbnail_url or not video_id:
+            raise YouTubeAPIException("Missing video_id or thumbnail_url for thumbnail application.")
+
+        # Case A: Base64 data URI
+        if thumbnail_url.startswith("data:image/"):
+            try:
+                header, encoded = thumbnail_url.split(",", 1)
+                mime = "image/jpeg"
+                if "image/png" in header:
+                    mime = "image/png"
+                elif "image/jpeg" in header or "image/jpg" in header:
+                    mime = "image/jpeg"
+                image_bytes = base64.b64decode(encoded)
+            except Exception as e:
+                raise YouTubeAPIException(f"Invalid base64 thumbnail data: {e}")
+            return self.set_video_thumbnail(access_token, video_id, image_bytes, mime_type=mime)
+
+        # Case B: Trusted storage URL
+        trusted_domains = (
+            "https://res.cloudinary.com/",
+            "https://images.unsplash.com/",
+        )
+        is_trusted = any(thumbnail_url.startswith(d) for d in trusted_domains)
+        if not is_trusted:
+            frontend_base = (settings.FRONTEND_URL or "").rstrip("/")
+            if frontend_base and thumbnail_url.startswith(frontend_base):
+                is_trusted = True
+
+        if not is_trusted:
+            logger.warning(f"[YOUTUBE_THUMBNAIL] Untrusted thumbnail URL domain rejected: {thumbnail_url}")
+            raise YouTubeAPIException("Thumbnail URL domain is not in the trusted storage whitelist.")
+
+        try:
+            res = requests.get(thumbnail_url, timeout=20)
+            if res.status_code != 200:
+                raise YouTubeAPIException(f"Failed to fetch thumbnail image from storage: HTTP {res.status_code}")
+            image_bytes = res.content
+            content_type = res.headers.get("Content-Type", "image/jpeg")
+            if "png" in content_type:
+                mime_type = "image/png"
+            else:
+                mime_type = "image/jpeg"
+        except Exception as e:
+            logger.error(f"[YOUTUBE_THUMBNAIL] Error downloading thumbnail from {thumbnail_url}: {e}")
+            raise YouTubeAPIException(f"Could not load thumbnail from storage: {str(e)}")
+
+        return self.set_video_thumbnail(access_token, video_id, image_bytes, mime_type=mime_type)
 
 youtube_service = YouTubeService()

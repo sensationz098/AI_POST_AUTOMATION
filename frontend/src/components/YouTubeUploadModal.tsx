@@ -17,7 +17,9 @@ import {
   Play,
   Trash2,
   ExternalLink,
-  Film
+  Film,
+  Image as ImageIcon,
+  AlertTriangle,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import {
@@ -25,7 +27,9 @@ import {
   YouTubeUploadInitiateResponse,
   YouTubeUploadChunkResponse,
   YouTubeUploadStatusResponse,
-  YouTubeUploadCancelResponse
+  YouTubeUploadCancelResponse,
+  YouTubeThumbnailUploadResponse,
+  YouTubeThumbnailRetryResponse,
 } from '@/lib/types';
 
 interface YouTubeUploadModalProps {
@@ -52,6 +56,18 @@ export function YouTubeUploadModal({
   const [title, setTitle] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [privacyStatus, setPrivacyStatus] = useState<'private' | 'unlisted' | 'public'>('private');
+
+  // Custom Thumbnail state
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [thumbnailDimensions, setThumbnailDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [thumbnailUploading, setThumbnailUploading] = useState<boolean>(false);
+  const [thumbnailValidationError, setThumbnailValidationError] = useState<string | null>(null);
+  const [thumbnailStatus, setThumbnailStatus] = useState<string | null>(null);
+  const [thumbnailError, setThumbnailError] = useState<string | null>(null);
+  const [isRetryingThumbnail, setIsRetryingThumbnail] = useState<boolean>(false);
+  const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
 
   // Execution states
   const [uploadPhase, setUploadPhase] = useState<UploadPhase>('idle');
@@ -84,14 +100,17 @@ export function YouTubeUploadModal({
     }
   }, [isOpen, defaultChannelId, channels]);
 
-  // Cleanup polling timer on unmount or close
+  // Cleanup polling timer and preview URL on unmount or close
   useEffect(() => {
     return () => {
+      if (thumbnailPreviewUrl && thumbnailPreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(thumbnailPreviewUrl);
+      }
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
       }
     };
-  }, []);
+  }, [thumbnailPreviewUrl]);
 
   if (!isOpen) return null;
 
@@ -108,6 +127,93 @@ export function YouTubeUploadModal({
       if (!title) {
         setTitle(file.name.replace(/\.[^/.]+$/, ''));
       }
+    }
+  };
+
+  const handleThumbnailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setThumbnailValidationError(null);
+
+      const validMimes = ['image/jpeg', 'image/png', 'image/jpg'];
+      const isValidExt = file.name.match(/\.(jpe?g|png)$/i);
+      if (!validMimes.includes(file.type) && !isValidExt) {
+        setThumbnailValidationError('Custom thumbnails must be JPEG or PNG format.');
+        return;
+      }
+
+      if (file.size > 2 * 1024 * 1024) {
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+        setThumbnailValidationError(`Thumbnail size (${sizeMb} MB) exceeds maximum allowed limit of 2 MB.`);
+        return;
+      }
+
+      setThumbnailFile(file);
+      if (thumbnailPreviewUrl && thumbnailPreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(thumbnailPreviewUrl);
+      }
+      const localUrl = URL.createObjectURL(file);
+      setThumbnailPreviewUrl(localUrl);
+
+      const img = new Image();
+      img.onload = () => {
+        setThumbnailDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.src = localUrl;
+
+      try {
+        setThumbnailUploading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await apiClient.post<YouTubeThumbnailUploadResponse>('/youtube/upload-thumbnail', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setThumbnailUrl(res.data.thumbnail_url);
+        setThumbnailStatus('PENDING');
+        setThumbnailError(null);
+      } catch (uploadErr: any) {
+        const msg = uploadErr.response?.data?.detail || 'Failed to upload thumbnail.';
+        setThumbnailValidationError(msg);
+      } finally {
+        setThumbnailUploading(false);
+      }
+    }
+  };
+
+  const handleRemoveThumbnail = () => {
+    if (thumbnailPreviewUrl && thumbnailPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(thumbnailPreviewUrl);
+    }
+    setThumbnailFile(null);
+    setThumbnailPreviewUrl(null);
+    setThumbnailUrl(null);
+    setThumbnailDimensions(null);
+    setThumbnailValidationError(null);
+    setThumbnailStatus(null);
+    setThumbnailError(null);
+    if (thumbnailInputRef.current) {
+      thumbnailInputRef.current.value = '';
+    }
+  };
+
+  const handleRetryThumbnail = async () => {
+    if (!uploadId) return;
+    setIsRetryingThumbnail(true);
+    try {
+      const res = await apiClient.post<YouTubeThumbnailRetryResponse>(`/youtube/upload/${uploadId}/thumbnail/retry`);
+      if (res.data.success) {
+        setThumbnailStatus('APPLIED');
+        setThumbnailError(null);
+      } else {
+        setThumbnailStatus('FAILED');
+        setThumbnailError(res.data.thumbnail_error || 'Thumbnail application failed.');
+      }
+    } catch (retryErr: any) {
+      const msg = retryErr.response?.data?.detail || retryErr.message || 'Thumbnail retry failed.';
+      setThumbnailStatus('FAILED');
+      setThumbnailError(msg);
+    } finally {
+      setIsRetryingThumbnail(false);
     }
   };
 
@@ -154,6 +260,7 @@ export function YouTubeUploadModal({
         mime_type: selectedFile.type || 'video/mp4',
         file_size_bytes: selectedFile.size,
         client_mutation_id: mutationId,
+        thumbnail_url: thumbnailUrl || undefined,
       };
 
       const initRes = await apiClient.post<YouTubeUploadInitiateResponse>(
@@ -308,6 +415,14 @@ export function YouTubeUploadModal({
         );
         const data = res.data;
         setStatusDetail(data);
+
+        // Sync thumbnail status
+        if (data.thumbnail_status) {
+          setThumbnailStatus(data.thumbnail_status);
+        }
+        if (data.thumbnail_error) {
+          setThumbnailError(data.thumbnail_error);
+        }
 
         if (data.status === 'READY' || data.processing_status === 'succeeded') {
           setUploadPhase('ready');
@@ -533,6 +648,96 @@ export function YouTubeUploadModal({
             </div>
           )}
 
+          {/* Custom Thumbnail Picker */}
+          {uploadPhase === 'idle' && (
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between">
+                <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-red-400" />
+                  <span>Custom Thumbnail (Optional)</span>
+                </label>
+                <div className="flex items-center space-x-1.5 text-[10px] text-slate-400">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">Rec: 16:9</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">JPEG/PNG ≤ 2MB</span>
+                </div>
+              </div>
+
+              <input
+                ref={thumbnailInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/jpg"
+                onChange={handleThumbnailChange}
+                disabled={uploadPhase !== 'idle' || thumbnailUploading}
+                className="hidden"
+              />
+
+              {!thumbnailPreviewUrl ? (
+                <div
+                  onClick={() => thumbnailInputRef.current?.click()}
+                  className="p-3.5 border border-dashed border-slate-700 hover:border-red-500/80 rounded-xl bg-slate-950/40 cursor-pointer transition text-center group flex items-center justify-center space-x-3"
+                >
+                  {thumbnailUploading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-red-400" />
+                  ) : (
+                    <ImageIcon className="w-4 h-4 text-slate-400 group-hover:text-red-400 transition" />
+                  )}
+                  <span className="text-xs font-medium text-slate-300 group-hover:text-white">
+                    {thumbnailUploading ? 'Uploading thumbnail...' : 'Select custom thumbnail image'}
+                  </span>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="relative w-16 h-10 rounded-md overflow-hidden bg-black border border-slate-700 flex-shrink-0">
+                      <img src={thumbnailPreviewUrl} alt="Thumbnail preview" className="w-full h-full object-cover" />
+                      {thumbnailUploading && (
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 space-y-0.5">
+                      <p className="text-xs font-semibold text-slate-200 truncate">
+                        {thumbnailFile?.name || 'Custom Thumbnail'}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        {thumbnailFile ? formatBytes(thumbnailFile.size) : ''}
+                        {thumbnailDimensions ? ` • ${thumbnailDimensions.width}×${thumbnailDimensions.height}` : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => thumbnailInputRef.current?.click()}
+                      disabled={thumbnailUploading}
+                      className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition"
+                    >
+                      Change
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRemoveThumbnail}
+                      disabled={thumbnailUploading}
+                      className="p-1 rounded-md bg-rose-950/40 hover:bg-rose-900 border border-rose-800/60 text-rose-300 transition"
+                      title="Remove thumbnail"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {thumbnailValidationError && (
+                <p className="text-[10px] text-rose-400 flex items-center space-x-1 pt-0.5">
+                  <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                  <span>{thumbnailValidationError}</span>
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Live Upload Progress Section */}
           {uploadPhase !== 'idle' && (
             <div className="space-y-3 p-4 rounded-xl bg-slate-950/80 border border-slate-800">
@@ -635,7 +840,7 @@ export function YouTubeUploadModal({
 
           {/* Success Card */}
           {uploadPhase === 'ready' && statusDetail && (
-            <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-800/80 space-y-2">
+            <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-800/80 space-y-2.5">
               <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs">
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Upload & YouTube Processing Complete!</span>
@@ -643,6 +848,44 @@ export function YouTubeUploadModal({
               <p className="text-[11px] text-slate-300">
                 Your video is published and ready to watch on YouTube.
               </p>
+
+              {/* Thumbnail Status in Success Card */}
+              {(statusDetail.thumbnail_url || thumbnailUrl) && (
+                <div className="p-2 rounded-lg bg-slate-900/80 border border-emerald-700/30 flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-2">
+                    <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+                    {thumbnailStatus === 'APPLIED' ? (
+                      <span className="text-emerald-300 font-semibold flex items-center space-x-1 text-[11px]">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        <span>Thumbnail applied</span>
+                      </span>
+                    ) : thumbnailStatus === 'FAILED' ? (
+                      <span className="text-rose-300 font-semibold flex items-center space-x-1 text-[11px]">
+                        <AlertTriangle className="w-3 h-3 text-rose-400" />
+                        <span>Thumbnail application failed{thumbnailError ? `: ${thumbnailError}` : ''}</span>
+                      </span>
+                    ) : (
+                      <span className="text-amber-300 font-medium flex items-center space-x-1 text-[11px]">
+                        <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                        <span>Applying thumbnail...</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {thumbnailStatus === 'FAILED' && uploadId && (
+                    <button
+                      type="button"
+                      onClick={handleRetryThumbnail}
+                      disabled={isRetryingThumbnail}
+                      className="px-2 py-0.5 rounded bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 text-[10px] font-bold transition flex items-center space-x-1"
+                    >
+                      {isRetryingThumbnail ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <RefreshCw className="w-2.5 h-2.5" />}
+                      <span>Retry</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               {statusDetail.video_url && (
                 <div className="pt-2 flex items-center space-x-3">
                   <a

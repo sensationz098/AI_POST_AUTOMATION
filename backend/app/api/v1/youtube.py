@@ -1,9 +1,11 @@
+import os
+import base64
 import secrets
 import logging
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, status, Query, HTTPException, Request, Header
+from fastapi import APIRouter, Depends, status, Query, HTTPException, Request, Header, File, UploadFile
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -41,6 +43,8 @@ from app.schemas.youtube import (
     YouTubeUploadChunkResponse,
     YouTubeUploadStatusResponse,
     YouTubeUploadDetailResponse,
+    YouTubeThumbnailUploadResponse,
+    YouTubeThumbnailRetryResponse,
     YouTubeUploadCancelResponse,
     YouTubeUploadListResponse,
 )
@@ -216,6 +220,66 @@ def list_connected_youtube_channels(
 
 # ─── Resumable Upload Endpoints (Milestone 2B) ───────────────────────────────
 
+@router.post("/upload-thumbnail", response_model=YouTubeThumbnailUploadResponse)
+async def upload_youtube_thumbnail(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Upload and validate custom thumbnail for YouTube videos.
+    Enforces image format (image/jpeg, image/png) and max size (2 MB per YouTube requirements).
+    Streams image into trusted media storage (Cloudinary or fallback).
+    """
+    filename = file.filename or "thumbnail.jpg"
+    content_type = (file.content_type or "").lower()
+
+    # 1. Validate MIME type strictly (JPEG, PNG)
+    valid_mimes = ["image/jpeg", "image/jpg", "image/png"]
+    has_valid_ext = any(filename.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png"])
+    if (content_type and content_type not in valid_mimes) or (not content_type and not has_valid_ext):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image format. YouTube custom thumbnails must be JPEG or PNG format."
+        )
+
+    # 2. Check file size (max 2 MB = 2 * 1024 * 1024 bytes)
+    file.file.seek(0, os.SEEK_END)
+    file_size = file.file.tell()
+    file.file.seek(0)
+
+    MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024
+    if file_size > MAX_THUMBNAIL_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Thumbnail size ({file_size / (1024*1024):.2f} MB) exceeds maximum allowed limit of 2 MB."
+        )
+    if file_size == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Thumbnail file cannot be empty."
+        )
+
+    # 3. Upload to trusted application storage
+    from app.services.cloudinary_service import upload_media_to_cloudinary
+    storage_url = upload_media_to_cloudinary(file.file, filename_prefix="yt_thumb", media_type="image")
+
+    if not storage_url:
+        # Fallback to base64 data URI if Cloudinary is unconfigured
+        file.file.seek(0)
+        raw_bytes = file.file.read()
+        b64 = base64.b64encode(raw_bytes).decode("utf-8")
+        actual_mime = "image/png" if filename.lower().endswith(".png") else "image/jpeg"
+        storage_url = f"data:{actual_mime};base64,{b64}"
+
+    logger.info(f"[YOUTUBE_THUMBNAIL] User {current_user.id} uploaded thumbnail {filename} ({file_size} bytes)")
+
+    return YouTubeThumbnailUploadResponse(
+        thumbnail_url=storage_url,
+        filename=filename,
+        file_size_bytes=file_size,
+    )
+
 @router.post("/upload/initiate", response_model=YouTubeUploadInitiateResponse)
 def initiate_youtube_upload(
     payload: YouTubeUploadInitiateRequest,
@@ -247,6 +311,8 @@ def initiate_youtube_upload(
                 mime_type=existing_upload.mime_type,
                 privacy_status=existing_upload.privacy_status,
                 status=existing_upload.upload_status,
+                thumbnail_url=existing_upload.thumbnail_url,
+                thumbnail_status=existing_upload.thumbnail_status,
                 next_byte_offset=existing_upload.bytes_uploaded,
                 message="Resumed existing active upload session."
             )
@@ -286,6 +352,7 @@ def initiate_youtube_upload(
             tags=payload.tags,
             category_id=payload.category_id,
             made_for_kids=payload.made_for_kids,
+            publish_at=payload.publish_at,
         )
     except YouTubeAPIException as e:
         logger.error(f"[YOUTUBE_UPLOAD] Resumable init API error: {e.message}")
@@ -318,7 +385,11 @@ def initiate_youtube_upload(
         file_size_bytes=payload.file_size_bytes,
         encrypted_session_url=encrypted_url,
         client_mutation_id=payload.client_mutation_id,
-        metadata_json={"channel_title": account.account_name},
+        thumbnail_url=payload.thumbnail_url,
+        metadata_json={
+            "channel_title": account.account_name,
+            "thumbnail_url": payload.thumbnail_url,
+        },
     )
 
     # Cache session in Redis for fast access
@@ -333,6 +404,9 @@ def initiate_youtube_upload(
         "mime_type": payload.mime_type or "video/mp4",
         "privacy_status": payload.privacy_status or "private",
         "encrypted_session_url": encrypted_url,
+        "thumbnail_url": payload.thumbnail_url,
+        "thumbnail_status": "PENDING" if payload.thumbnail_url else None,
+        "thumbnail_error": None,
         "status": YouTubeUploadStatus.INITIATED.value,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -351,6 +425,8 @@ def initiate_youtube_upload(
         mime_type=payload.mime_type or "video/mp4",
         privacy_status=payload.privacy_status or "private",
         status=upload_record.upload_status,
+        thumbnail_url=payload.thumbnail_url,
+        thumbnail_status=upload_record.thumbnail_status,
         next_byte_offset=0,
         message="Resumable upload session initiated successfully."
     )
@@ -476,11 +552,46 @@ async def upload_youtube_chunk(
         video_url = result.get("video_url")
         if upload:
             youtube_upload_repo.mark_completed(db, upload_id, video_id or "", video_url or "")
+
+        # Check for custom thumbnail application
+        thumb_url = (upload.thumbnail_url if upload else None)
+        thumb_status = (upload.thumbnail_status if upload else None)
+        thumb_error = (upload.thumbnail_error if upload else None)
+
+        if not thumb_url:
+            cached_session = get_upload_session(upload_id)
+            if cached_session:
+                thumb_url = cached_session.get("thumbnail_url")
+                thumb_status = cached_session.get("thumbnail_status")
+                thumb_error = cached_session.get("thumbnail_error")
+
+        # Apply custom thumbnail if thumbnail_url is present and not yet applied
+        if thumb_url and video_id and thumb_status != "APPLIED":
+            try:
+                youtube_service.apply_thumbnail_from_storage(
+                    access_token=access_token,
+                    video_id=video_id,
+                    thumbnail_url=thumb_url,
+                )
+                thumb_status = "APPLIED"
+                thumb_error = None
+                if upload:
+                    youtube_upload_repo.update_thumbnail_status(db, upload_id, "APPLIED")
+                logger.info(f"[YOUTUBE_UPLOAD] Custom thumbnail successfully applied to video {video_id} for upload {upload_id}")
+            except Exception as e:
+                thumb_status = "FAILED"
+                thumb_error = str(getattr(e, "message", e))
+                if upload:
+                    youtube_upload_repo.update_thumbnail_status(db, upload_id, "FAILED", error=thumb_error)
+                logger.warning(f"[YOUTUBE_UPLOAD] Thumbnail application failed for video {video_id} (upload {upload_id}): {thumb_error}. Video publication remains successful.")
         
         update_upload_session(upload_id, {
             "status": YouTubeUploadStatus.PROCESSING.value,
             "video_id": video_id,
             "video_url": video_url,
+            "thumbnail_url": thumb_url,
+            "thumbnail_status": thumb_status,
+            "thumbnail_error": thumb_error,
             "last_byte_received": last_byte_received,
         })
 
@@ -516,6 +627,9 @@ async def upload_youtube_chunk(
         is_complete=is_complete,
         video_id=result.get("video_id"),
         video_url=result.get("video_url"),
+        thumbnail_url=thumb_url if is_complete else (upload.thumbnail_url if upload else None),
+        thumbnail_status=thumb_status if is_complete else (upload.thumbnail_status if upload else None),
+        thumbnail_error=thumb_error if is_complete else (upload.thumbnail_error if upload else None),
     )
 
 @router.get("/upload/{upload_id}/status", response_model=YouTubeUploadStatusResponse)
@@ -561,6 +675,9 @@ def get_youtube_upload_status(
             is_complete=is_finished,
             video_id=session_data.get("video_id"),
             video_url=session_data.get("video_url"),
+            thumbnail_url=session_data.get("thumbnail_url"),
+            thumbnail_status=session_data.get("thumbnail_status"),
+            thumbnail_error=session_data.get("thumbnail_error"),
         )
 
     # Controlled live refresh if client requested it
@@ -626,11 +743,88 @@ def get_youtube_upload_status(
         processing_failure_reason=upload.processing_failure_reason,
         video_id=upload.video_id,
         video_url=upload.video_url,
+        thumbnail_url=upload.thumbnail_url,
+        thumbnail_status=upload.thumbnail_status,
+        thumbnail_error=upload.thumbnail_error,
         error_message=upload.error_message,
         created_at=upload.created_at,
         updated_at=upload.updated_at,
         completed_at=upload.completed_at,
     )
+
+@router.post("/upload/{upload_id}/thumbnail/retry", response_model=YouTubeThumbnailRetryResponse)
+@router.post("/{upload_id}/thumbnail/retry", response_model=YouTubeThumbnailRetryResponse)
+def retry_youtube_thumbnail(
+    upload_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retry applying custom thumbnail for an existing uploaded YouTube video.
+    Strictly tenant-isolated.
+    """
+    upload = youtube_upload_repo.get_by_upload_id_and_user(db, upload_id, current_user.id)
+    if not upload:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="YouTube upload record not found or access denied."
+        )
+
+    if not upload.video_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot apply thumbnail: Video has not yet been assigned a YouTube video ID."
+        )
+
+    if not upload.thumbnail_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No thumbnail URL is associated with this upload."
+        )
+
+    account = social_account_repo.get_by_id(db, upload.social_account_id)
+    if not account or account.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Connected YouTube channel not found or access denied."
+        )
+
+    access_token = youtube_service.get_valid_access_token_for_account(db, account)
+
+    try:
+        youtube_service.apply_thumbnail_from_storage(
+            access_token=access_token,
+            video_id=upload.video_id,
+            thumbnail_url=upload.thumbnail_url,
+        )
+        youtube_upload_repo.update_thumbnail_status(db, upload_id, "APPLIED")
+        update_upload_session(upload_id, {
+            "thumbnail_status": "APPLIED",
+            "thumbnail_error": None,
+        })
+        logger.info(f"[YOUTUBE_THUMBNAIL] Successfully applied retried thumbnail for upload {upload_id}, video_id={upload.video_id}")
+        return YouTubeThumbnailRetryResponse(
+            success=True,
+            upload_id=upload_id,
+            thumbnail_status="APPLIED",
+            thumbnail_error=None,
+            message="Thumbnail applied successfully."
+        )
+    except Exception as e:
+        err_msg = str(getattr(e, "message", e))
+        youtube_upload_repo.update_thumbnail_status(db, upload_id, "FAILED", error=err_msg)
+        update_upload_session(upload_id, {
+            "thumbnail_status": "FAILED",
+            "thumbnail_error": err_msg,
+        })
+        logger.warning(f"[YOUTUBE_THUMBNAIL] Thumbnail retry failed for upload {upload_id}: {err_msg}")
+        return YouTubeThumbnailRetryResponse(
+            success=False,
+            upload_id=upload_id,
+            thumbnail_status="FAILED",
+            thumbnail_error=err_msg,
+            message=f"Thumbnail application failed: {err_msg}"
+        )
 
 @router.post("/upload/{upload_id}/cancel", response_model=YouTubeUploadCancelResponse)
 def cancel_youtube_upload(

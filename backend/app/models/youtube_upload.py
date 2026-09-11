@@ -50,6 +50,9 @@ class YouTubeUpload(Base):
 
     encrypted_session_url = Column(Text, nullable=True)  # Encrypted Google capability session URL
     video_url = Column(Text, nullable=True)
+    thumbnail_url = Column(Text, nullable=True)
+    thumbnail_status = Column(String(50), nullable=True)  # "PENDING", "APPLIED", "FAILED"
+    thumbnail_error = Column(Text, nullable=True)
     metadata_json = Column(JSON, default=dict)
 
     created_at = Column(DateTime, default=utc_now)
