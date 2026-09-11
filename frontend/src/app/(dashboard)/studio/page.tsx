@@ -859,7 +859,7 @@ export default function AIStudioPage() {
             <span>Social Media Creator Studio</span>
           </h1>
           <p className="text-[11px] text-slate-400">
-            Generate AI captions & graphics or upload custom media clips for Meta Facebook & Instagram publishing.
+            Generate AI captions & graphics or upload custom media clips for Meta Facebook & Instagram publishings.
           </p>
         </div>
 
