@@ -819,4 +819,162 @@ class YouTubeService:
             "raw_status": updated_status,
         }
 
+    def list_channel_videos(
+        self,
+        access_token: str,
+        uploads_playlist_id: Optional[str] = None,
+        page_token: Optional[str] = None,
+        max_results: int = 20,
+    ) -> Dict[str, Any]:
+        """
+        List uploaded videos for the authenticated user's YouTube channel.
+        Queries channels.list (for uploads playlist ID if not provided),
+        playlistItems.list (part=snippet,contentDetails), and
+        videos.list (part=snippet,status) to fetch live privacyStatus, high-res thumbnails,
+        and publication dates.
+        Never exposes access token or client secrets.
+        """
+        channel_id = None
+        channel_title = None
+
+        # 1. Resolve uploads playlist ID if not provided
+        if not uploads_playlist_id:
+            channel_info = self.fetch_authenticated_channel(access_token)
+            uploads_playlist_id = channel_info.get("uploads_playlist_id")
+            channel_id = channel_info.get("channel_id")
+            channel_title = channel_info.get("title")
+
+        if not uploads_playlist_id:
+            logger.warning("[YOUTUBE_LIBRARY] No uploads playlist ID found for channel.")
+            return {
+                "videos": [],
+                "next_page_token": None,
+                "prev_page_token": None,
+                "total_results": 0,
+                "channel_id": channel_id,
+                "channel_title": channel_title,
+            }
+
+        # 2. Query playlistItems.list
+        playlist_url = f"{self.YOUTUBE_API_BASE_URL}/playlistItems"
+        safe_limit = min(max(max_results, 1), 50)
+        params: Dict[str, Any] = {
+            "part": "snippet,contentDetails",
+            "playlistId": uploads_playlist_id,
+            "maxResults": safe_limit,
+        }
+        if page_token:
+            params["pageToken"] = page_token
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        }
+
+        try:
+            res = requests.get(playlist_url, params=params, headers=headers, timeout=25)
+            data = res.json()
+        except Exception as e:
+            logger.error(f"[YOUTUBE_LIBRARY] Error querying playlistItems for {uploads_playlist_id}: {e}")
+            raise YouTubeAPIException(f"Failed to query channel playlist: {str(e)}")
+
+        if res.status_code != 200:
+            err_msg = data.get("error", {}).get("message") or f"HTTP {res.status_code}"
+            logger.error(f"[YOUTUBE_LIBRARY] playlistItems error ({res.status_code}): {err_msg}")
+            raise YouTubeAPIException(f"YouTube playlist error: {err_msg}", status_code=res.status_code)
+
+        items = data.get("items", [])
+        next_page = data.get("nextPageToken")
+        prev_page = data.get("prevPageToken")
+        page_info = data.get("pageInfo", {})
+        total_results = page_info.get("totalResults")
+
+        if not items:
+            return {
+                "videos": [],
+                "next_page_token": next_page,
+                "prev_page_token": prev_page,
+                "total_results": total_results,
+                "channel_id": channel_id,
+                "channel_title": channel_title,
+            }
+
+        # 3. Extract Video IDs
+        video_ids = []
+        for it in items:
+            vid = it.get("contentDetails", {}).get("videoId") or it.get("snippet", {}).get("resourceId", {}).get("videoId")
+            if vid:
+                video_ids.append(vid)
+
+        # 4. Query videos.list to get live privacyStatus and detailed snippet
+        videos_map: Dict[str, Any] = {}
+        if video_ids:
+            videos_url = f"{self.YOUTUBE_API_BASE_URL}/videos"
+            v_params = {
+                "part": "snippet,status",
+                "id": ",".join(video_ids),
+                "maxResults": len(video_ids),
+            }
+            try:
+                v_res = requests.get(videos_url, params=v_params, headers=headers, timeout=25)
+                v_data = v_res.json()
+                if v_res.status_code == 200:
+                    for v_item in v_data.get("items", []):
+                        v_id = v_item.get("id")
+                        if v_id:
+                            videos_map[v_id] = v_item
+                else:
+                    logger.warning(f"[YOUTUBE_LIBRARY] videos.list batch query returned HTTP {v_res.status_code}")
+            except Exception as e:
+                logger.warning(f"[YOUTUBE_LIBRARY] Failed batch video detail query: {e}")
+
+        # 5. Format results
+        video_list: List[Dict[str, Any]] = []
+        for it in items:
+            vid = it.get("contentDetails", {}).get("videoId") or it.get("snippet", {}).get("resourceId", {}).get("videoId")
+            if not vid:
+                continue
+
+            v_detail = videos_map.get(vid, {})
+            v_snippet = v_detail.get("snippet") or it.get("snippet", {})
+            v_status = v_detail.get("status", {})
+
+            thumbnails = v_snippet.get("thumbnails", {})
+            thumb_url = (
+                thumbnails.get("maxres", {}).get("url")
+                or thumbnails.get("standard", {}).get("url")
+                or thumbnails.get("high", {}).get("url")
+                or thumbnails.get("medium", {}).get("url")
+                or thumbnails.get("default", {}).get("url")
+            )
+
+            c_id = v_snippet.get("channelId") or channel_id
+            c_title = v_snippet.get("channelTitle") or channel_title
+            if not channel_id and c_id:
+                channel_id = c_id
+            if not channel_title and c_title:
+                channel_title = c_title
+
+            video_list.append({
+                "video_id": vid,
+                "title": v_snippet.get("title", ""),
+                "description": v_snippet.get("description", ""),
+                "thumbnail_url": thumb_url,
+                "published_at": v_snippet.get("publishedAt") or it.get("snippet", {}).get("publishedAt"),
+                "privacy_status": v_status.get("privacyStatus", "public"),
+                "upload_status": v_status.get("uploadStatus"),
+                "channel_id": c_id,
+                "channel_title": c_title,
+                "video_url": f"https://www.youtube.com/watch?v={vid}",
+            })
+
+        return {
+            "videos": video_list,
+            "next_page_token": next_page,
+            "prev_page_token": prev_page,
+            "total_results": total_results,
+            "channel_id": channel_id,
+            "channel_title": channel_title,
+        }
+
 youtube_service = YouTubeService()

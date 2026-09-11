@@ -17,7 +17,8 @@ import {
   Activity,
   ChevronRight,
   Sun,
-  Moon
+  Moon,
+  Youtube
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -40,6 +41,7 @@ const navGroups: NavGroup[] = [
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { name: 'Studio', href: '/studio', icon: Sparkles },
+      { name: 'YouTube Videos', href: '/youtube/videos', icon: Youtube },
       { name: 'Post Scheduler', href: '/posts', icon: Calendar },
     ],
   },

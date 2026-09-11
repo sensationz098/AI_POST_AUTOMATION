@@ -49,6 +49,8 @@ from app.schemas.youtube import (
     YouTubeUploadListResponse,
     YouTubeVideoDetailResponse,
     YouTubeVideoUpdateRequest,
+    YouTubeVideoItem,
+    YouTubeVideoListResponse,
 )
 from app.schemas.social_account import SocialAccountResponse
 from app.api.v1.deps import get_current_user
@@ -954,6 +956,82 @@ def _resolve_youtube_account_for_video(
             continue
 
     return user_accounts[0]
+
+@router.get("/videos", response_model=YouTubeVideoListResponse)
+def list_youtube_videos(
+    page_token: Optional[str] = Query(None, description="YouTube pagination pageToken"),
+    limit: int = Query(20, ge=1, le=50, description="Page size limit (1-50)"),
+    social_account_id: Optional[int] = Query(None, description="Optional connected SocialAccount ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List uploaded videos from the authenticated user's connected YouTube channel.
+    Strictly tenant-isolated. Resolves user ownership of the channel.
+    Queries YouTube Data API v3 (playlistItems and videos) with live metadata.
+    """
+    if social_account_id is not None:
+        account = social_account_repo.get_by_id(db, social_account_id)
+        if not account or account.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Connected YouTube channel not found or access denied."
+            )
+        if account.platform != "youtube":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Specified account is not a YouTube channel."
+            )
+    else:
+        accounts = social_account_repo.get_by_user_and_platform(db, current_user.id, "youtube")
+        if not accounts:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No connected YouTube account found for your profile. Please connect your YouTube channel first."
+            )
+        account = accounts[0]
+
+    try:
+        access_token = youtube_service.get_valid_access_token_for_account(db, account)
+    except Exception as e:
+        logger.error(f"[YOUTUBE_LIBRARY] Authentication resolution failed for user {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Failed to authenticate with YouTube: {str(e)}"
+        )
+
+    uploads_playlist_id = None
+    if account.metadata_json and isinstance(account.metadata_json, dict):
+        uploads_playlist_id = account.metadata_json.get("uploads_playlist_id")
+
+    try:
+        result = youtube_service.list_channel_videos(
+            access_token=access_token,
+            uploads_playlist_id=uploads_playlist_id,
+            page_token=page_token,
+            max_results=limit,
+        )
+    except YouTubeAPIException as e:
+        logger.error(f"[YOUTUBE_LIBRARY] YouTube API error for user {current_user.id}: {e.message}")
+        raise HTTPException(
+            status_code=e.status_code if e.status_code and e.status_code >= 400 else 502,
+            detail=f"YouTube video library query failed: {e.message}"
+        )
+    except Exception as e:
+        logger.error(f"[YOUTUBE_LIBRARY] Unexpected error listing videos for user {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve channel videos from YouTube."
+        )
+
+    return YouTubeVideoListResponse(
+        videos=result.get("videos", []),
+        next_page_token=result.get("next_page_token"),
+        prev_page_token=result.get("prev_page_token"),
+        total_results=result.get("total_results"),
+        channel_id=result.get("channel_id") or account.account_id,
+        channel_title=result.get("channel_title") or account.account_name,
+    )
 
 @router.get("/videos/{video_id}", response_model=YouTubeVideoDetailResponse)
 def get_youtube_video(

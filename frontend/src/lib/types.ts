@@ -686,3 +686,25 @@ export const YOUTUBE_CATEGORIES = [
   { id: '25', name: 'News & Politics' },
   { id: '29', name: 'Nonprofits & Activism' },
 ];
+
+export interface YouTubeVideoItem {
+  video_id: string;
+  title: string;
+  description?: string | null;
+  thumbnail_url?: string | null;
+  published_at?: string | null;
+  privacy_status: 'public' | 'unlisted' | 'private' | string;
+  upload_status?: string | null;
+  channel_id?: string | null;
+  channel_title?: string | null;
+  video_url?: string | null;
+}
+
+export interface YouTubeVideoListResponse {
+  videos: YouTubeVideoItem[];
+  next_page_token?: string | null;
+  prev_page_token?: string | null;
+  total_results?: number | null;
+  channel_id?: string | null;
+  channel_title?: string | null;
+}

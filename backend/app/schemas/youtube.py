@@ -178,3 +178,23 @@ class YouTubeVideoUpdateRequest(BaseModel):
     privacy_status: Optional[str] = Field(default=None, description="Updated privacy: private, unlisted, public")
     made_for_kids: Optional[bool] = Field(default=None, description="COPPA Made for kids declaration")
     thumbnail_url: Optional[str] = Field(default=None, description="Updated trusted custom thumbnail URL")
+
+class YouTubeVideoItem(BaseModel):
+    video_id: str = Field(..., description="YouTube 11-char video ID")
+    title: str = Field(..., description="Video title")
+    description: Optional[str] = Field(default="", description="Video description snippet")
+    thumbnail_url: Optional[str] = Field(default=None, description="Thumbnail URL")
+    published_at: Optional[str] = Field(default=None, description="ISO publication timestamp")
+    privacy_status: str = Field(default="public", description="Privacy status: public, unlisted, private")
+    upload_status: Optional[str] = Field(default=None, description="YouTube uploadStatus (e.g. processed, uploaded)")
+    channel_id: Optional[str] = Field(default=None, description="Channel ID")
+    channel_title: Optional[str] = Field(default=None, description="Channel Name")
+    video_url: Optional[str] = Field(default=None, description="Canonical YouTube watch URL")
+
+class YouTubeVideoListResponse(BaseModel):
+    videos: List[YouTubeVideoItem] = Field(default=[], description="List of channel videos")
+    next_page_token: Optional[str] = Field(default=None, description="Token for retrieving next page of results")
+    prev_page_token: Optional[str] = Field(default=None, description="Token for retrieving previous page of results")
+    total_results: Optional[int] = Field(default=None, description="Estimated total number of uploaded videos in channel")
+    channel_id: Optional[str] = Field(default=None, description="Channel ID")
+    channel_title: Optional[str] = Field(default=None, description="Channel Title")
