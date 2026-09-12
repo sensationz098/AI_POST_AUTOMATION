@@ -225,6 +225,8 @@ class MetaCommentIngestionService:
 
             comment_text = value.get("text")
             parent_id = value.get("parent_id")
+            if parent_id and media_id and str(parent_id).strip() == str(media_id).strip():
+                parent_id = None
             
             sender = value.get("from", {}) if isinstance(value.get("from"), dict) else {}
             commenter_id = str(sender.get("id", "")) if sender.get("id") else None

@@ -257,16 +257,20 @@ class SocialCommentRepository:
         sort_order: str = "desc"
     ) -> List[SocialComment]:
         """Fetch comments belonging to a specific user with pagination, ordered by event_timestamp/created_at, excluding owner reply echoes."""
+        import logging
+        logger = logging.getLogger(__name__)
         from app.models.social_comment_reply import SocialCommentReply
         from sqlalchemy.orm import joinedload, selectinload
-        from sqlalchemy import or_, func
+        from sqlalchemy import or_, func, exists, not_
 
-        reply_subquery = db.query(SocialCommentReply.external_reply_id).filter(
+        has_owner_reply_echo = exists().where(
             SocialCommentReply.user_id == user_id,
-            SocialCommentReply.external_reply_id.isnot(None)
+            SocialCommentReply.external_reply_id == SocialComment.external_comment_id,
+            SocialCommentReply.external_reply_id.isnot(None),
+            SocialCommentReply.external_reply_id != ""
         )
         if platform:
-            reply_subquery = reply_subquery.filter(SocialCommentReply.platform == platform)
+            has_owner_reply_echo = has_owner_reply_echo.where(SocialCommentReply.platform == platform)
 
         query = db.query(SocialComment).options(
             joinedload(SocialComment.social_account),
@@ -275,10 +279,17 @@ class SocialCommentRepository:
         ).filter(
             SocialComment.user_id == user_id,
             SocialComment.is_deleted.isnot(True),
-            ~SocialComment.external_comment_id.in_(reply_subquery)
+            not_(has_owner_reply_echo)
         )
+
+        is_top_level = or_(
+            SocialComment.parent_comment_id.is_(None),
+            SocialComment.parent_comment_id == "",
+            SocialComment.parent_comment_id == SocialComment.external_post_id
+        )
+
         if top_level_only:
-            query = query.filter(or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == ""))
+            query = query.filter(is_top_level)
             if status and status.lower() != "all":
                 query = self._apply_inbox_status_filter(query, user_id, status)
             elif reply_status:
@@ -317,7 +328,32 @@ class SocialCommentRepository:
         else:
             query = query.order_by(order_col.desc(), SocialComment.id.desc())
 
-        return query.offset(skip).limit(limit).all()
+        results = query.offset(skip).limit(limit).all()
+
+        # Structured diagnostic logging
+        try:
+            total_user_comments = db.query(SocialComment).filter(SocialComment.user_id == user_id).count()
+            non_deleted_cnt = db.query(SocialComment).filter(SocialComment.user_id == user_id, SocialComment.is_deleted.isnot(True)).count()
+            top_level_cnt = db.query(SocialComment).filter(SocialComment.user_id == user_id, SocialComment.is_deleted.isnot(True), is_top_level).count()
+            echo_excluded_cnt = db.query(SocialComment).filter(SocialComment.user_id == user_id, SocialComment.is_deleted.isnot(True), has_owner_reply_echo).count()
+
+            logger.info(
+                f"[INBOX_QUERY_DIAGNOSTIC] user_id={user_id} total_user_comments={total_user_comments} "
+                f"non_deleted={non_deleted_cnt} top_level={top_level_cnt} echo_excluded={echo_excluded_cnt} "
+                f"filter_status={status or reply_status or 'all'} filter_platform={platform or 'all'} "
+                f"filter_account={social_account_id or 'all'} returned_rows={len(results)}"
+            )
+            for r in results[:10]:
+                logger.info(
+                    f"[INBOX_ROW_DIAGNOSTIC] user_id={r.user_id} comment_id={r.id} "
+                    f"external_comment_id={r.external_comment_id} social_account_id={r.social_account_id} "
+                    f"parent_comment_id={r.parent_comment_id} external_post_id={r.external_post_id} "
+                    f"is_deleted={r.is_deleted} processing_status={r.processing_status}"
+                )
+        except Exception as diag_err:
+            logger.debug(f"[INBOX_DIAGNOSTIC_ERR] {diag_err}")
+
+        return results
 
     def count_by_user_id(
         self,
@@ -335,22 +371,31 @@ class SocialCommentRepository:
     ) -> int:
         """Count comments belonging to a specific user, excluding owner reply echoes."""
         from app.models.social_comment_reply import SocialCommentReply
-        from sqlalchemy import or_
+        from sqlalchemy import or_, exists, not_
 
-        reply_subquery = db.query(SocialCommentReply.external_reply_id).filter(
+        has_owner_reply_echo = exists().where(
             SocialCommentReply.user_id == user_id,
-            SocialCommentReply.external_reply_id.isnot(None)
+            SocialCommentReply.external_reply_id == SocialComment.external_comment_id,
+            SocialCommentReply.external_reply_id.isnot(None),
+            SocialCommentReply.external_reply_id != ""
         )
         if platform:
-            reply_subquery = reply_subquery.filter(SocialCommentReply.platform == platform)
+            has_owner_reply_echo = has_owner_reply_echo.where(SocialCommentReply.platform == platform)
 
         query = db.query(SocialComment).filter(
             SocialComment.user_id == user_id,
             SocialComment.is_deleted.isnot(True),
-            ~SocialComment.external_comment_id.in_(reply_subquery)
+            not_(has_owner_reply_echo)
         )
+
+        is_top_level = or_(
+            SocialComment.parent_comment_id.is_(None),
+            SocialComment.parent_comment_id == "",
+            SocialComment.parent_comment_id == SocialComment.external_post_id
+        )
+
         if top_level_only:
-            query = query.filter(or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == ""))
+            query = query.filter(is_top_level)
             if status and status.lower() != "all":
                 query = self._apply_inbox_status_filter(query, user_id, status)
             elif reply_status:
@@ -440,12 +485,14 @@ class SocialCommentRepository:
         from app.models.social_comment_reply import SocialCommentReply
         from sqlalchemy import or_
 
-        reply_subquery = db.query(SocialCommentReply.external_reply_id).filter(
+        has_owner_reply_echo = exists().where(
             SocialCommentReply.user_id == user_id,
-            SocialCommentReply.external_reply_id.isnot(None)
+            SocialCommentReply.external_reply_id == SocialComment.external_comment_id,
+            SocialCommentReply.external_reply_id.isnot(None),
+            SocialCommentReply.external_reply_id != ""
         )
         if platform:
-            reply_subquery = reply_subquery.filter(SocialCommentReply.platform == platform)
+            has_owner_reply_echo = has_owner_reply_echo.where(SocialCommentReply.platform == platform)
 
         # 1. Ingested Meta child replies
         meta_replies_query = db.query(SocialComment).filter(
@@ -453,7 +500,8 @@ class SocialCommentRepository:
             SocialComment.is_deleted.isnot(True),
             SocialComment.parent_comment_id.isnot(None),
             SocialComment.parent_comment_id != "",
-            ~SocialComment.external_comment_id.in_(reply_subquery)
+            SocialComment.parent_comment_id != SocialComment.external_post_id,
+            not_(has_owner_reply_echo)
         )
         if platform:
             meta_replies_query = meta_replies_query.filter(SocialComment.platform == platform)

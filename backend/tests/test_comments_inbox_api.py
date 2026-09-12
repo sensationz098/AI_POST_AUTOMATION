@@ -340,3 +340,243 @@ def test_inbox_tenant_isolation(inbox_auth_headers, other_inbox_headers, setup_i
     data_other = res_other.json()
     assert len(data_other) == 1
     assert data_other[0]["external_comment_id"] == "comm_other_tenant_1"
+
+def test_production_reported_comment_retrieval(db_session: Session, inbox_user: User, inbox_auth_headers):
+    """
+    Exact production regression test:
+    Instagram comment 17967710256188117 on post 17902645869579015
+    with status NEEDS_REPLY and parent_comment_id=None.
+    Must appear in GET /api/v1/social-comments/ and in inbox-summary (all>=1, needs_reply>=1).
+    """
+    ig_acc = SocialAccount(
+        user_id=inbox_user.id,
+        platform="instagram",
+        account_id="17841443294223730",
+        account_name="prod_brand_acc",
+        status="CONNECTED",
+        access_token=encrypt_token("IG_TOKEN")
+    )
+    db_session.add(ig_acc)
+    db_session.commit()
+    db_session.refresh(ig_acc)
+
+    prod_comment = SocialComment(
+        user_id=inbox_user.id,
+        social_account_id=ig_acc.id,
+        platform="instagram",
+        external_comment_id="17967710256188117",
+        external_post_id="17902645869579015",
+        comment_text="Hey",
+        commenter_name="soubhagyavashishtha",
+        parent_comment_id=None,
+        is_deleted=False,
+        processing_status="NEEDS_REPLY",
+        event_timestamp=datetime.now(timezone.utc),
+        webhook_object="instagram"
+    )
+    db_session.add(prod_comment)
+    db_session.commit()
+
+    # 1. Verify GET /social-comments/ returns the comment
+    res = client.get("/api/v1/social-comments/", headers=inbox_auth_headers)
+    assert res.status_code == 200
+    items = res.json()
+    found = next((c for c in items if c["external_comment_id"] == "17967710256188117"), None)
+    assert found is not None
+    assert found["comment_text"] == "Hey"
+    assert found["lifecycle_status"] == "NEEDS_REPLY"
+    assert found["commenter_name"] == "soubhagyavashishtha"
+
+    # 2. Verify GET /social-comments/inbox-summary counts
+    res_summary = client.get("/api/v1/social-comments/inbox-summary", headers=inbox_auth_headers)
+    assert res_summary.status_code == 200
+    counts = res_summary.json()["status_counts"]
+    assert counts["all"] >= 1
+    assert counts["needs_reply"] >= 1
+
+def test_production_legacy_parent_id_equals_post_id_retrieval(db_session: Session, inbox_user: User, inbox_auth_headers):
+    """
+    Verify that if a legacy row in the database has parent_comment_id == external_post_id
+    (e.g., stored before ingestion fix), it is still retrieved as a top-level comment.
+    """
+    ig_acc = SocialAccount(
+        user_id=inbox_user.id,
+        platform="instagram",
+        account_id="17841443294223731",
+        account_name="legacy_brand_acc",
+        status="CONNECTED",
+        access_token=encrypt_token("IG_TOKEN")
+    )
+    db_session.add(ig_acc)
+    db_session.commit()
+    db_session.refresh(ig_acc)
+
+    legacy_comment = SocialComment(
+        user_id=inbox_user.id,
+        social_account_id=ig_acc.id,
+        platform="instagram",
+        external_comment_id="17967710256188999",
+        external_post_id="17902645869579015",
+        comment_text="Legacy top-level comment with parent_id=media_id in db",
+        commenter_name="legacy_user",
+        parent_comment_id="17902645869579015",  # Matches external_post_id
+        is_deleted=False,
+        processing_status="NEEDS_REPLY",
+        event_timestamp=datetime.now(timezone.utc),
+        webhook_object="instagram"
+    )
+    db_session.add(legacy_comment)
+    db_session.commit()
+
+    res = client.get("/api/v1/social-comments/", headers=inbox_auth_headers)
+    assert res.status_code == 200
+    items = res.json()
+    found = next((c for c in items if c["external_comment_id"] == "17967710256188999"), None)
+    assert found is not None
+    assert found["lifecycle_status"] == "NEEDS_REPLY"
+
+def test_child_reply_excluded_from_toplevel_inbox(db_session: Session, inbox_user: User, inbox_auth_headers):
+    """
+    Verify that an actual child/reply comment (where parent_comment_id points to another comment)
+    is excluded from top-level inbox and summary counts.
+    """
+    ig_acc = SocialAccount(
+        user_id=inbox_user.id,
+        platform="instagram",
+        account_id="17841443294223732",
+        account_name="child_test_acc",
+        status="CONNECTED",
+        access_token=encrypt_token("IG_TOKEN")
+    )
+    db_session.add(ig_acc)
+    db_session.commit()
+    db_session.refresh(ig_acc)
+
+    # Parent comment
+    parent_comment = SocialComment(
+        user_id=inbox_user.id,
+        social_account_id=ig_acc.id,
+        platform="instagram",
+        external_comment_id="parent_comm_111",
+        external_post_id="post_media_555",
+        comment_text="Top level parent comment",
+        commenter_name="parent_user",
+        parent_comment_id=None,
+        is_deleted=False,
+        processing_status="NEEDS_REPLY",
+        event_timestamp=datetime.now(timezone.utc),
+        webhook_object="instagram"
+    )
+    db_session.add(parent_comment)
+    db_session.commit()
+
+    # Child comment pointing to parent_comm_111
+    child_comment = SocialComment(
+        user_id=inbox_user.id,
+        social_account_id=ig_acc.id,
+        platform="instagram",
+        external_comment_id="child_comm_222",
+        external_post_id="post_media_555",
+        comment_text="Child reply to parent comment",
+        commenter_name="child_user",
+        parent_comment_id="parent_comm_111",  # True child reply
+        is_deleted=False,
+        processing_status="NEEDS_REPLY",
+        event_timestamp=datetime.now(timezone.utc),
+        webhook_object="instagram"
+    )
+    db_session.add(child_comment)
+    db_session.commit()
+
+    res = client.get("/api/v1/social-comments/", headers=inbox_auth_headers)
+    assert res.status_code == 200
+    items = res.json()
+    # Parent must be present
+    assert any(c["external_comment_id"] == "parent_comm_111" for c in items)
+    # Child must NOT be present in top-level inbox
+    assert not any(c["external_comment_id"] == "child_comm_222" for c in items)
+
+def test_owner_reply_echo_exclusion_safe_with_null_and_unrelated_comments(db_session: Session, inbox_user: User, inbox_auth_headers):
+    """
+    Verify owner-reply echo exclusion does not exclude unrelated incoming comments
+    even when SocialCommentReply has NULL external_reply_id or various statuses.
+    """
+    fb_acc = SocialAccount(
+        user_id=inbox_user.id,
+        platform="facebook",
+        account_id="fb_echo_page",
+        account_name="Echo Page",
+        status="CONNECTED",
+        access_token=encrypt_token("FB_TOKEN")
+    )
+    db_session.add(fb_acc)
+    db_session.commit()
+    db_session.refresh(fb_acc)
+
+    # 1. Incoming user comment
+    c_user = SocialComment(
+        user_id=inbox_user.id,
+        social_account_id=fb_acc.id,
+        platform="facebook",
+        external_comment_id="user_comm_echo_test",
+        external_post_id="post_echo_1",
+        comment_text="Can I get some help?",
+        commenter_name="customer_1",
+        parent_comment_id=None,
+        is_deleted=False,
+        processing_status="PROCESSED",
+        event_timestamp=datetime.now(timezone.utc),
+        webhook_object="page"
+    )
+    db_session.add(c_user)
+    db_session.commit()
+    db_session.refresh(c_user)
+
+    # 2. Outbound manual reply created via system
+    reply = SocialCommentReply(
+        comment_id=c_user.id,
+        user_id=inbox_user.id,
+        platform="facebook",
+        message="Sure, how can we assist you?",
+        external_reply_id="echo_reply_ext_id_999",
+        status="SUCCESS"
+    )
+    # Also another reply with NULL external_reply_id to test NULL safety
+    reply_null = SocialCommentReply(
+        comment_id=c_user.id,
+        user_id=inbox_user.id,
+        platform="facebook",
+        message="Pending reply message",
+        external_reply_id=None,
+        status="PENDING"
+    )
+    db_session.add_all([reply, reply_null])
+    db_session.commit()
+
+    # 3. Echoed comment from webhook representing the outbound reply
+    c_echo = SocialComment(
+        user_id=inbox_user.id,
+        social_account_id=fb_acc.id,
+        platform="facebook",
+        external_comment_id="echo_reply_ext_id_999",
+        external_post_id="post_echo_1",
+        comment_text="Sure, how can we assist you?",
+        commenter_name="Echo Page",
+        parent_comment_id=None,
+        is_deleted=False,
+        processing_status="PROCESSED",
+        event_timestamp=datetime.now(timezone.utc),
+        webhook_object="page"
+    )
+    db_session.add(c_echo)
+    db_session.commit()
+
+    res = client.get("/api/v1/social-comments/", headers=inbox_auth_headers)
+    assert res.status_code == 200
+    items = res.json()
+
+    # Incoming customer comment MUST be present
+    assert any(c["external_comment_id"] == "user_comm_echo_test" for c in items)
+    # Echoed reply comment MUST be excluded
+    assert not any(c["external_comment_id"] == "echo_reply_ext_id_999" for c in items)
+

@@ -299,3 +299,79 @@ def test_publishing_and_oauth_unaffected(db_session):
         assert res_ig == "ig_media_999"
         assert mock_fb.called
         assert mock_ig.called
+
+def test_instagram_comment_webhook_normalizes_parent_id_matching_media_id(client, db_session):
+    """
+    Verify that when Instagram webhook sends parent_id matching the media_id (top-level comment),
+    parent_comment_id is normalized to None.
+    """
+    social_account_repo.create_or_update(
+        db=db_session, user_id=3, platform="instagram", account_id="17841443294223730", account_name="@ig_prod", access_token="tok_300"
+    )
+
+    payload = json.dumps({
+        "object": "instagram",
+        "entry": [{
+            "id": "17841443294223730",
+            "time": 1700000000,
+            "changes": [{
+                "field": "comments",
+                "value": {
+                    "id": "17967710256188117",
+                    "text": "Hey",
+                    "media": {"id": "17902645869579015"},
+                    "parent_id": "17902645869579015",  # Meta sends media ID as parent_id for top-level comments
+                    "from": {"id": "ig_user_777", "username": "soubhagyavashishtha"}
+                }
+            }]
+        }]
+    }).encode("utf-8")
+
+    headers = {"X-Hub-Signature-256": generate_signature(payload)}
+    res = client.post("/api/v1/webhooks/meta", data=payload, headers=headers)
+    assert res.status_code == 200
+
+    comment = db_session.query(SocialComment).filter_by(external_comment_id="17967710256188117").first()
+    assert comment is not None
+    assert comment.user_id == 3
+    assert comment.external_post_id == "17902645869579015"
+    assert comment.parent_comment_id is None
+    assert comment.comment_text == "Hey"
+
+def test_instagram_child_comment_webhook_preserves_parent_comment_id(client, db_session):
+    """
+    Verify that when Instagram webhook sends a real reply (parent_id != media_id),
+    parent_comment_id is properly retained as the parent comment's ID.
+    """
+    social_account_repo.create_or_update(
+        db=db_session, user_id=3, platform="instagram", account_id="17841443294223730", account_name="@ig_prod", access_token="tok_300"
+    )
+
+    payload = json.dumps({
+        "object": "instagram",
+        "entry": [{
+            "id": "17841443294223730",
+            "time": 1700000000,
+            "changes": [{
+                "field": "comments",
+                "value": {
+                    "id": "17967710256188999",
+                    "text": "This is a reply to another comment",
+                    "media": {"id": "17902645869579015"},
+                    "parent_id": "17967710256188117",  # Points to parent comment, not media
+                    "from": {"id": "ig_user_888", "username": "reply_user"}
+                }
+            }]
+        }]
+    }).encode("utf-8")
+
+    headers = {"X-Hub-Signature-256": generate_signature(payload)}
+    res = client.post("/api/v1/webhooks/meta", data=payload, headers=headers)
+    assert res.status_code == 200
+
+    comment = db_session.query(SocialComment).filter_by(external_comment_id="17967710256188999").first()
+    assert comment is not None
+    assert comment.user_id == 3
+    assert comment.external_post_id == "17902645869579015"
+    assert comment.parent_comment_id == "17967710256188117"
+
