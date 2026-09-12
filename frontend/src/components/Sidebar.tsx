@@ -48,8 +48,9 @@ const navGroups: NavGroup[] = [
   {
     title: 'Social & Brands',
     items: [
+      { name: 'Comment Inbox', href: '/comments', icon: MessageSquare },
       { name: 'Comment Automations', href: '/automations', icon: Bot, badge: 'V1' },
-      { name: 'Organic Comments', href: '/comments/posts', icon: MessageSquare },
+      { name: 'Organic Posts', href: '/comments/posts', icon: Sparkles },
       { name: 'Ad Comments', href: '/comments/ads', icon: Megaphone },
       { name: 'Brand Profiles', href: '/brands', icon: Layers },
       { name: 'Meta Accounts', href: '/meta-connect', icon: Share2, isMeta: true },

@@ -36,10 +36,22 @@ import {
 import { apiClient } from '@/lib/api';
 import PostPickerModal from './PostPickerModal';
 
+export interface AutomationPrefillData {
+  platform?: AutomationPlatform;
+  social_account_id?: number | null;
+  external_post_id?: string | null;
+  post_title?: string | null;
+  post_thumbnail?: string | null;
+  name?: string;
+  keywords?: string[];
+  sample_comment?: string;
+}
+
 interface AutomationWizardModalProps {
   isOpen: boolean;
   editingAutomation: Automation | null;
   socialAccounts: SocialAccount[];
+  initialValues?: AutomationPrefillData | null;
   onClose: () => void;
   onSuccess: (automation: Automation) => void;
 }
@@ -48,6 +60,7 @@ export default function AutomationWizardModal({
   isOpen,
   editingAutomation,
   socialAccounts,
+  initialValues,
   onClose,
   onSuccess,
 }: AutomationWizardModalProps) {
@@ -85,7 +98,7 @@ export default function AutomationWizardModal({
     "Hey! Thanks for your interest. Here's the information and direct link you asked for!"
   );
 
-  // Prepopulate state if editing
+  // Prepopulate state if editing or prefilled
   useEffect(() => {
     if (!isOpen) return;
 
@@ -135,6 +148,43 @@ export default function AutomationWizardModal({
         }
       }
       setCurrentStep(1);
+    } else if (initialValues) {
+      // Prefilled new automation from a comment
+      setName(initialValues.name || (initialValues.sample_comment ? `Auto-Reply: "${initialValues.sample_comment.slice(0, 24)}..."` : 'New Comment Automation'));
+      const targetPlat = initialValues.platform || 'instagram';
+      setPlatform(targetPlat);
+      const matchedAcc = initialValues.social_account_id
+        ? socialAccounts.find((a) => a.id === initialValues.social_account_id)
+        : (socialAccounts.find((a) => a.platform === targetPlat) || socialAccounts[0]);
+      setSelectedAccountId(matchedAcc ? matchedAcc.id : null);
+      
+      if (initialValues.external_post_id) {
+        setExternalPostId(initialValues.external_post_id);
+        setSelectedPost({
+          id: initialValues.external_post_id,
+          platform: targetPlat,
+          caption: initialValues.post_title || undefined,
+          media_url: initialValues.post_thumbnail || undefined,
+          thumbnail_url: initialValues.post_thumbnail || undefined,
+        });
+      } else {
+        setSelectedPost(null);
+        setExternalPostId(null);
+      }
+      setInternalPostId(null);
+      setTriggerType('KEYWORD');
+      setKeywords(initialValues.keywords && initialValues.keywords.length > 0 ? initialValues.keywords : ['price', 'info', 'link']);
+      setKeywordInput('');
+      setPublicReplyEnabled(true);
+      setVariations([
+        'Thanks for your comment! Check your DM 👋',
+        'I just sent you the details in private message!',
+      ]);
+      setPrivateMessageEnabled(true);
+      setPrivateMessage(
+        "Hey! Thanks for your interest. Here's the information and direct link you asked for!"
+      );
+      setCurrentStep(1);
     } else {
       // Default new automation initialization
       setName('');
@@ -159,7 +209,7 @@ export default function AutomationWizardModal({
       setCurrentStep(1);
     }
     setErrorMessage(null);
-  }, [isOpen, editingAutomation, socialAccounts]);
+  }, [isOpen, editingAutomation, initialValues, socialAccounts]);
 
   if (!isOpen) return null;
 

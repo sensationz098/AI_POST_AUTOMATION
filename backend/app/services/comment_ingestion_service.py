@@ -140,6 +140,12 @@ class MetaCommentIngestionService:
             )
             created_comments.append(comment)
 
+            logger.info(
+                f"[COMMENT_RECEIVED] platform=facebook comment_id={comment.external_comment_id} "
+                f"post_id={comment.external_post_id or 'none'} commenter={comment.commenter_name or comment.commenter_id or 'unknown'} "
+                f"comment_text={repr((comment.comment_text or '')[:80])}"
+            )
+
             # Phase 3: Evaluate comment triggers for active automations
             try:
                 from app.services.comment_trigger_service import comment_trigger_service
@@ -249,6 +255,12 @@ class MetaCommentIngestionService:
                 metadata_json={"field": field}
             )
             created_comments.append(comment)
+
+            logger.info(
+                f"[COMMENT_RECEIVED] platform=instagram comment_id={comment.external_comment_id} "
+                f"post_id={comment.external_post_id or 'none'} commenter={comment.commenter_name or comment.commenter_id or 'unknown'} "
+                f"comment_text={repr((comment.comment_text or '')[:80])}"
+            )
 
             # Phase 3: Evaluate comment triggers for active automations
             try:

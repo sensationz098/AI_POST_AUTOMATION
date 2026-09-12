@@ -197,6 +197,31 @@ export interface MetaAdCommentContext {
   platform?: 'facebook' | 'instagram' | string;
 }
 
+export type CommentLifecycleStatus = 
+  | 'NEEDS_REPLY'
+  | 'AUTOMATED'
+  | 'REPLIED'
+  | 'IGNORED'
+  | 'OWNER_COMMENT'
+  | 'FAILED'
+  | 'PROCESSING'
+  | 'DELETED'
+  | string;
+
+export interface AutomationExecutionSummary {
+  id: number;
+  automation_id: number;
+  automation_name?: string | null;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'PARTIAL_FAILURE' | string;
+  trigger_type?: string | null;
+  matched_keyword?: string | null;
+  public_reply_status?: string | null;
+  private_message_status?: string | null;
+  error_message?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface SocialComment {
   id: number;
   social_account_id: number;
@@ -213,11 +238,35 @@ export interface SocialComment {
   event_timestamp?: string;
   webhook_object: string;
   processing_status: 'RECEIVED' | 'DELETED' | string;
+  lifecycle_status?: CommentLifecycleStatus;
+  status_reason?: string;
+  automation_execution?: AutomationExecutionSummary | null;
   is_deleted?: boolean;
   deleted_at?: string;
   created_at: string;
   post?: SocialCommentPostContext | null;
   replies?: SocialCommentReply[];
+}
+
+export interface InboxStatusCounts {
+  all: number;
+  needs_reply: number;
+  automated: number;
+  replied: number;
+  ignored: number;
+  failed: number;
+}
+
+export interface InboxHealthMetrics {
+  instagram_connected: boolean;
+  facebook_connected: boolean;
+  connected_accounts_count: number;
+  active_automations_count: number;
+}
+
+export interface InboxSummaryResponse {
+  status_counts: InboxStatusCounts;
+  health: InboxHealthMetrics;
 }
 
 export interface SocialCommentDeleteResponse {

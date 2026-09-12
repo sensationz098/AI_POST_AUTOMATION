@@ -157,6 +157,75 @@ class SocialCommentRepository:
 
         return query
 
+    def _apply_inbox_status_filter(
+        self,
+        query,
+        user_id: int,
+        status: Optional[str]
+    ):
+        if not status or status.lower() == "all":
+            return query
+
+        from app.models.social_comment_reply import SocialCommentReply
+        from app.models.automation_execution import AutomationExecution
+        from sqlalchemy.orm import aliased
+        from sqlalchemy import exists, or_, not_, func, String
+
+        norm_status = status.lower().strip()
+
+        has_manual_reply = exists().where(
+            SocialCommentReply.comment_id == SocialComment.id,
+            SocialCommentReply.status == "SUCCESS"
+        )
+
+        child_alias = aliased(SocialComment)
+        has_meta_reply = exists().where(
+            child_alias.user_id == user_id,
+            child_alias.is_deleted.isnot(True),
+            or_(
+                child_alias.parent_comment_id == SocialComment.external_comment_id,
+                child_alias.parent_comment_id == func.cast(SocialComment.id, String)
+            )
+        )
+        has_any_reply = or_(has_manual_reply, has_meta_reply)
+
+        has_automation_match = exists().where(
+            AutomationExecution.user_id == user_id,
+            AutomationExecution.status != "FAILED",
+            or_(
+                AutomationExecution.comment_id == SocialComment.id,
+                AutomationExecution.external_comment_id == SocialComment.external_comment_id
+            )
+        )
+
+        has_automation_failure = exists().where(
+            AutomationExecution.user_id == user_id,
+            AutomationExecution.status == "FAILED",
+            or_(
+                AutomationExecution.comment_id == SocialComment.id,
+                AutomationExecution.external_comment_id == SocialComment.external_comment_id
+            )
+        )
+
+        if norm_status == "replied":
+            return query.filter(has_any_reply)
+        elif norm_status == "automated":
+            return query.filter(has_automation_match, not_(has_any_reply))
+        elif norm_status == "ignored":
+            return query.filter(SocialComment.processing_status == "IGNORED")
+        elif norm_status == "failed":
+            return query.filter(or_(SocialComment.processing_status == "FAILED", has_automation_failure))
+        elif norm_status == "needs_reply":
+            return query.filter(
+                not_(has_any_reply),
+                not_(has_automation_match),
+                SocialComment.processing_status != "IGNORED",
+                SocialComment.processing_status != "FAILED",
+                not_(has_automation_failure)
+            )
+
+        return query
+
     def _build_post_id_filter(self, external_post_id: str):
         from sqlalchemy import or_
         clean_id = (external_post_id or "").strip()
@@ -183,6 +252,8 @@ class SocialCommentRepository:
         is_ad: Optional[bool] = None,
         top_level_only: bool = True,
         reply_status: Optional[str] = "all",
+        status: Optional[str] = None,
+        search: Optional[str] = None,
         sort_order: str = "desc"
     ) -> List[SocialComment]:
         """Fetch comments belonging to a specific user with pagination, ordered by event_timestamp/created_at, excluding owner reply echoes."""
@@ -208,7 +279,19 @@ class SocialCommentRepository:
         )
         if top_level_only:
             query = query.filter(or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == ""))
-            query = self._apply_reply_status_filter(query, user_id, reply_status)
+            if status and status.lower() != "all":
+                query = self._apply_inbox_status_filter(query, user_id, status)
+            elif reply_status:
+                query = self._apply_reply_status_filter(query, user_id, reply_status)
+        if search and search.strip():
+            s = f"%{search.strip()}%"
+            query = query.filter(
+                or_(
+                    SocialComment.comment_text.ilike(s),
+                    SocialComment.commenter_name.ilike(s),
+                    SocialComment.commenter_id.ilike(s)
+                )
+            )
         if platform:
             query = query.filter(SocialComment.platform == platform)
         if social_account_id:
@@ -246,7 +329,9 @@ class SocialCommentRepository:
         external_post_id: Optional[str] = None,
         is_ad: Optional[bool] = None,
         top_level_only: bool = True,
-        reply_status: Optional[str] = "all"
+        reply_status: Optional[str] = "all",
+        status: Optional[str] = None,
+        search: Optional[str] = None
     ) -> int:
         """Count comments belonging to a specific user, excluding owner reply echoes."""
         from app.models.social_comment_reply import SocialCommentReply
@@ -266,7 +351,19 @@ class SocialCommentRepository:
         )
         if top_level_only:
             query = query.filter(or_(SocialComment.parent_comment_id.is_(None), SocialComment.parent_comment_id == ""))
-            query = self._apply_reply_status_filter(query, user_id, reply_status)
+            if status and status.lower() != "all":
+                query = self._apply_inbox_status_filter(query, user_id, status)
+            elif reply_status:
+                query = self._apply_reply_status_filter(query, user_id, reply_status)
+        if search and search.strip():
+            s = f"%{search.strip()}%"
+            query = query.filter(
+                or_(
+                    SocialComment.comment_text.ilike(s),
+                    SocialComment.commenter_name.ilike(s),
+                    SocialComment.commenter_id.ilike(s)
+                )
+            )
         if platform:
             query = query.filter(SocialComment.platform == platform)
         if social_account_id:
@@ -283,6 +380,48 @@ class SocialCommentRepository:
             query = query.filter(SocialComment.meta_ad_id.is_(None))
 
         return query.count()
+
+    def get_inbox_metrics_by_user_id(
+        self,
+        db: Session,
+        user_id: int,
+        platform: Optional[str] = None,
+        social_account_id: Optional[int] = None,
+        external_post_id: Optional[str] = None,
+    ) -> Dict[str, int]:
+        """Calculates exact deterministic status counts for the Comment Inbox."""
+        all_cnt = self.count_by_user_id(
+            db, user_id, platform=platform, social_account_id=social_account_id,
+            external_post_id=external_post_id, top_level_only=True, status="all"
+        )
+        needs_reply_cnt = self.count_by_user_id(
+            db, user_id, platform=platform, social_account_id=social_account_id,
+            external_post_id=external_post_id, top_level_only=True, status="needs_reply"
+        )
+        automated_cnt = self.count_by_user_id(
+            db, user_id, platform=platform, social_account_id=social_account_id,
+            external_post_id=external_post_id, top_level_only=True, status="automated"
+        )
+        replied_cnt = self.count_by_user_id(
+            db, user_id, platform=platform, social_account_id=social_account_id,
+            external_post_id=external_post_id, top_level_only=True, status="replied"
+        )
+        ignored_cnt = self.count_by_user_id(
+            db, user_id, platform=platform, social_account_id=social_account_id,
+            external_post_id=external_post_id, top_level_only=True, status="ignored"
+        )
+        failed_cnt = self.count_by_user_id(
+            db, user_id, platform=platform, social_account_id=social_account_id,
+            external_post_id=external_post_id, top_level_only=True, status="failed"
+        )
+        return {
+            "all": all_cnt,
+            "needs_reply": needs_reply_cnt,
+            "automated": automated_cnt,
+            "replied": replied_cnt,
+            "ignored": ignored_cnt,
+            "failed": failed_cnt
+        }
 
     def count_replies_by_user_id(
         self,

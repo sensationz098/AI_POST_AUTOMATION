@@ -300,6 +300,9 @@ class CommentTriggerService:
             logger.info(
                 f"[COMMENT_TRIGGER] Comment {comment.external_comment_id} on {account.platform} account #{account.id} is an owner comment. Ignoring."
             )
+            logger.info(
+                f"[COMMENT_ACTION] comment_id={comment.external_comment_id} status=IGNORED reason=OWNER_COMMENT"
+            )
             return []
 
         # 2. Find candidate active automations targeting this post
@@ -312,6 +315,9 @@ class CommentTriggerService:
         logger.info(f"[COMMENT_TRIGGER] candidate_automations={len(candidates)}")
 
         if not candidates:
+            logger.info(
+                f"[COMMENT_ACTION] comment_id={comment.external_comment_id} status=NEEDS_REPLY reason=NO_ACTIVE_AUTOMATIONS_TARGETING_POST"
+            )
             return []
 
         executions: List[AutomationExecution] = []
@@ -325,9 +331,17 @@ class CommentTriggerService:
             logger.info(
                 f"[COMMENT_TRIGGER] keyword_match={str(is_matched).lower()} matched_keyword={matched_kw or 'none'}"
             )
+            logger.info(
+                f"[COMMENT_AUTOMATION_EVALUATION] comment_id={comment.external_comment_id} "
+                f"rules_checked={len(candidates)} matched={str(is_matched).lower()} "
+                f"automation_id={auto.id} matched_keyword={matched_kw or 'none'}"
+            )
             if is_matched:
                 logger.info(
                     f"[COMMENT_TRIGGER] MATCH: Automation '{auto.name}' (ID #{auto.id}, trigger={auto.trigger_type}) matched comment {comment.external_comment_id}."
+                )
+                logger.info(
+                    f"[COMMENT_ACTION] comment_id={comment.external_comment_id} status=AUTOMATED automation_id={auto.id}"
                 )
                 exec_record = self.create_execution_idempotent(
                     db=db,
@@ -353,6 +367,11 @@ class CommentTriggerService:
                 logger.info(
                     f"[COMMENT_TRIGGER] NO_MATCH: Automation '{auto.name}' (ID #{auto.id}) did not match comment {comment.external_comment_id}."
                 )
+
+        if not executions:
+            logger.info(
+                f"[COMMENT_ACTION] comment_id={comment.external_comment_id} status=NEEDS_REPLY reason=NO_AUTOMATION_MATCH"
+            )
 
         return executions
 

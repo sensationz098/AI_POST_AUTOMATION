@@ -294,137 +294,232 @@ def _format_comments_response_list(comments: List[SocialComment], current_user: 
                 child_comments_map[p_id] = []
             child_comments_map[p_id].append(child)
 
-    # Build final response list with account context & resolved post context
-    res_list = []
-    for c in comments:
-        if c.external_comment_id in owner_reply_ids:
-            continue
+        # Batch lookup AutomationExecution records for comments
+        comment_db_ids = [c.id for c in comments if c.id]
+        comment_ext_ids = [c.external_comment_id for c in comments if c.external_comment_id]
+        exec_map_by_comment_id = {}
+        exec_map_by_ext_id = {}
+        if comment_db_ids or comment_ext_ids:
+            from app.models.automation_execution import AutomationExecution
+            from sqlalchemy.orm import joinedload
+            from sqlalchemy import or_
 
-        acc_obj = None
-        sa = c.social_account
-        if sa:
-            is_ig = (sa.platform or "").lower() == "instagram"
-            acc_obj = {
-                "id": sa.id,
-                "account_id": sa.account_id,
-                "account_name": sa.account_name,
-                "username": sa.account_name if is_ig else None,
-                "display_name": sa.account_name,
-                "platform": sa.platform,
-                "logo_url": sa.logo_url
-            }
-        else:
-            acc_obj = {
-                "id": c.social_account_id,
-                "account_id": "unknown",
-                "account_name": f"{c.platform.capitalize()} Account #{c.social_account_id}",
-                "username": None,
-                "display_name": f"{c.platform.capitalize()} Account #{c.social_account_id}",
-                "platform": c.platform,
-                "logo_url": None
-            }
+            filter_clauses = []
+            if comment_db_ids:
+                filter_clauses.append(AutomationExecution.comment_id.in_(comment_db_ids))
+            if comment_ext_ids:
+                filter_clauses.append(AutomationExecution.external_comment_id.in_(comment_ext_ids))
 
-        post_obj = None
-        if c.external_post_id and c.external_post_id.strip():
-            ext_pid = c.external_post_id.strip()
-            c_platform = (c.platform or "").lower()
+            executions = db.query(AutomationExecution).options(
+                joinedload(AutomationExecution.automation)
+            ).filter(
+                AutomationExecution.user_id == current_user.id,
+                or_(*filter_clauses)
+            ).all()
 
-            matched_local = fb_posts.get(ext_pid) if c_platform == "facebook" else ig_posts.get(ext_pid)
-            if matched_local:
-                title_txt = matched_local.title or (matched_local.caption[:60] if matched_local.caption else "Social Post")
-                post_obj = {
-                    "id": matched_local.id,
-                    "title": title_txt,
-                    "caption": matched_local.caption,
-                    "image_url": matched_local.image_url,
-                    "media_type": matched_local.media_type,
-                    "thumbnail_url": matched_local.thumbnail_url,
-                    "permalink": _resolve_post_permalink(ext_pid, c.platform, db, local_post=matched_local, ctx_map=ctx_map_by_ext_id),
-                    "platform": c.platform,
-                    "source": "local"
+            for ex in executions:
+                if ex.comment_id:
+                    exec_map_by_comment_id[ex.comment_id] = ex
+                if ex.external_comment_id:
+                    exec_map_by_ext_id[ex.external_comment_id] = ex
+
+        res_list = []
+        for c in comments:
+            if c.external_comment_id in owner_reply_ids:
+                continue
+
+            acc_obj = None
+            sa = c.social_account
+            if sa:
+                is_ig = (sa.platform or "").lower() == "instagram"
+                acc_obj = {
+                    "id": sa.id,
+                    "account_id": sa.account_id,
+                    "account_name": sa.account_name,
+                    "username": sa.account_name if is_ig else None,
+                    "display_name": sa.account_name,
+                    "platform": sa.platform,
+                    "logo_url": sa.logo_url
                 }
             else:
-                key = (c.social_account_id, c_platform, ext_pid)
-                ext_ctx = cached_ext_posts.get(key) or ctx_map_by_ext_id.get(ext_pid)
-                if ext_ctx and ext_ctx.status == "ACTIVE":
-                    title_txt = ext_ctx.caption.split("\n")[0][:60] if ext_ctx.caption else f"{c.platform.capitalize()} Post"
+                acc_obj = {
+                    "id": c.social_account_id,
+                    "account_id": "unknown",
+                    "account_name": f"{c.platform.capitalize()} Account #{c.social_account_id}",
+                    "username": None,
+                    "display_name": f"{c.platform.capitalize()} Account #{c.social_account_id}",
+                    "platform": c.platform,
+                    "logo_url": None
+                }
+
+            post_obj = None
+            if c.external_post_id and c.external_post_id.strip():
+                ext_pid = c.external_post_id.strip()
+                c_platform = (c.platform or "").lower()
+
+                matched_local = fb_posts.get(ext_pid) if c_platform == "facebook" else ig_posts.get(ext_pid)
+                if matched_local:
+                    title_txt = matched_local.title or (matched_local.caption[:60] if matched_local.caption else "Social Post")
                     post_obj = {
-                        "id": ext_ctx.external_post_id,
+                        "id": matched_local.id,
                         "title": title_txt,
-                        "caption": ext_ctx.caption,
-                        "image_url": ext_ctx.media_url,
-                        "media_type": (ext_ctx.media_type or "IMAGE").lower(),
-                        "thumbnail_url": ext_ctx.thumbnail_url or ext_ctx.media_url,
-                        "permalink": ext_ctx.permalink or _resolve_post_permalink(ext_pid, c.platform, db, ctx_map=ctx_map_by_ext_id),
+                        "caption": matched_local.caption,
+                        "image_url": matched_local.image_url,
+                        "media_type": matched_local.media_type,
+                        "thumbnail_url": matched_local.thumbnail_url,
+                        "permalink": _resolve_post_permalink(ext_pid, c.platform, db, local_post=matched_local, ctx_map=ctx_map_by_ext_id),
                         "platform": c.platform,
-                        "source": "meta"
+                        "source": "local"
                     }
+                else:
+                    key = (c.social_account_id, c_platform, ext_pid)
+                    ext_ctx = cached_ext_posts.get(key) or ctx_map_by_ext_id.get(ext_pid)
+                    if ext_ctx and ext_ctx.status == "ACTIVE":
+                        title_txt = ext_ctx.caption.split("\n")[0][:60] if ext_ctx.caption else f"{c.platform.capitalize()} Post"
+                        post_obj = {
+                            "id": ext_ctx.external_post_id,
+                            "title": title_txt,
+                            "caption": ext_ctx.caption,
+                            "image_url": ext_ctx.media_url,
+                            "media_type": (ext_ctx.media_type or "IMAGE").lower(),
+                            "thumbnail_url": ext_ctx.thumbnail_url or ext_ctx.media_url,
+                            "permalink": ext_ctx.permalink or _resolve_post_permalink(ext_pid, c.platform, db, ctx_map=ctx_map_by_ext_id),
+                            "platform": c.platform,
+                            "source": "meta"
+                        }
 
-        # Combine SocialCommentReply records and child SocialComment records (Meta replies)
-        formatted_replies = []
-        for r in (c.replies or []):
-            formatted_replies.append({
-                "id": r.id,
-                "message": r.message,
-                "status": r.status,
-                "error_message": r.error_message,
-                "external_reply_id": r.external_reply_id,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-                "commenter_name": None,
-                "source": "owner"
+            # Combine SocialCommentReply records and child SocialComment records (Meta replies)
+            formatted_replies = []
+            for r in (c.replies or []):
+                formatted_replies.append({
+                    "id": r.id,
+                    "message": r.message,
+                    "status": r.status,
+                    "error_message": r.error_message,
+                    "external_reply_id": r.external_reply_id,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "commenter_name": None,
+                    "source": "owner"
+                })
+
+            meta_child_comments = child_comments_map.get(c.external_comment_id, []) + child_comments_map.get(str(c.id), [])
+            for child in meta_child_comments:
+                child_ts = child.event_timestamp.isoformat() if child.event_timestamp else (child.created_at.isoformat() if child.created_at else None)
+                formatted_replies.append({
+                    "id": child.id,
+                    "message": child.comment_text,
+                    "status": "SUCCESS",
+                    "error_message": None,
+                    "external_reply_id": child.external_comment_id,
+                    "created_at": child_ts,
+                    "commenter_name": child.commenter_name,
+                    "commenter_id": child.commenter_id,
+                    "source": "meta"
+                })
+
+            formatted_replies.sort(key=lambda r: r.get("created_at") or "")
+
+            meta_ad_obj = None
+            if c.meta_ad:
+                meta_ad_obj = {
+                    "id": c.meta_ad.id,
+                    "meta_ad_id": c.meta_ad.meta_ad_id,
+                    "name": c.meta_ad.name,
+                    "campaign_name": c.meta_ad.campaign_name,
+                    "adset_name": c.meta_ad.adset_name,
+                    "effective_status": c.meta_ad.effective_status,
+                    "permalink": _resolve_ad_permalink(c.meta_ad, db, ctx_map=ctx_map_by_ext_id),
+                    "platform": "facebook" if (not c.meta_ad.engagement_object_type or c.meta_ad.engagement_object_type == "FACEBOOK_POST") else "instagram"
+                }
+
+            # Resolve AutomationExecution for this comment
+            matched_exec = exec_map_by_comment_id.get(c.id) or exec_map_by_ext_id.get(c.external_comment_id)
+            exec_obj = None
+            if matched_exec:
+                auto_name = matched_exec.automation.name if matched_exec.automation else None
+                trig_res = matched_exec.trigger_result if isinstance(matched_exec.trigger_result, dict) else {}
+                exec_obj = {
+                    "id": matched_exec.id,
+                    "automation_id": matched_exec.automation_id,
+                    "automation_name": auto_name,
+                    "status": matched_exec.status,
+                    "trigger_type": trig_res.get("trigger_type"),
+                    "matched_keyword": trig_res.get("matched_keyword"),
+                    "public_reply_status": matched_exec.public_reply_status,
+                    "private_message_status": matched_exec.private_message_status,
+                    "error_message": matched_exec.error_message,
+                    "created_at": matched_exec.created_at.isoformat() if matched_exec.created_at else None,
+                    "updated_at": matched_exec.updated_at.isoformat() if matched_exec.updated_at else None,
+                }
+
+            # Deterministic lifecycle status derivation
+            has_successful_reply = any(r.get("status") == "SUCCESS" for r in formatted_replies)
+            sa_acc_id = sa.account_id if sa else None
+            is_owner = bool(
+                (c.commenter_id and sa_acc_id and str(c.commenter_id) == str(sa_acc_id)) or
+                (c.commenter_name and sa and sa.account_name and c.commenter_name.strip().lower() == sa.account_name.strip().lower())
+            )
+
+            if c.is_deleted or c.processing_status == "DELETED":
+                lifecycle_status = "DELETED"
+                status_reason = "This comment was deleted."
+            elif is_owner:
+                lifecycle_status = "OWNER_COMMENT"
+                status_reason = "This comment was posted by your connected account and was not processed by automation."
+            elif c.processing_status == "IGNORED":
+                lifecycle_status = "IGNORED"
+                status_reason = "This comment was intentionally ignored."
+            elif c.processing_status == "FAILED" or (matched_exec and matched_exec.status == "FAILED"):
+                lifecycle_status = "FAILED"
+                status_reason = (matched_exec.error_message if matched_exec and matched_exec.error_message else "We received this comment, but processing failed.")
+            elif has_successful_reply:
+                lifecycle_status = "REPLIED"
+                status_reason = "Reply sent successfully."
+            elif matched_exec:
+                if matched_exec.status in ("PENDING", "RUNNING"):
+                    lifecycle_status = "PROCESSING"
+                    status_reason = "Checking automation rules..."
+                elif matched_exec.status == "COMPLETED" or (matched_exec.trigger_result and matched_exec.trigger_result.get("matched")):
+                    lifecycle_status = "AUTOMATED"
+                    auto_name_disp = matched_exec.automation.name if matched_exec.automation else f"Automation #{matched_exec.automation_id}"
+                    status_reason = f"Automation '{auto_name_disp}' matched this comment."
+                elif matched_exec.status == "PARTIAL_FAILURE":
+                    lifecycle_status = "FAILED"
+                    status_reason = matched_exec.error_message or "Automation action partially failed."
+                else:
+                    lifecycle_status = "NEEDS_REPLY"
+                    status_reason = "No automation matched this comment."
+            elif c.processing_status == "PENDING":
+                lifecycle_status = "PROCESSING"
+                status_reason = "Checking automation rules..."
+            else:
+                lifecycle_status = "NEEDS_REPLY"
+                status_reason = "No automation matched this comment."
+
+            res_list.append({
+                "id": c.id,
+                "social_account_id": c.social_account_id,
+                "meta_ad_id": c.meta_ad_id,
+                "meta_ad": meta_ad_obj,
+                "account": acc_obj,
+                "platform": c.platform,
+                "external_comment_id": c.external_comment_id,
+                "external_post_id": c.external_post_id,
+                "parent_comment_id": c.parent_comment_id,
+                "comment_text": c.comment_text,
+                "commenter_id": c.commenter_id,
+                "commenter_name": c.commenter_name,
+                "event_timestamp": c.event_timestamp.isoformat() if c.event_timestamp else None,
+                "webhook_object": c.webhook_object,
+                "processing_status": c.processing_status,
+                "lifecycle_status": lifecycle_status,
+                "status_reason": status_reason,
+                "automation_execution": exec_obj,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+                "post": post_obj,
+                "replies": formatted_replies
             })
-
-        meta_child_comments = child_comments_map.get(c.external_comment_id, []) + child_comments_map.get(str(c.id), [])
-        for child in meta_child_comments:
-            child_ts = child.event_timestamp.isoformat() if child.event_timestamp else (child.created_at.isoformat() if child.created_at else None)
-            formatted_replies.append({
-                "id": child.id,
-                "message": child.comment_text,
-                "status": "SUCCESS",
-                "error_message": None,
-                "external_reply_id": child.external_comment_id,
-                "created_at": child_ts,
-                "commenter_name": child.commenter_name,
-                "commenter_id": child.commenter_id,
-                "source": "meta"
-            })
-
-        formatted_replies.sort(key=lambda r: r.get("created_at") or "")
-
-        meta_ad_obj = None
-        if c.meta_ad:
-            meta_ad_obj = {
-                "id": c.meta_ad.id,
-                "meta_ad_id": c.meta_ad.meta_ad_id,
-                "name": c.meta_ad.name,
-                "campaign_name": c.meta_ad.campaign_name,
-                "adset_name": c.meta_ad.adset_name,
-                "effective_status": c.meta_ad.effective_status,
-                "permalink": _resolve_ad_permalink(c.meta_ad, db, ctx_map=ctx_map_by_ext_id),
-                "platform": "facebook" if (not c.meta_ad.engagement_object_type or c.meta_ad.engagement_object_type == "FACEBOOK_POST") else "instagram"
-            }
-
-        res_list.append({
-            "id": c.id,
-            "social_account_id": c.social_account_id,
-            "meta_ad_id": c.meta_ad_id,
-            "meta_ad": meta_ad_obj,
-            "account": acc_obj,
-            "platform": c.platform,
-            "external_comment_id": c.external_comment_id,
-            "external_post_id": c.external_post_id,
-            "parent_comment_id": c.parent_comment_id,
-            "comment_text": c.comment_text,
-            "commenter_id": c.commenter_id,
-            "commenter_name": c.commenter_name,
-            "event_timestamp": c.event_timestamp.isoformat() if c.event_timestamp else None,
-            "webhook_object": c.webhook_object,
-            "processing_status": c.processing_status,
-            "created_at": c.created_at.isoformat() if c.created_at else None,
-            "post": post_obj,
-            "replies": formatted_replies
-        })
-    return res_list
+        return res_list
 
 
 @router.get("/", response_model=List[dict])
@@ -437,6 +532,8 @@ def get_user_social_comments(
     external_post_id: Optional[str] = Query(None, description="Filter by external post ID"),
     is_ad: Optional[bool] = Query(None, description="Filter ad vs organic comments"),
     reply_status: Optional[str] = Query(None, description="Filter by reply status: 'all', 'replied', or 'unreplied'"),
+    status: Optional[str] = Query(None, description="Filter by inbox lifecycle status: 'all', 'needs_reply', 'automated', 'replied', 'ignored', 'failed'"),
+    search: Optional[str] = Query(None, description="Search comment text, commenter name, or commenter ID"),
     sort_order: Optional[str] = Query("desc", description="Sort order: 'desc' (Newest first) or 'asc' (Oldest first)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -465,10 +562,66 @@ def get_user_social_comments(
         is_ad=is_ad,
         top_level_only=True,
         reply_status=reply_status,
+        status=status,
+        search=search,
         sort_order=sort_order or "desc"
     )
 
     return _format_comments_response_list(comments, current_user, db)
+
+
+@router.get("/inbox-summary", response_model=dict)
+def get_inbox_summary(
+    platform: Optional[str] = Query(None, description="Filter by platform"),
+    social_account_id: Optional[int] = Query(None, description="Filter by connected social account ID"),
+    external_post_id: Optional[str] = Query(None, description="Filter by external post ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Authoritative summary counts for Comment Inbox status tabs and platform health.
+    All counts strictly scoped to current_user.
+    """
+    if social_account_id is not None:
+        account = db.query(SocialAccount).filter(
+            SocialAccount.id == social_account_id,
+            SocialAccount.user_id == current_user.id
+        ).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Social account not found")
+
+    status_counts = social_comment_repo.get_inbox_metrics_by_user_id(
+        db=db,
+        user_id=current_user.id,
+        platform=platform,
+        social_account_id=social_account_id,
+        external_post_id=external_post_id
+    )
+
+    # Health metrics: Connected social accounts for user
+    accounts = db.query(SocialAccount).filter(
+        SocialAccount.user_id == current_user.id
+    ).all()
+
+    ig_connected = any(a.platform == "instagram" and a.status == "CONNECTED" for a in accounts)
+    fb_connected = any(a.platform == "facebook" and a.status == "CONNECTED" for a in accounts)
+
+    # Active automations count
+    from app.models.automation import Automation, AutomationStatus
+    active_automations_cnt = db.query(Automation).filter(
+        Automation.user_id == current_user.id,
+        Automation.status == AutomationStatus.ACTIVE.value
+    ).count()
+
+    return {
+        "status_counts": status_counts,
+        "health": {
+            "instagram_connected": ig_connected,
+            "facebook_connected": fb_connected,
+            "connected_accounts_count": len([a for a in accounts if a.status == "CONNECTED"]),
+            "active_automations_count": active_automations_cnt
+        }
+    }
 
 
 @router.get("/overview", response_model=dict)
