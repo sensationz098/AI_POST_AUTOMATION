@@ -2554,35 +2554,6 @@ class MetaGraphService:
             logger.warning(f"[IG_POST_FETCH] Error fetching IG media {media_id} from Meta: {e}")
             return None
 
-    def fetch_facebook_post_info(self, post_id: str, access_token: str) -> Optional[Dict[str, Any]]:
-        """Fetch Facebook post metadata directly from Meta Graph API for post context preview."""
-        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
-        if is_mock_allowed and (not post_id or not access_token or post_id.startswith("mock") or access_token.startswith("sandbox") or access_token.startswith("mock")):
-            logger.info(f"[FB_POST_FETCH] Sandbox Facebook Post Fetch for ID: {post_id}")
-            return {
-                "id": post_id,
-                "message": "Sandbox Facebook Page Post",
-                "full_picture": "https://example.com/mock_fb_photo.jpg",
-                "picture": "https://example.com/mock_fb_thumb.jpg"
-            }
-
-        if not post_id or not access_token:
-            return None
-
-        try:
-            url = f"{self.BASE_URL}/{post_id}"
-            params = {
-                "fields": "id,message,full_picture,picture,attachments",
-                "access_token": access_token
-            }
-            res = requests.get(url, params=params, timeout=10)
-            if res.status_code == 200:
-                return res.json()
-            logger.warning(f"[FB_POST_FETCH] Meta API returned status {res.status_code} for FB post {post_id}")
-            return None
-        except Exception as e:
-            logger.warning(f"[FB_POST_FETCH] Error fetching FB post {post_id} from Meta: {e}")
-            return None
 
     def delete_facebook_comment(self, external_comment_id: str, access_token: str) -> Dict[str, Any]:
         """Delete a Facebook comment from Meta Graph API."""
@@ -2709,10 +2680,19 @@ class MetaGraphService:
             logger.error(f"[META_POST_FETCH] Exception fetching IG media {media_id}: {e}")
             return None
 
-    def fetch_facebook_post_info(self, post_id: str, access_token: str) -> Optional[Dict[str, Any]]:
+    def fetch_facebook_post_info(
+        self,
+        post_id: str,
+        access_token: str,
+        media_type: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """
-        Fetch lightweight post metadata for a Facebook post via GET /{fb_post_id}.
-        Requests fields: id, message, created_time, full_picture, picture, permalink_url.
+        Fetch lightweight post/video metadata for a Facebook post via GET /{fb_post_id}.
+        Adaptive field selection:
+        - For video objects: requests id,description,title,created_time,picture,permalink_url
+        - For general post/photo objects: requests id,message,created_time,full_picture,picture,permalink_url
+        - Resilient fallback: if a field error (e.g. (#100) nonexisting field) occurs, falls back to safe universal fields
+          (id,created_time,picture,permalink_url,description,title,name) and normalizes output.
         """
         if not post_id or not access_token:
             return None
@@ -2730,19 +2710,51 @@ class MetaGraphService:
             }
 
         url = f"{self.BASE_URL}/{post_id}"
-        params = {
-            "fields": "id,message,created_time,full_picture,picture,permalink_url",
-            "access_token": raw_token
-        }
+        is_vid = bool(media_type and str(media_type).lower() in ["video", "reels", "reel"])
+        primary_fields = (
+            "id,description,title,created_time,picture,permalink_url"
+            if is_vid else
+            "id,message,created_time,full_picture,picture,permalink_url"
+        )
+        fallback_fields = "id,created_time,picture,permalink_url,description,title,name"
+
         try:
-            res = requests.get(url, params=params, timeout=10)
+            res = requests.get(url, params={"fields": primary_fields, "access_token": raw_token}, timeout=10)
             if res.status_code == 200:
-                return res.json()
-            else:
-                logger.warning(f"[META_POST_FETCH] FB post fetch status {res.status_code} for {post_id}: {res.text[:200]}")
-                return None
+                data = res.json()
+                if "description" in data and "message" not in data:
+                    data["message"] = data["description"]
+                elif "name" in data and "message" not in data:
+                    data["message"] = data["name"]
+                elif "title" in data and "message" not in data:
+                    data["message"] = data["title"]
+                if "picture" in data and "full_picture" not in data:
+                    data["full_picture"] = data["picture"]
+                return data
+
+            err_text = res.text or ""
+            # If 400 with nonexisting field (OAuthException #100), retry with fallback fields
+            if res.status_code == 400 and ("nonexisting field" in err_text.lower() or "100" in err_text):
+                fb_res = requests.get(url, params={"fields": fallback_fields, "access_token": raw_token}, timeout=10)
+                if fb_res.status_code == 200:
+                    data = fb_res.json()
+                    if "description" in data and "message" not in data:
+                        data["message"] = data["description"]
+                    elif "name" in data and "message" not in data:
+                        data["message"] = data["name"]
+                    elif "title" in data and "message" not in data:
+                        data["message"] = data["title"]
+                    if "picture" in data and "full_picture" not in data:
+                        data["full_picture"] = data["picture"]
+                    return data
+                else:
+                    logger.info(f"[META_POST_FETCH] FB post fallback fetch notice ({fb_res.status_code}) for {post_id}: {fb_res.text[:150]}")
+                    return None
+
+            logger.info(f"[META_POST_FETCH] FB post fetch notice ({res.status_code}) for {post_id}: {res.text[:150]}")
+            return None
         except Exception as e:
-            logger.error(f"[META_POST_FETCH] Exception fetching FB post {post_id}: {e}")
+            logger.warning(f"[META_POST_FETCH] Optional FB post fetch notice for {post_id}: {e}")
             return None
 
     def debug_token(self, token: str) -> Dict[str, Any]:

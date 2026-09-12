@@ -208,7 +208,11 @@ class PublishingEngine:
                                 ext_ctx.permalink = real_permalink
                             thread_db.commit()
                     elif acc.platform == "facebook":
-                        post_info = meta_service.fetch_facebook_post_info(ext_id, token)
+                        post_info = meta_service.fetch_facebook_post_info(
+                            ext_id,
+                            token,
+                            media_type="video" if is_video else "image"
+                        )
                         if post_info and isinstance(post_info, dict) and post_info.get("permalink_url"):
                             real_permalink = post_info.get("permalink_url")
                             from app.models.external_post_context import ExternalPostContext

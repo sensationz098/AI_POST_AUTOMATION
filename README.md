@@ -1,6 +1,6 @@
 # Production-Ready AI Social Media Automation Platform (Facebook & Instagram)
 
-An enterprise-grade, full-stack AI-powered social media automation platform designed for Facebook Pages and Instagram Business accounts. Features multi-tenant brand profile management, AI content copy generation (captions, hashtags, CTAs, SEO keywords, image prompts), AI visual graphic generation (OpenAI DALL-E 3), rich interactive post previews (Facebook & Instagram), approval and scheduling workflows, asynchronous Celery multi-account batch publishing via Meta Graph API, real-time byte-level media upload progress tracking for 300MB+ long videos, exponential retry logic, real-time analytics dashboard, and system audit logging.
+An enterprise-grade, full-stack AI-powered social media automation platform designed for Facebook Pages and Instagram Business accounts. Features multi-tenant brand profile management, AI content copy generation (captions, hashtags, CTAs, SEO keywords, image prompts), AI visual graphic generation (OpenAI DALL-E 3), rich interactive post previews (Facebook & Instagram), approval and scheduling workflows, asynchronous Celery multi-account batch publishing via Meta Graph API, real-time byte-level media upload progress tracking for 300MB+ long videos, exponential retry logic, real-time analytics dashboard, and system audit logging...
 
 ---
 
