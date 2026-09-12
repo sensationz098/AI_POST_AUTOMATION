@@ -261,6 +261,20 @@ def publish_multi_account(
             detail="No matching authorized social accounts found for publishing."
         )
 
+    # Validate that every requested account has a supported platform (facebook, instagram)
+    SUPPORTED_MULTI_PUBLISH_PLATFORMS = {"facebook", "instagram"}
+    unsupported_accounts = [acc for acc in accounts if acc.platform not in SUPPORTED_MULTI_PUBLISH_PLATFORMS]
+    if unsupported_accounts:
+        unsupported_details = [f"{acc.platform} (ID: {acc.id}, Name: '{acc.account_name}')" for acc in unsupported_accounts]
+        logger.warning(
+            f"[PUBLISH_TRACE] PUBLISH_MULTI_REJECTED_UNSUPPORTED_PLATFORM | user_id={current_user.id} | "
+            f"post_id={post.id} | unsupported_accounts={unsupported_details}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The multi-publish endpoint supports Facebook and Instagram only. Unsupported platform(s) selected: {', '.join(unsupported_details)}."
+        )
+
     # 1. Create or retrieve PublishingBatch with idempotency safeguard
     idempotency_key = request.idempotency_key or f"batch_{post.id}_{abs(hash(tuple(request.social_account_ids)))}"
     batch = publishing_repo.create_batch(

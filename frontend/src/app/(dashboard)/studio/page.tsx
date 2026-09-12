@@ -264,6 +264,14 @@ export default function AIStudioPage() {
     [socialAccounts]
   );
 
+  const postCapableAccounts = React.useMemo(
+    () =>
+      socialAccounts.filter(
+        a => a.platform === 'facebook' || a.platform === 'instagram'
+      ),
+    [socialAccounts]
+  );
+
   // Auto-poll active batch status when batch modal is open and batch is processing
   useEffect(() => {
     if (!isBatchModalOpen || !activeBatch) return;
@@ -293,7 +301,7 @@ export default function AIStudioPage() {
   };
 
   const handleSelectAllAccounts = () => {
-    setSelectedAccountIds(socialAccounts.map(a => a.id));
+    setSelectedAccountIds(postCapableAccounts.map(a => a.id));
   };
 
   const handleClearAccountSelect = () => {
@@ -738,7 +746,11 @@ export default function AIStudioPage() {
   };
 
   const handlePublishNow = async () => {
-    if (selectedAccountIds.length === 0) {
+    const validTargetIds = selectedAccountIds.filter(id =>
+      postCapableAccounts.some(account => account.id === id)
+    );
+
+    if (validTargetIds.length === 0) {
       toast.error('Please select at least one account to publish.', {
         duration: 4000,
         style: {
@@ -781,11 +793,11 @@ export default function AIStudioPage() {
       }, { timeout: PUBLISHING_TIMEOUT_MS });
       const postId = postRes.data.id;
 
-      if (selectedAccountIds.length > 0) {
+      if (validTargetIds.length > 0) {
         // Multi-Account Publishing Batch (uses 300s window matching server-side max Meta video processing window)
         const batchRes = await apiClient.post('/posts/publish-multi', {
           post_id: postId,
-          social_account_ids: selectedAccountIds,
+          social_account_ids: validTargetIds,
           media_type: detectedMediaType,
         }, { timeout: PUBLISHING_TIMEOUT_MS });
 
@@ -911,7 +923,10 @@ export default function AIStudioPage() {
       <div className="flex items-center space-x-2 border-b border-slate-800/80 pb-3">
         <button
           type="button"
-          onClick={() => setContentFormat('post')}
+          onClick={() => {
+            setContentFormat('post');
+            setSelectedAccountIds(prev => prev.filter(id => postCapableAccounts.some(a => a.id === id)));
+          }}
           className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
             contentFormat === 'post'
               ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
@@ -1415,7 +1430,7 @@ export default function AIStudioPage() {
                 <Share2 className="w-4 h-4 text-indigo-400" />
                 <span className="text-xs font-bold text-slate-100">Publish Destinations</span>
                 <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-indigo-950/60 text-indigo-300 border border-indigo-800/60">
-                  {selectedAccountIds.length} accounts selected
+                  {selectedAccountIds.filter(id => postCapableAccounts.some(a => a.id === id)).length} accounts selected
                 </span>
               </div>
 
@@ -1439,7 +1454,7 @@ export default function AIStudioPage() {
             </div>
 
             {/* Destination Accounts Checklist */}
-            {socialAccounts.length === 0 ? (
+            {postCapableAccounts.length === 0 ? (
               <div className="p-3 rounded bg-slate-900/40 border border-slate-800 flex items-center justify-between text-xs text-slate-400">
                 <span>No social accounts connected yet.</span>
                 <a
@@ -1452,11 +1467,11 @@ export default function AIStudioPage() {
             ) : (
               <div className="space-y-2">
                 {/* Instagram Group */}
-                {socialAccounts.some(a => a.platform === 'instagram') && (
+                {postCapableAccounts.some(a => a.platform === 'instagram') && (
                   <div>
                     <span className="text-[10px] font-mono text-pink-300 uppercase tracking-wider block mb-1">Instagram</span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {socialAccounts.filter(a => a.platform === 'instagram').map((acc) => {
+                      {postCapableAccounts.filter(a => a.platform === 'instagram').map((acc) => {
                         const isSelected = selectedAccountIds.includes(acc.id);
                         return (
                           <button
@@ -1486,11 +1501,11 @@ export default function AIStudioPage() {
                 )}
 
                 {/* Facebook Group */}
-                {socialAccounts.some(a => a.platform === 'facebook') && (
+                {postCapableAccounts.some(a => a.platform === 'facebook') && (
                   <div>
                     <span className="text-[10px] font-mono text-blue-300 uppercase tracking-wider block mb-1 mt-2">Facebook Pages</span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {socialAccounts.filter(a => a.platform === 'facebook').map((acc) => {
+                      {postCapableAccounts.filter(a => a.platform === 'facebook').map((acc) => {
                         const isSelected = selectedAccountIds.includes(acc.id);
                         return (
                           <button

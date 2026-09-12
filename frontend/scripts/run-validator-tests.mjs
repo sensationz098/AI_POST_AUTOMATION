@@ -129,7 +129,41 @@ runTest('Video selection: vertical video under 180s produces recommendation warn
   assert.ok(res.warnings[0].includes('YouTube Short'));
 });
 
+// ─── Studio Post Destination Scoping & Sanitization Tests ────────────────────
+import { filterPostCapableAccounts, sanitizeTargetAccountIds } from '../src/lib/studioAccountScoping.ts';
+
+const mockAccounts = [
+  { id: 38, platform: 'facebook', account_name: 'Facebook Page Official', account_id: 'fb_1', user_id: 1, created_at: '', updated_at: '' },
+  { id: 39, platform: 'instagram', account_name: 'Instagram Business Official', account_id: 'ig_1', user_id: 1, created_at: '', updated_at: '' },
+  { id: 40, platform: 'youtube', account_name: 'YouTube Channel #40', account_id: 'yt_1', user_id: 1, created_at: '', updated_at: '' },
+];
+
+runTest('Studio Scoping: Select All with Facebook + Instagram + YouTube selects only Facebook + Instagram', () => {
+  const postCapable = filterPostCapableAccounts(mockAccounts);
+  assert.strictEqual(postCapable.length, 2);
+  const postCapableIds = postCapable.map(a => a.id);
+  assert.deepStrictEqual(postCapableIds, [38, 39]);
+  assert.ok(!postCapableIds.includes(40), 'YouTube account #40 must NOT be in postCapableIds');
+});
+
+runTest('Studio Sanitization: A stale YouTube ID (40) is stripped before multi-publish payload', () => {
+  const postCapable = filterPostCapableAccounts(mockAccounts);
+  const staleSelectedAccountIds = [38, 39, 40]; // YouTube #40 present in state
+  const sanitized = sanitizeTargetAccountIds(staleSelectedAccountIds, postCapable);
+  assert.deepStrictEqual(sanitized, [38, 39]);
+  assert.ok(!sanitized.includes(40), 'Sanitized payload must NOT contain YouTube ID 40');
+});
+
+runTest('Studio Isolation: Sole YouTube ID produces empty valid targets and prevents publish', () => {
+  const postCapable = filterPostCapableAccounts(mockAccounts);
+  const onlyYouTubeSelected = [40];
+  const sanitized = sanitizeTargetAccountIds(onlyYouTubeSelected, postCapable);
+  assert.deepStrictEqual(sanitized, []);
+  assert.strictEqual(sanitized.length, 0);
+});
+
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed.\n`);
 if (failed > 0) {
   process.exit(1);
 }
+
