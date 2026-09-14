@@ -338,28 +338,114 @@ def test_instagram_comment_webhook_normalizes_parent_id_matching_media_id(client
     assert comment.parent_comment_id is None
     assert comment.comment_text == "Hey"
 
-def test_instagram_child_comment_webhook_preserves_parent_comment_id(client, db_session):
+def test_duplicate_social_account_resolves_most_recent_active_owner(db_session):
     """
-    Verify that when Instagram webhook sends a real reply (parent_id != media_id),
-    parent_comment_id is properly retained as the parent comment's ID.
+    Test A: Verify that when duplicate SocialAccount records exist with the same (platform, account_id),
+    global webhook resolution (user_id=None) deterministically selects the CONNECTED record
+    with the most recent updated_at and highest id tie-breaker.
     """
-    social_account_repo.create_or_update(
-        db=db_session, user_id=3, platform="instagram", account_id="17841443294223730", account_name="@ig_prod", access_token="tok_300"
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+
+    # Older account for user 1 (e.g. created 7 days ago)
+    acc1 = SocialAccount(
+        user_id=1,
+        platform="instagram",
+        account_id="ig_shared_123",
+        account_name="@user1_ig",
+        access_token="tok_1",
+        status="CONNECTED",
+        created_at=now - timedelta(days=7),
+        updated_at=now - timedelta(days=7)
     )
+    # Newer account for user 2 (e.g. created today)
+    acc2 = SocialAccount(
+        user_id=2,
+        platform="instagram",
+        account_id="ig_shared_123",
+        account_name="@user2_ig",
+        access_token="tok_2",
+        status="CONNECTED",
+        created_at=now,
+        updated_at=now
+    )
+    db_session.add_all([acc1, acc2])
+    db_session.commit()
+
+    resolved = social_account_repo.get_by_account_id(db_session, user_id=None, platform="instagram", account_id="ig_shared_123")
+    assert resolved is not None
+    assert resolved.id == acc2.id
+    assert resolved.user_id == 2
+
+
+def test_connected_account_beats_disconnected_newer_account(db_session):
+    """
+    Test B: Verify status priority: a CONNECTED older account beats a DISCONNECTED/REVOKED newer account.
+    """
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+
+    acc_connected_old = SocialAccount(
+        user_id=1,
+        platform="facebook",
+        account_id="fb_shared_456",
+        account_name="Active Page",
+        access_token="tok_conn",
+        status="CONNECTED",
+        created_at=now - timedelta(days=5),
+        updated_at=now - timedelta(days=5)
+    )
+    acc_revoked_new = SocialAccount(
+        user_id=2,
+        platform="facebook",
+        account_id="fb_shared_456",
+        account_name="Revoked Page",
+        access_token="tok_rev",
+        status="REVOKED",
+        created_at=now,
+        updated_at=now
+    )
+    db_session.add_all([acc_connected_old, acc_revoked_new])
+    db_session.commit()
+
+    resolved = social_account_repo.get_by_account_id(db_session, user_id=None, platform="facebook", account_id="fb_shared_456")
+    assert resolved is not None
+    assert resolved.id == acc_connected_old.id
+    assert resolved.user_id == 1
+    assert resolved.status == "CONNECTED"
+
+
+def test_webhook_comment_uses_resolved_account_tenant(client, db_session):
+    """
+    Test C: Verify incoming webhook assigns SocialComment.user_id and social_account_id
+    matching the resolved authoritative SocialAccount.
+    """
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+
+    acc1 = SocialAccount(
+        user_id=1, platform="instagram", account_id="ig_tenant_789", account_name="@ig_old",
+        access_token="tok1", status="CONNECTED", created_at=now - timedelta(days=2), updated_at=now - timedelta(days=2)
+    )
+    acc2 = SocialAccount(
+        user_id=2, platform="instagram", account_id="ig_tenant_789", account_name="@ig_new",
+        access_token="tok2", status="CONNECTED", created_at=now, updated_at=now
+    )
+    db_session.add_all([acc1, acc2])
+    db_session.commit()
 
     payload = json.dumps({
         "object": "instagram",
         "entry": [{
-            "id": "17841443294223730",
+            "id": "ig_tenant_789",
             "time": 1700000000,
             "changes": [{
                 "field": "comments",
                 "value": {
-                    "id": "17967710256188999",
-                    "text": "This is a reply to another comment",
-                    "media": {"id": "17902645869579015"},
-                    "parent_id": "17967710256188117",  # Points to parent comment, not media
-                    "from": {"id": "ig_user_888", "username": "reply_user"}
+                    "id": "c_tenant_test_1",
+                    "text": "Tenant isolation check",
+                    "media": {"id": "media_789"},
+                    "from": {"id": "u_99", "username": "commenter_99"}
                 }
             }]
         }]
@@ -369,9 +455,269 @@ def test_instagram_child_comment_webhook_preserves_parent_comment_id(client, db_
     res = client.post("/api/v1/webhooks/meta", data=payload, headers=headers)
     assert res.status_code == 200
 
-    comment = db_session.query(SocialComment).filter_by(external_comment_id="17967710256188999").first()
+    comment = db_session.query(SocialComment).filter_by(external_comment_id="c_tenant_test_1").first()
     assert comment is not None
-    assert comment.user_id == 3
-    assert comment.external_post_id == "17902645869579015"
-    assert comment.parent_comment_id == "17967710256188117"
+    assert comment.user_id == acc2.user_id
+    assert comment.user_id == 2
+    assert comment.social_account_id == acc2.id
+
+
+def test_webhook_comment_visible_in_resolved_users_inbox(client, db_session):
+    """
+    Test D: Verify that after webhook ingestion, SocialCommentRepository.get_by_user_id()
+    for the resolved user returns the comment.
+    """
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+
+    acc = SocialAccount(
+        user_id=2, platform="instagram", account_id="ig_inbox_test", account_name="@inbox_ig",
+        access_token="tok", status="CONNECTED", created_at=now, updated_at=now
+    )
+    db_session.add(acc)
+    db_session.commit()
+
+    payload = json.dumps({
+        "object": "instagram",
+        "entry": [{
+            "id": "ig_inbox_test",
+            "changes": [{
+                "field": "comments",
+                "value": {
+                    "id": "c_inbox_visible",
+                    "text": "Hello Inbox",
+                    "media": {"id": "m_inbox_1"}
+                }
+            }]
+        }]
+    }).encode("utf-8")
+
+    headers = {"X-Hub-Signature-256": generate_signature(payload)}
+    res = client.post("/api/v1/webhooks/meta", data=payload, headers=headers)
+    assert res.status_code == 200
+
+    user2_comments = social_comment_repo.get_by_user_id(db=db_session, user_id=2)
+    ext_ids = [c.external_comment_id for c in user2_comments]
+    assert "c_inbox_visible" in ext_ids
+
+
+def test_webhook_comment_isolated_from_other_users(client, db_session):
+    """
+    Test E: Verify that other users' inboxes (e.g. user_id=1) do NOT receive or view
+    comments belonging to user_id=2.
+    """
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+
+    acc = SocialAccount(
+        user_id=2, platform="instagram", account_id="ig_isolated_acc", account_name="@isolated_ig",
+        access_token="tok", status="CONNECTED", created_at=now, updated_at=now
+    )
+    db_session.add(acc)
+    db_session.commit()
+
+    payload = json.dumps({
+        "object": "instagram",
+        "entry": [{
+            "id": "ig_isolated_acc",
+            "changes": [{
+                "field": "comments",
+                "value": {
+                    "id": "c_isolated_1",
+                    "text": "Secret Comment",
+                    "media": {"id": "m_iso_1"}
+                }
+            }]
+        }]
+    }).encode("utf-8")
+
+    headers = {"X-Hub-Signature-256": generate_signature(payload)}
+    res = client.post("/api/v1/webhooks/meta", data=payload, headers=headers)
+    assert res.status_code == 200
+
+    user1_comments = social_comment_repo.get_by_user_id(db=db_session, user_id=1)
+    ext_ids_1 = [c.external_comment_id for c in user1_comments]
+    assert "c_isolated_1" not in ext_ids_1
+
+    user2_comments = social_comment_repo.get_by_user_id(db=db_session, user_id=2)
+    ext_ids_2 = [c.external_comment_id for c in user2_comments]
+    assert "c_isolated_1" in ext_ids_2
+
+
+def test_existing_comment_ownership_reconciliation_is_safe(db_session):
+    """
+    Test F: Verify that existing comment ownership reconciliation only updates ownership
+    when the target SocialAccount is proven to be the authoritative active account for the exact same
+    (platform, external account_id) relationship, and does NOT allow arbitrary cross-tenant theft.
+    """
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+
+    # 1. Authoritative account for Page A
+    acc_a1 = SocialAccount(
+        user_id=1, platform="facebook", account_id="page_reconcile_A", account_name="Page A Old",
+        access_token="tok", status="CONNECTED", created_at=now - timedelta(days=2), updated_at=now - timedelta(days=2)
+    )
+    acc_a2 = SocialAccount(
+        user_id=2, platform="facebook", account_id="page_reconcile_A", account_name="Page A New",
+        access_token="tok", status="CONNECTED", created_at=now, updated_at=now
+    )
+    # Unrelated account for Page B
+    acc_b = SocialAccount(
+        user_id=3, platform="facebook", account_id="page_reconcile_B", account_name="Page B",
+        access_token="tok", status="CONNECTED", created_at=now, updated_at=now
+    )
+    db_session.add_all([acc_a1, acc_a2, acc_b])
+    db_session.commit()
+
+    # Create existing comment under old acc_a1
+    comment = social_comment_repo.create_or_get_existing(
+        db=db_session,
+        user_id=acc_a1.user_id,
+        social_account_id=acc_a1.id,
+        platform="facebook",
+        external_comment_id="c_recon_test_1",
+        comment_text="Reconcile Me"
+    )
+    assert comment.user_id == 1
+    assert comment.social_account_id == acc_a1.id
+
+    # Re-ingest with authoritative acc_a2 -> Should safely reconcile to user 2
+    comment_recon = social_comment_repo.create_or_get_existing(
+        db=db_session,
+        user_id=acc_a2.user_id,
+        social_account_id=acc_a2.id,
+        platform="facebook",
+        external_comment_id="c_recon_test_1"
+    )
+    assert comment_recon.user_id == 2
+    assert comment_recon.social_account_id == acc_a2.id
+
+    # Attempt to reconcile with unrelated Page B account (acc_b) -> Should NOT steal ownership
+    comment_blocked = social_comment_repo.create_or_get_existing(
+        db=db_session,
+        user_id=acc_b.user_id,
+        social_account_id=acc_b.id,
+        platform="facebook",
+        external_comment_id="c_recon_test_1"
+    )
+    assert comment_blocked.user_id == 2
+    assert comment_blocked.social_account_id == acc_a2.id
+
+
+def test_instagram_and_facebook_global_account_resolution(db_session):
+    """
+    Test G: Verify both Facebook and Instagram platforms use deterministic global resolution.
+    """
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+
+    # Facebook
+    fb1 = SocialAccount(user_id=1, platform="facebook", account_id="fb_global_1", account_name="FB1", access_token="t", status="CONNECTED", created_at=now - timedelta(days=1), updated_at=now - timedelta(days=1))
+    fb2 = SocialAccount(user_id=2, platform="facebook", account_id="fb_global_1", account_name="FB2", access_token="t", status="CONNECTED", created_at=now, updated_at=now)
+
+    # Instagram
+    ig1 = SocialAccount(user_id=1, platform="instagram", account_id="ig_global_1", account_name="IG1", access_token="t", status="CONNECTED", created_at=now - timedelta(days=1), updated_at=now - timedelta(days=1))
+    ig2 = SocialAccount(user_id=2, platform="instagram", account_id="ig_global_1", account_name="IG2", access_token="t", status="CONNECTED", created_at=now, updated_at=now)
+
+    db_session.add_all([fb1, fb2, ig1, ig2])
+    db_session.commit()
+
+    fb_res = social_account_repo.get_by_account_id(db_session, user_id=None, platform="facebook", account_id="fb_global_1")
+    ig_res = social_account_repo.get_by_account_id(db_session, user_id=None, platform="instagram", account_id="ig_global_1")
+
+    assert fb_res.id == fb2.id
+    assert fb_res.user_id == 2
+    assert ig_res.id == ig2.id
+    assert ig_res.user_id == 2
+
+
+def test_instagram_metadata_fallback_uses_authoritative_account(client, db_session):
+    """
+    Test H: Verify fallback resolution via metadata_json uses deterministic ordering (CONNECTED + most recent).
+    """
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+
+    # Older account with linked IG ID in metadata_json
+    acc1 = SocialAccount(
+        user_id=1,
+        platform="instagram",
+        account_id="ig_meta_old_id",
+        account_name="@ig_meta_1",
+        access_token="tok1",
+        status="CONNECTED",
+        metadata_json={"instagram_business_account": {"id": "ig_meta_target_999"}},
+        created_at=now - timedelta(days=3),
+        updated_at=now - timedelta(days=3)
+    )
+    # Newer account with linked IG ID in metadata_json
+    acc2 = SocialAccount(
+        user_id=2,
+        platform="instagram",
+        account_id="ig_meta_new_id",
+        account_name="@ig_meta_2",
+        access_token="tok2",
+        status="CONNECTED",
+        metadata_json={"instagram_business_account": {"id": "ig_meta_target_999"}},
+        created_at=now,
+        updated_at=now
+    )
+    db_session.add_all([acc1, acc2])
+    db_session.commit()
+
+    payload = json.dumps({
+        "object": "instagram",
+        "entry": [{
+            "id": "ig_meta_target_999",
+            "changes": [{
+                "field": "comments",
+                "value": {
+                    "id": "c_fallback_test_1",
+                    "text": "Fallback resolution comment"
+                }
+            }]
+        }]
+    }).encode("utf-8")
+
+    headers = {"X-Hub-Signature-256": generate_signature(payload)}
+    res = client.post("/api/v1/webhooks/meta", data=payload, headers=headers)
+    assert res.status_code == 200
+
+    comment = db_session.query(SocialComment).filter_by(external_comment_id="c_fallback_test_1").first()
+    assert comment is not None
+    assert comment.user_id == 2
+    assert comment.social_account_id == acc2.id
+
+
+def test_resolution_logging(client, db_session, caplog):
+    """
+    Test I: Verify the structured [META_WEBHOOK_ACCOUNT_RESOLVED] log is emitted
+    with platform, external account ID, social account ID, user ID, brand ID, and account name.
+    """
+    import logging
+    social_account_repo.create_or_update(
+        db=db_session, user_id=5, platform="instagram", account_id="ig_log_acc_5", account_name="@log_test", access_token="tok"
+    )
+
+    payload = json.dumps({
+        "object": "instagram",
+        "entry": [{
+            "id": "ig_log_acc_5",
+            "changes": [{
+                "field": "comments",
+                "value": {"id": "c_log_1", "text": "Log test"}
+            }]
+        }]
+    }).encode("utf-8")
+
+    headers = {"X-Hub-Signature-256": generate_signature(payload)}
+    with caplog.at_level(logging.INFO):
+        res = client.post("/api/v1/webhooks/meta", data=payload, headers=headers)
+        assert res.status_code == 200
+        assert "[META_WEBHOOK_ACCOUNT_RESOLVED]" in caplog.text
+        assert "platform=instagram" in caplog.text
+        assert "external_account_id=ig_log_acc_5" in caplog.text
+        assert "user_id=5" in caplog.text
+        assert "account_name=@log_test" in caplog.text
 

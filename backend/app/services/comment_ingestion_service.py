@@ -58,6 +58,15 @@ class MetaCommentIngestionService:
             logger.info(f"[META_WEBHOOK_INGEST] Facebook Page {page_id} not found in connected social accounts. Ignoring event.")
             return []
 
+        logger.info(
+            f"[META_WEBHOOK_ACCOUNT_RESOLVED] platform=facebook "
+            f"external_account_id={page_id} "
+            f"social_account_id={account.id} "
+            f"user_id={account.user_id} "
+            f"brand_id={account.brand_id} "
+            f"account_name={account.account_name}"
+        )
+
         created_comments = []
         for change in changes:
             if not isinstance(change, dict):
@@ -167,8 +176,19 @@ class MetaCommentIngestionService:
         """Parse Instagram account 'comments' or 'mentions' changes."""
         account = social_account_repo.get_by_account_id(db, user_id=None, platform="instagram", account_id=ig_account_id)
         if not account:
-            # Fallback: Check if any connected Instagram account has this ID in metadata_json
-            candidates = db.query(SocialAccount).filter(SocialAccount.platform == "instagram").all()
+            # Fallback: Check if any connected Instagram account has this ID in metadata_json with deterministic priority
+            from sqlalchemy import case
+            status_priority = case(
+                (SocialAccount.status == "CONNECTED", 1),
+                else_=2
+            )
+            candidates = db.query(SocialAccount).filter(
+                SocialAccount.platform == "instagram"
+            ).order_by(
+                status_priority,
+                SocialAccount.updated_at.desc(),
+                SocialAccount.id.desc()
+            ).all()
             for cand in candidates:
                 if isinstance(cand.metadata_json, dict):
                     ig_id = (
@@ -176,12 +196,21 @@ class MetaCommentIngestionService:
                         or cand.metadata_json.get("id")
                         or cand.metadata_json.get("ig_business_account_id")
                     )
-                    if ig_id and str(ig_id) == str(ig_account_id):
+                    if ig_id and str(ig_id).strip() == str(ig_account_id).strip():
                         account = cand
                         break
             if not account:
                 logger.info(f"[META_WEBHOOK_INGEST] Instagram Account {ig_account_id} not found in connected social accounts. Ignoring event.")
                 return []
+
+        logger.info(
+            f"[META_WEBHOOK_ACCOUNT_RESOLVED] platform=instagram "
+            f"external_account_id={ig_account_id} "
+            f"social_account_id={account.id} "
+            f"user_id={account.user_id} "
+            f"brand_id={account.brand_id} "
+            f"account_name={account.account_name}"
+        )
 
         created_comments = []
         for change in changes:

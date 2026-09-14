@@ -35,6 +35,29 @@ class SocialCommentRepository:
 
         if existing:
             is_updated = False
+            # Safe Tenant Ownership Reconciliation:
+            # Only reconcile when target account is proven to be the authoritative active account
+            # for the exact same (platform, external account_id) relationship.
+            if existing.social_account_id != social_account_id or existing.user_id != user_id:
+                from app.repositories.social_account_repository import social_account_repo
+                from app.models.social_account import SocialAccount
+                target_sa = db.query(SocialAccount).filter(SocialAccount.id == social_account_id).first()
+                existing_sa = db.query(SocialAccount).filter(SocialAccount.id == existing.social_account_id).first()
+                if (
+                    target_sa and existing_sa and
+                    target_sa.platform == existing_sa.platform and
+                    str(target_sa.account_id).strip() == str(existing_sa.account_id).strip()
+                ):
+                    auth_sa = social_account_repo.get_authoritative_account_by_account_id(
+                        db=db,
+                        platform=target_sa.platform,
+                        account_id=target_sa.account_id
+                    )
+                    if auth_sa and auth_sa.id == target_sa.id:
+                        existing.user_id = user_id
+                        existing.social_account_id = social_account_id
+                        is_updated = True
+
             if meta_ad_id is not None and existing.meta_ad_id != meta_ad_id:
                 existing.meta_ad_id = meta_ad_id
                 is_updated = True
@@ -92,6 +115,26 @@ class SocialCommentRepository:
             ).first()
             if ext:
                 is_updated = False
+                if ext.social_account_id != social_account_id or ext.user_id != user_id:
+                    from app.repositories.social_account_repository import social_account_repo
+                    from app.models.social_account import SocialAccount
+                    target_sa = db.query(SocialAccount).filter(SocialAccount.id == social_account_id).first()
+                    existing_sa = db.query(SocialAccount).filter(SocialAccount.id == ext.social_account_id).first()
+                    if (
+                        target_sa and existing_sa and
+                        target_sa.platform == existing_sa.platform and
+                        str(target_sa.account_id).strip() == str(existing_sa.account_id).strip()
+                    ):
+                        auth_sa = social_account_repo.get_authoritative_account_by_account_id(
+                            db=db,
+                            platform=target_sa.platform,
+                            account_id=target_sa.account_id
+                        )
+                        if auth_sa and auth_sa.id == target_sa.id:
+                            ext.user_id = user_id
+                            ext.social_account_id = social_account_id
+                            is_updated = True
+
                 if meta_ad_id is not None and ext.meta_ad_id != meta_ad_id:
                     ext.meta_ad_id = meta_ad_id
                     is_updated = True

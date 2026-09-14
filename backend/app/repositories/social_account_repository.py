@@ -19,13 +19,40 @@ class SocialAccountRepository:
         ).all()
 
     def get_by_account_id(self, db: Session, user_id: Optional[int], platform: str, account_id: str) -> Optional[SocialAccount]:
+        """
+        Retrieve SocialAccount by platform and external account_id.
+        - If user_id is provided: scoped to the specific user/tenant.
+        - If user_id is None (webhook/global resolution): deterministically resolves
+          the authoritative account prioritizing status='CONNECTED', recency (updated_at DESC),
+          and highest id tie-breaker.
+        """
+        from sqlalchemy import case
+        norm_account_id = str(account_id).strip() if account_id is not None else ""
         query = db.query(SocialAccount).filter(
             SocialAccount.platform == platform,
-            SocialAccount.account_id == account_id
+            SocialAccount.account_id == norm_account_id
         )
         if user_id is not None:
             query = query.filter(SocialAccount.user_id == user_id)
-        return query.first()
+            return query.first()
+
+        # Global / Webhook resolution: Deterministic priority
+        status_priority = case(
+            (SocialAccount.status == "CONNECTED", 1),
+            else_=2
+        )
+        return query.order_by(
+            status_priority,
+            SocialAccount.updated_at.desc(),
+            SocialAccount.id.desc()
+        ).first()
+
+    def get_authoritative_account_by_account_id(self, db: Session, platform: str, account_id: str) -> Optional[SocialAccount]:
+        """
+        Explicit helper to resolve the globally authoritative, active SocialAccount
+        for a given platform and external account_id.
+        """
+        return self.get_by_account_id(db=db, user_id=None, platform=platform, account_id=account_id)
 
     def create_or_update(
         self,
