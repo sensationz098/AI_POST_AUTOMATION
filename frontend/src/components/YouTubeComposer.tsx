@@ -782,19 +782,19 @@ export function YouTubeComposer({
       )}
 
       {/* Top Bar: Target Channel Selector & Persona Banner */}
-      <div className="glass-panel p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+      <div className="glass-panel p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center space-x-3.5">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center text-white shadow-lg shadow-red-600/20 flex-shrink-0">
             <Youtube className="w-5 h-5 fill-white" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h2 className="text-sm font-bold text-white tracking-tight">YouTube Composer Studio</h2>
-              <span className="px-2 py-0.5 rounded-full bg-red-950/80 text-red-300 border border-red-800/60 text-[10px] font-mono font-semibold">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">YouTube Composer Studio</h2>
+              <span className="px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-950/80 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/60 text-[10px] font-mono font-semibold">
                 8 MB Resumable
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400">
               Publish high-definition Standard Videos & YouTube Shorts with chunked upload reliability
             </p>
           </div>
@@ -802,7 +802,7 @@ export function YouTubeComposer({
 
         {/* Channel Dropdown */}
         <div className="flex items-center space-x-2">
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden md:block">
+          <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden md:block">
             Channel:
           </label>
           <div className="relative min-w-[220px]">
@@ -810,10 +810,10 @@ export function YouTubeComposer({
               value={selectedAccountId || ''}
               onChange={(e) => setSelectedAccountId(Number(e.target.value))}
               disabled={uploadPhase !== 'idle'}
-              className="w-full pl-3 pr-8 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-red-500 disabled:opacity-50 appearance-none shadow-inner"
+              className="w-full pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-red-500 disabled:opacity-50 appearance-none shadow-inner"
             >
               {channels.map((c) => (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={c.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
                   {c.account_name} {c.metadata_json?.custom_url ? `(${c.metadata_json.custom_url})` : ''}
                 </option>
               ))}
@@ -830,20 +830,20 @@ export function YouTubeComposer({
         {/* ── Left Column: Media & Metadata Form (7 Cols) ───────────────────── */}
         <div className="lg:col-span-7 space-y-6">
           {/* Explicit Content Type Selector (Video vs Shorts) */}
-          <div className="glass-panel p-5 rounded-2xl space-y-3 border border-slate-800 shadow-xl">
+          <div className="glass-panel p-5 rounded-2xl space-y-3 border border-slate-200 dark:border-slate-800 shadow-xl">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-                <Sliders className="w-4 h-4 text-red-400" />
+              <label className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center space-x-2">
+                <Sliders className="w-4 h-4 text-red-500 dark:text-red-400" />
                 <span>Choose Content Type</span>
               </label>
               {contentType === 'short' ? (
-                <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-red-600/30 to-rose-600/30 text-red-300 border border-red-500/50 text-[10px] font-bold flex items-center space-x-1">
-                  <Zap className="w-3 h-3 text-red-400" />
+                <span className="px-2.5 py-0.5 rounded-full bg-red-50 dark:bg-gradient-to-r dark:from-red-600/30 dark:to-rose-600/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-500/50 text-[10px] font-bold flex items-center space-x-1">
+                  <Zap className="w-3 h-3 text-red-500 dark:text-red-400" />
                   <span>Shorts Publishing Mode</span>
                 </span>
               ) : (
-                <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-semibold flex items-center space-x-1">
-                  <Film className="w-3 h-3 text-indigo-400" />
+                <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[10px] font-semibold flex items-center space-x-1">
+                  <Film className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
                   <span>Standard Video Mode</span>
                 </span>
               )}
@@ -857,25 +857,25 @@ export function YouTubeComposer({
                 disabled={uploadPhase !== 'idle'}
                 className={`p-4 rounded-xl border text-left transition-all flex items-start space-x-3.5 ${
                   contentType === 'video'
-                    ? 'bg-gradient-to-br from-indigo-950/60 to-slate-900 border-indigo-500 text-white shadow-lg ring-1 ring-indigo-500/50'
-                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-indigo-50 dark:bg-gradient-to-br dark:from-indigo-950/60 dark:to-slate-900 border-indigo-500 text-slate-900 dark:text-white shadow-lg ring-1 ring-indigo-500/50'
+                    : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/50'
                 }`}
               >
                 <div
                   className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
                     contentType === 'video'
                       ? 'bg-indigo-600 text-white shadow-md'
-                      : 'bg-slate-800 text-slate-400'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                   }`}
                 >
                   <Film className="w-4 h-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-100 block">YouTube Video</span>
-                    {contentType === 'video' && <Check className="w-4 h-4 text-indigo-400" />}
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">YouTube Video</span>
+                    {contentType === 'video' && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />}
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                     Standard 16:9 widescreen or longform content for desktop, mobile & TV.
                   </p>
                 </div>
@@ -893,25 +893,25 @@ export function YouTubeComposer({
                 disabled={uploadPhase !== 'idle'}
                 className={`p-4 rounded-xl border text-left transition-all flex items-start space-x-3.5 ${
                   contentType === 'short'
-                    ? 'bg-gradient-to-br from-red-950/60 to-rose-950/60 border-red-500 text-white shadow-lg ring-1 ring-red-500/50'
-                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-red-50 dark:bg-gradient-to-br dark:from-red-950/60 dark:to-rose-950/60 border-red-500 text-slate-900 dark:text-white shadow-lg ring-1 ring-red-500/50'
+                    : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/50'
                 }`}
               >
                 <div
                   className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
                     contentType === 'short'
                       ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md'
-                      : 'bg-slate-800 text-slate-400'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                   }`}
                 >
                   <Zap className="w-4 h-4 fill-current" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-100 block">YouTube Short</span>
-                    {contentType === 'short' && <Check className="w-4 h-4 text-red-400" />}
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">YouTube Short</span>
+                    {contentType === 'short' && <Check className="w-4 h-4 text-red-500 dark:text-red-400" />}
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                     Vertical 9:16 video (≤ 3 mins / 180s) featured in the YouTube Shorts mobile feed.
                   </p>
                 </div>

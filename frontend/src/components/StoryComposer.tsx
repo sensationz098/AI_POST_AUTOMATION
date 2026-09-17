@@ -364,19 +364,19 @@ export function StoryComposer({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 max-w-7xl mx-auto text-slate-100">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 max-w-7xl mx-auto text-slate-900 dark:text-slate-100">
       {/* ── Left Column: Configuration & Media Upload (7 Cols) ── */}
       <div className="lg:col-span-7 space-y-6">
         {/* Brand Selector Banner */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-sm">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-fuchsia-600 to-indigo-600 flex items-center justify-center font-bold text-white shadow-md shadow-fuchsia-500/20">
                 <Camera className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-sm font-bold text-slate-100">Stories Automation Studio</h2>
-                <p className="text-xs text-slate-400">Create, preview & schedule 24-hour Stories for Instagram & Facebook</p>
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Stories Automation Studio</h2>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Create, preview & schedule 24-hour Stories for Instagram & Facebook</p>
               </div>
             </div>
 
@@ -388,10 +388,10 @@ export function StoryComposer({
                   const b = brands.find(item => item.id === Number(e.target.value));
                   if (b) onSelectBrand(b);
                 }}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                className="bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
               >
                 {brands.map(b => (
-                  <option key={b.id} value={b.id}>
+                  <option key={b.id} value={b.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
                     {b.name}
                   </option>
                 ))}
@@ -401,36 +401,36 @@ export function StoryComposer({
         </div>
 
         {/* Media Upload Area (9:16 Optimized) */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-2">
-              <UploadCloud className="w-4 h-4 text-indigo-400" />
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-300 flex items-center space-x-2">
+              <UploadCloud className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span>Story Media Asset</span>
             </label>
-            <span className="text-[11px] font-medium text-fuchsia-400 bg-fuchsia-500/10 px-2.5 py-0.5 rounded-full border border-fuchsia-500/20">
+            <span className="text-[11px] font-medium text-fuchsia-700 dark:text-fuchsia-400 bg-fuchsia-50 dark:bg-fuchsia-500/10 px-2.5 py-0.5 rounded-full border border-fuchsia-200 dark:border-fuchsia-500/20">
               Recommended: 9:16 Vertical (1080×1920)
             </span>
           </div>
 
           {mediaUrl ? (
-            <div className="relative rounded-2xl overflow-hidden border border-slate-700/80 bg-slate-950 p-3.5 space-y-3">
+            <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-950 p-3.5 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3 truncate">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0">
                     {mediaType === 'video' ? <Film className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
                   </div>
                   <div className="truncate">
-                    <p className="text-xs font-semibold text-slate-200 truncate">
+                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
                       {mediaUrl.split('/').pop() || 'Story Asset'}
                     </p>
                     <div className="flex items-center space-x-2 mt-0.5">
-                      <p className="text-[10px] text-emerald-400 flex items-center space-x-1">
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center space-x-1">
                         <CheckCircle2 className="w-3 h-3" />
                         <span className="capitalize">{mediaType} Story Ready</span>
                       </p>
                       {isEdited && (
-                        <span className="text-[9px] font-bold text-fuchsia-300 bg-fuchsia-500/20 border border-fuchsia-500/30 px-2 py-0.5 rounded-full flex items-center space-x-1">
-                          <Sparkles className="w-2.5 h-2.5 text-fuchsia-400" />
+                        <span className="text-[9px] font-bold text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-100 dark:bg-fuchsia-500/20 border border-fuchsia-200 dark:border-fuchsia-500/30 px-2 py-0.5 rounded-full flex items-center space-x-1">
+                          <Sparkles className="w-2.5 h-2.5 text-fuchsia-600 dark:text-fuchsia-400" />
                           <span>9:16 Custom Edited</span>
                         </span>
                       )}
@@ -456,14 +456,14 @@ export function StoryComposer({
                         setIsEdited(false);
                         toast.success('Reverted back to original uploaded media.');
                       }}
-                      className="text-[11px] bg-slate-800 hover:bg-slate-700 text-amber-300 font-medium px-2.5 py-1.5 rounded-xl transition"
+                      className="text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-amber-600 dark:text-amber-300 font-medium px-2.5 py-1.5 rounded-xl transition"
                       title="Revert back to original media"
                     >
                       Revert
                     </button>
                   )}
 
-                  <label className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-xl cursor-pointer transition font-medium">
+                  <label className="text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-2.5 py-1.5 rounded-xl cursor-pointer transition font-medium border border-slate-200 dark:border-transparent">
                     Replace
                     <input
                       type="file"
@@ -479,7 +479,7 @@ export function StoryComposer({
                       setOriginalMediaUrl('');
                       setIsEdited(false);
                     }}
-                    className="p-1.5 text-slate-400 hover:text-rose-400 transition"
+                    className="p-1.5 text-slate-400 hover:text-rose-500 transition"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -487,16 +487,16 @@ export function StoryComposer({
               </div>
             </div>
           ) : (
-            <label className="relative flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 hover:border-indigo-500/80 rounded-2xl bg-slate-950/60 cursor-pointer transition-all duration-200 group overflow-hidden">
+            <label className="relative flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500/80 rounded-2xl bg-slate-50 dark:bg-slate-950/60 cursor-pointer transition-all duration-200 group overflow-hidden">
               <div className="flex flex-col items-center justify-center space-y-2 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition">
                   <Film className="w-6 h-6" />
                 </div>
                 <div>
-                  <span className="text-xs font-semibold text-slate-200">
+                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                     {isUploading ? `Uploading (${uploadProgress}%)...` : 'Click or Drag & Drop Story Media'}
                   </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                     Images (JPG, PNG) or Videos (MP4, MOV up to 60s)
                   </p>
                 </div>
@@ -513,7 +513,7 @@ export function StoryComposer({
 
           {/* Or Paste Direct Public HTTPS URL */}
           <div className="space-y-1.5 pt-1">
-            <label className="text-[11px] font-semibold text-slate-400">Or Media URL (HTTPS):</label>
+            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Or Media URL (HTTPS):</label>
             <input
               type="url"
               placeholder="https://your-cdn.com/story-media.mp4"
@@ -526,48 +526,48 @@ export function StoryComposer({
                 if (val.match(/\.(mp4|mov|webm)$/i)) setMediaType('video');
                 else setMediaType('image');
               }}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition"
+              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-indigo-500 transition"
             />
           </div>
         </div>
 
         {/* Story Details (Optional Title & Internal Note) */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-2">
-            <Sparkles className="w-4 h-4 text-fuchsia-400" />
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+          <label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-300 flex items-center space-x-2">
+            <Sparkles className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
             <span>Story Details (Optional)</span>
           </label>
 
           <div className="space-y-3">
             <div>
-              <label className="text-[11px] font-semibold text-slate-400">Story Title / Descriptor</label>
+              <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Story Title / Descriptor</label>
               <input
                 type="text"
                 placeholder="e.g. Summer Flash Sale Launch"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                className="w-full mt-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-400">Internal Notes / Caption</label>
+              <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Internal Notes / Caption</label>
               <textarea
                 rows={2}
                 placeholder="Story internal reference note..."
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 resize-none"
+                className="w-full mt-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-indigo-500 resize-none"
               />
             </div>
           </div>
         </div>
 
         {/* Destination Platform / Accounts Selection */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-2">
-              <Share2 className="w-4 h-4 text-indigo-400" />
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-300 flex items-center space-x-2">
+              <Share2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span>Target Story Destinations</span>
             </label>
             <div className="flex items-center space-x-2">
@@ -576,35 +576,35 @@ export function StoryComposer({
                   <button
                     type="button"
                     onClick={handleSelectAll}
-                    className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 px-2.5 py-1 rounded-lg bg-indigo-950/60 border border-indigo-800/60 hover:border-indigo-700 transition"
+                    className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 hover:border-indigo-300 dark:hover:border-indigo-700 transition"
                   >
                     Select All
                   </button>
                   <button
                     type="button"
                     onClick={handleClearAll}
-                    className="text-[10px] font-semibold text-slate-400 hover:text-slate-300 px-2.5 py-1 rounded-lg bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition"
+                    className="text-[10px] font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition"
                   >
                     Clear
                   </button>
                 </>
               )}
-              <span className="text-[10px] text-slate-400 font-mono ml-1">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono ml-1">
                 {selectedAccountIds.length} account{selectedAccountIds.length === 1 ? '' : 's'} selected
               </span>
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-400">
-            The Story will be published <span className="text-slate-200 font-medium">ONLY</span> to the exact checked account(s) below.
+          <p className="text-[11px] text-slate-600 dark:text-slate-400">
+            The Story will be published <span className="text-slate-900 dark:text-slate-200 font-medium">ONLY</span> to the exact checked account(s) below.
           </p>
 
           {capableAccounts.length === 0 ? (
-            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start space-x-2.5">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs flex items-start space-x-2.5">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
               <div>
                 <p className="font-semibold">No connected Story-capable accounts found.</p>
-                <p className="text-[11px] text-amber-300/80 mt-0.5">
+                <p className="text-[11px] text-amber-700 dark:text-amber-300/80 mt-0.5">
                   Please connect an Instagram Business or Facebook Page account in the Meta Connect settings.
                 </p>
               </div>
@@ -620,22 +620,22 @@ export function StoryComposer({
                     onClick={() => toggleAccount(acc.id)}
                     className={`flex items-center space-x-3 p-3 rounded-xl border text-left transition-all ${
                       isSelected
-                        ? 'bg-indigo-600/15 border-indigo-500 text-slate-100 shadow-md shadow-indigo-500/10'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                        ? 'bg-indigo-50 dark:bg-indigo-600/15 border-indigo-300 dark:border-indigo-500 text-slate-900 dark:text-slate-100 shadow-sm'
+                        : 'bg-slate-50 hover:bg-slate-100 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400 dark:hover:border-slate-700'
                     }`}
                   >
                     <div className="flex-shrink-0">
                       {isSelected ? (
-                        <CheckSquare className="w-4 h-4 text-indigo-400" />
+                        <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                       ) : (
-                        <Square className="w-4 h-4 text-slate-600" />
+                        <Square className="w-4 h-4 text-slate-400 dark:text-slate-600" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold truncate text-slate-200">
+                      <p className="text-xs font-semibold truncate text-slate-900 dark:text-slate-200">
                         {acc.account_name}
                       </p>
-                      <p className="text-[10px] text-indigo-400 font-medium capitalize">
+                      <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium capitalize">
                         {acc.platform === 'instagram' ? 'Instagram Story' : 'Facebook Page Story'}
                       </p>
                       <p className="text-[9px] text-slate-500 truncate">
@@ -653,20 +653,20 @@ export function StoryComposer({
         {validationResult && (
           <div className={`p-4 rounded-2xl border text-xs space-y-2 ${
             validationResult.is_valid
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-              : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+              ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-800 dark:text-emerald-300'
+              : 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-800 dark:text-rose-300'
           }`}>
             <div className="flex items-center space-x-2 font-semibold">
               {validationResult.is_valid ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               ) : (
-                <AlertTriangle className="w-4 h-4 text-rose-400" />
+                <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
               )}
               <span>{validationResult.is_valid ? 'Ready to Publish Story' : 'Validation Checks Required'}</span>
             </div>
 
             {validationResult.errors.length > 0 && (
-              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-300/90 pl-1">
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-700 dark:text-rose-300/90 pl-1">
                 {validationResult.errors.map((e, idx) => (
                   <li key={idx}>{e}</li>
                 ))}
@@ -674,7 +674,7 @@ export function StoryComposer({
             )}
 
             {validationResult.warnings.length > 0 && (
-              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-300/90 pl-1">
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-700 dark:text-amber-300/90 pl-1">
                 {validationResult.warnings.map((w, idx) => (
                   <li key={idx}>{w}</li>
                 ))}
@@ -688,7 +688,7 @@ export function StoryComposer({
           <button
             type="button"
             onClick={handleSaveDraft}
-            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+            className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-transparent text-xs font-semibold transition"
           >
             Save Draft
           </button>
@@ -697,9 +697,9 @@ export function StoryComposer({
             <button
               type="button"
               onClick={() => setIsScheduling(!isScheduling)}
-              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition"
             >
-              <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+              <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               <span>Schedule</span>
             </button>
 
@@ -721,16 +721,16 @@ export function StoryComposer({
 
         {/* Schedule Date & Time Picker Accordion */}
         {isScheduling && (
-          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-700/80 space-y-3 animate-in fade-in slide-in-from-top-2">
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 space-y-3 animate-in fade-in slide-in-from-top-2 shadow-lg">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-200 flex items-center space-x-2">
-                <Clock className="w-4 h-4 text-indigo-400" />
+              <span className="text-xs font-bold text-slate-900 dark:text-slate-200 flex items-center space-x-2">
+                <Clock className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <span>Select Publication Date & Time</span>
               </span>
               <button
                 type="button"
                 onClick={() => setIsScheduling(false)}
-                className="text-slate-400 hover:text-slate-200 text-xs"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
               >
                 ✕
               </button>
@@ -741,7 +741,7 @@ export function StoryComposer({
                 type="datetime-local"
                 value={scheduledDateTime}
                 onChange={(e) => setScheduledDateTime(e.target.value)}
-                className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                className="flex-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
               />
               <button
                 type="button"
@@ -759,14 +759,14 @@ export function StoryComposer({
       {/* ── Right Column: 9:16 Mobile Mockup Preview (5 Cols) ── */}
       <div className="lg:col-span-5 flex flex-col items-center space-y-4">
         {/* Preview Platform Switcher */}
-        <div className="flex items-center bg-slate-900/90 border border-slate-800 rounded-xl p-1 space-x-1">
+        <div className="flex items-center bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl p-1 space-x-1">
           <button
             type="button"
             onClick={() => setPreviewPlatform('instagram')}
             className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition ${
               previewPlatform === 'instagram'
                 ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             Instagram Story
@@ -777,7 +777,7 @@ export function StoryComposer({
             className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition ${
               previewPlatform === 'facebook'
                 ? 'bg-blue-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             Facebook Story

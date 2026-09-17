@@ -59,35 +59,35 @@ function MusicCard({
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
-    <div className="border border-slate-700/60 rounded-xl overflow-hidden">
+    <div className="border border-slate-200 dark:border-slate-700/60 rounded-xl overflow-hidden">
       {/* Header — toggle */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-slate-900/60 hover:bg-slate-800/60 transition"
+        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition"
       >
         <div className="flex items-center space-x-2">
-          <Music2 className="w-4 h-4 text-fuchsia-400" />
-          <span className="text-xs font-bold text-slate-200">Add Music / Audio</span>
+          <Music2 className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400" />
+          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Add Music / Audio</span>
           {musicUrl && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-fuchsia-500/20 text-fuchsia-300 font-semibold">✓ Track attached</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/20 dark:text-fuchsia-300 font-semibold">✓ Track attached</span>
           )}
         </div>
         <span className="text-slate-500 text-xs">{isOpen ? '▲' : '▼'}</span>
       </button>
 
       {isOpen && (
-        <div className="p-4 space-y-4 bg-slate-950/40">
-          <p className="text-[11px] text-slate-400">
+        <div className="p-4 space-y-4 bg-white dark:bg-slate-950/40">
+          <p className="text-[11px] text-slate-600 dark:text-slate-400">
             Attach a music track to play alongside your Reel or Story. Upload an MP3 / M4A, or paste a direct audio URL.
           </p>
 
           {/* Upload & URL row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 hover:border-fuchsia-500 rounded-xl bg-slate-900/60 cursor-pointer transition text-center group">
-              <Music className="w-6 h-6 text-slate-400 group-hover:text-fuchsia-400 mb-1" />
-              <span className="text-xs font-semibold text-slate-200">Upload Audio File</span>
-              <span className="text-[10px] text-slate-500">MP3, M4A, WAV, OGG</span>
+            <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-fuchsia-500 rounded-xl bg-slate-50 dark:bg-slate-900/60 cursor-pointer transition text-center group">
+              <Music className="w-6 h-6 text-slate-400 group-hover:text-fuchsia-600 dark:group-hover:text-fuchsia-400 mb-1" />
+              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">Upload Audio File</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">MP3, M4A, WAV, OGG</span>
               <input
                 type="file"
                 accept="audio/*"
@@ -96,14 +96,14 @@ function MusicCard({
               />
             </label>
 
-            <div className="flex flex-col justify-center space-y-1 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-              <span className="text-[11px] font-semibold text-slate-400">Or Paste Audio URL:</span>
+            <div className="flex flex-col justify-center space-y-1 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+              <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Or Paste Audio URL:</span>
               <input
                 type="url"
                 value={musicUrl}
                 onChange={(e) => setMusicUrl(e.target.value)}
                 placeholder="https://example.com/track.mp3"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-fuchsia-500"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-fuchsia-500"
               />
             </div>
           </div>
@@ -111,42 +111,42 @@ function MusicCard({
           {/* Track info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-medium text-slate-400 mb-1">Song Title</label>
+              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Song Title</label>
               <input
                 type="text"
                 value={musicTitle}
                 onChange={(e) => setMusicTitle(e.target.value)}
                 placeholder="e.g. Blinding Lights"
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-fuchsia-500"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-fuchsia-500"
               />
             </div>
             <div>
-              <label className="block text-[11px] font-medium text-slate-400 mb-1">Artist</label>
+              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Artist</label>
               <input
                 type="text"
                 value={musicArtist}
                 onChange={(e) => setMusicArtist(e.target.value)}
                 placeholder="e.g. The Weeknd"
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-fuchsia-500"
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-fuchsia-500"
               />
             </div>
           </div>
 
           {/* Live Audio Player */}
           {musicUrl && (
-            <div className="bg-fuchsia-950/30 border border-fuchsia-500/20 rounded-xl p-3 space-y-2">
+            <div className="bg-fuchsia-50 dark:bg-fuchsia-950/30 border border-fuchsia-200 dark:border-fuchsia-500/20 rounded-xl p-3 space-y-2">
               <div className="flex items-center space-x-3">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-fuchsia-600 to-purple-700 flex items-center justify-center flex-shrink-0 shadow-lg shadow-fuchsia-500/30">
                   <Music2 className="w-4 h-4 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-white truncate">{musicTitle || 'Untitled Track'}</p>
-                  <p className="text-[10px] text-fuchsia-300">{musicArtist || 'Unknown Artist'}</p>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{musicTitle || 'Untitled Track'}</p>
+                  <p className="text-[10px] text-fuchsia-700 dark:text-fuchsia-300">{musicArtist || 'Unknown Artist'}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => { setMusicUrl(''); setMusicTitle(''); setMusicArtist(''); }}
-                  className="text-slate-500 hover:text-red-400 transition"
+                  className="text-slate-400 hover:text-red-500 transition"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -157,7 +157,7 @@ function MusicCard({
                 className="w-full h-8 rounded-lg"
                 style={{ accentColor: '#d946ef' }}
               />
-              <p className="text-[10px] text-slate-500">
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
                 🎵 This track will be attached as audio metadata on compatible platforms (Reels, Stories).
               </p>
             </div>
@@ -864,37 +864,37 @@ export default function AIStudioPage() {
     <div className="space-y-5 select-none font-sans text-xs">
       <Toaster position="top-right" reverseOrder={false} />
       {/* Linear Workspace Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200 dark:border-slate-800/60">
         <div>
-          <h1 className="text-lg font-bold text-slate-100 tracking-tight flex items-center space-x-2">
-            <Sparkles className="w-4 h-4 text-indigo-400" />
+          <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight flex items-center space-x-2">
+            <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span>Social Media Creator Studio</span>
           </h1>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-600 dark:text-slate-400">
             Generate AI captions & graphics or upload custom media clips for Meta Facebook & Instagram publishings.
           </p>
         </div>
 
         <div className="flex items-center space-x-3 flex-shrink-0">
           {/* Active Brand Profile Dropdown */}
-          <div className="flex items-center space-x-2 bg-slate-900/60 border border-slate-800 px-3 py-1 rounded">
-            <span className="text-[10px] text-slate-400">Brand Persona:</span>
+          <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 px-3 py-1 rounded">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400">Brand Persona:</span>
             <select
               value={selectedBrand?.id || ''}
               onChange={(e) => {
                 const b = brands.find((x) => x.id === Number(e.target.value));
                 if (b) setSelectedBrand(b);
               }}
-              className="bg-transparent text-xs text-indigo-400 font-semibold focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-indigo-600 dark:text-indigo-400 font-semibold focus:outline-none cursor-pointer"
             >
               {brands.length > 0 ? (
                 brands.map((b) => (
-                  <option key={b.id} value={b.id} className="bg-slate-900 text-slate-100">
+                  <option key={b.id} value={b.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
                     {b.name} ({b.industry})
                   </option>
                 ))
               ) : (
-                <option value={1} className="bg-slate-900 text-slate-100">
+                <option value={1} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
                   Default Brand
                 </option>
               )}
@@ -903,15 +903,15 @@ export default function AIStudioPage() {
 
           {statusNotification && (
             <div className={`flex items-center space-x-1.5 px-3 py-1 rounded text-[11px] border ${statusNotification.startsWith('❌')
-                ? 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+                ? 'bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-300'
                 : statusNotification.startsWith('⚠️')
-                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
-                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300'
               }`}>
               {statusNotification.startsWith('❌') || statusNotification.startsWith('⚠️') ? (
-                <AlertTriangle className={`w-3.5 h-3.5 flex-shrink-0 ${statusNotification.startsWith('❌') ? 'text-rose-400' : 'text-amber-400'}`} />
+                <AlertTriangle className={`w-3.5 h-3.5 flex-shrink-0 ${statusNotification.startsWith('❌') ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`} />
               ) : (
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
               )}
               <span className="truncate max-w-xs">{statusNotification}</span>
             </div>
@@ -920,7 +920,7 @@ export default function AIStudioPage() {
       </div>
 
       {/* Content Format Switcher: Feed Post vs 24h Story vs YouTube */}
-      <div className="flex items-center space-x-2 border-b border-slate-800/80 pb-3">
+      <div className="flex items-center space-x-2 border-b border-slate-200 dark:border-slate-800/80 pb-3">
         <button
           type="button"
           onClick={() => {
@@ -930,7 +930,7 @@ export default function AIStudioPage() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
             contentFormat === 'post'
               ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
-              : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-800'
+              : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-800'
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
@@ -943,7 +943,7 @@ export default function AIStudioPage() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
             contentFormat === 'story'
               ? 'bg-gradient-to-r from-fuchsia-600 to-indigo-600 text-white shadow-lg shadow-fuchsia-600/20'
-              : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-800'
+              : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-800'
           }`}
         >
           <Camera className="w-3.5 h-3.5" />
@@ -956,10 +956,10 @@ export default function AIStudioPage() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
             contentFormat === 'youtube'
               ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-lg shadow-red-600/20'
-              : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-800'
+              : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-800'
           }`}
         >
-          <Youtube className="w-3.5 h-3.5 text-red-400" />
+          <Youtube className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
           <span>YouTube (Video / Shorts)</span>
         </button>
       </div>
@@ -982,9 +982,9 @@ export default function AIStudioPage() {
         <div className="lg:col-span-7 space-y-6">
           {/* Custom Post Upload Card */}
           <div className="glass-panel p-6 rounded-2xl space-y-5 border-l-4 border-indigo-500">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h2 className="text-sm font-bold text-white flex items-center space-x-2">
-                <ImageIcon className="w-4 h-4 text-indigo-400" />
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                <ImageIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <span>Upload Custom Graphic & Post Copy</span>
               </h2>
             </div>
@@ -992,11 +992,11 @@ export default function AIStudioPage() {
             {/* Photo & Video Media Upload Box */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-200">
+                <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
                   Post Media (Upload Photo or Video Reel)
                 </label>
                 {imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.startsWith('data:video/')) && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-mono">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 font-mono">
                     🎥 Video Reel Attached
                   </span>
                 )}
@@ -1004,10 +1004,10 @@ export default function AIStudioPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Photo Upload Button */}
-                <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
-                  <ImageIcon className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 mb-1" />
-                  <span className="text-xs font-bold text-slate-200">Upload Photo</span>
-                  <span className="text-[9px] text-slate-400">PNG, JPG, WEBP</span>
+                <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-50 dark:bg-slate-900/60 cursor-pointer transition text-center group">
+                  <ImageIcon className="w-5 h-5 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 mb-1" />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Upload Photo</span>
+                  <span className="text-[9px] text-slate-500 dark:text-slate-400">PNG, JPG, WEBP</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -1017,10 +1017,10 @@ export default function AIStudioPage() {
                 </label>
 
                 {/* Video Reel Upload Button */}
-                <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group">
-                  <Play className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 mb-1" />
-                  <span className="text-xs font-bold text-slate-200">Upload Video Reel</span>
-                  <span className="text-[9px] text-slate-400">MP4, MOV, WEBM</span>
+                <label className="flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 rounded-2xl bg-slate-50 dark:bg-slate-900/60 cursor-pointer transition text-center group">
+                  <Play className="w-5 h-5 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 mb-1" />
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Upload Video Reel</span>
+                  <span className="text-[9px] text-slate-500 dark:text-slate-400">MP4, MOV, WEBM</span>
                   <input
                     type="file"
                     accept="video/*"
@@ -1030,14 +1030,14 @@ export default function AIStudioPage() {
                 </label>
 
                 {/* Media URL Input */}
-                <div className="flex flex-col justify-center space-y-1 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
-                  <span className="text-[10px] font-bold text-slate-400">Or Paste Media URL:</span>
+                <div className="flex flex-col justify-center space-y-1 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">Or Paste Media URL:</span>
                   <input
                     type="url"
                     value={imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
                     placeholder="https://example.com/clip.mp4"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-[11px] text-white focus:outline-none focus:border-pink-500 font-mono"
+                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-2.5 py-1 text-[11px] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
                   />
                 </div>
               </div>
@@ -1045,13 +1045,13 @@ export default function AIStudioPage() {
 
             {/* 🎬 Optional Video Thumbnail Control Card */}
             {(uploadState.mediaType === 'video' || (imageUrl && (imageUrl.endsWith('.mp4') || imageUrl.endsWith('.mov') || imageUrl.endsWith('.webm') || imageUrl.endsWith('.m4v') || imageUrl.startsWith('data:video/')))) && (
-              <div className="p-4 rounded-2xl border border-indigo-500/30 bg-slate-900/80 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <h3 className="text-xs font-bold text-white flex items-center space-x-2">
-                    <Film className="w-4 h-4 text-indigo-400" />
+              <div className="p-4 rounded-2xl border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50/40 dark:bg-slate-900/80 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                    <Film className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     <span>🎬 Video Thumbnail (Reel Cover)</span>
                   </h3>
-                  <span className="text-[10px] text-slate-400 font-medium">Optional</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Optional</span>
                 </div>
 
                 {/* Radio choices */}
@@ -1064,8 +1064,8 @@ export default function AIStudioPage() {
                       setThumbnailOffsetMs(null);
                     }}
                     className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${thumbnailType === 'NONE'
-                        ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-900 dark:text-white shadow-sm'
+                        : 'bg-white dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                   >
                     <span>○ Automatic</span>
@@ -1075,8 +1075,8 @@ export default function AIStudioPage() {
                     type="button"
                     onClick={() => setThumbnailType('FRAME')}
                     className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${thumbnailType === 'FRAME'
-                        ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-900 dark:text-white shadow-sm'
+                        : 'bg-white dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                   >
                     <span>○ Choose frame</span>
@@ -1086,8 +1086,8 @@ export default function AIStudioPage() {
                     type="button"
                     onClick={() => setThumbnailType('CUSTOM')}
                     className={`px-3 py-2 rounded-xl text-xs font-semibold border text-center transition flex items-center justify-center space-x-1.5 ${thumbnailType === 'CUSTOM'
-                        ? 'bg-indigo-600/30 border-indigo-500 text-white shadow-sm'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-900 dark:text-white shadow-sm'
+                        : 'bg-white dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                       }`}
                   >
                     <span>○ Upload custom</span>
@@ -1096,16 +1096,16 @@ export default function AIStudioPage() {
 
                 {/* OPTION 1: NO THUMBNAIL */}
                 {thumbnailType === 'NONE' && (
-                  <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-center space-x-2">
-                    <span className="w-2 h-2 rounded-full bg-slate-500 flex-shrink-0" />
+                  <div className="p-3 bg-white dark:bg-slate-950/50 rounded-xl border border-slate-200 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400 flex items-center space-x-2">
+                    <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 flex-shrink-0" />
                     <span>Default video frame will be automatically generated by Meta upon publishing.</span>
                   </div>
                 )}
 
                 {/* OPTION 2: CHOOSE FRAME */}
                 {thumbnailType === 'FRAME' && (
-                  <div className="space-y-3 p-3 bg-slate-950/60 rounded-xl border border-indigo-900/50">
-                    <div className="text-xs font-bold text-slate-200">Scrub video to select cover timestamp:</div>
+                  <div className="space-y-3 p-3 bg-white dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-indigo-900/50">
+                    <div className="text-xs font-bold text-slate-800 dark:text-slate-200">Scrub video to select cover timestamp:</div>
                     <div className="relative rounded-xl overflow-hidden bg-black border border-slate-800 aspect-video flex items-center justify-center">
                       <video
                         ref={videoRef}
@@ -1131,15 +1131,15 @@ export default function AIStudioPage() {
                         <span>{isCapturingFrame ? 'Extracting & Uploading Frame...' : '📷 Capture Selected Frame'}</span>
                       </button>
                       {thumbnailOffsetMs !== null && (
-                        <span className="text-[11px] font-mono text-indigo-300 bg-indigo-950/80 border border-indigo-800/60 px-2.5 py-1 rounded-lg">
+                        <span className="text-[11px] font-mono text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/60 px-2.5 py-1 rounded-lg">
                           Timestamp: {(thumbnailOffsetMs / 1000).toFixed(1)}s
                         </span>
                       )}
                     </div>
 
                     {thumbnailUrl && (
-                      <div className="pt-2 border-t border-slate-800 space-y-2">
-                        <span className="text-[11px] font-bold text-emerald-400 flex items-center space-x-1">
+                      <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center space-x-1">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Selected Frame Image Preview:</span>
                         </span>
@@ -1153,10 +1153,10 @@ export default function AIStudioPage() {
 
                 {/* OPTION 3: UPLOAD CUSTOM THUMBNAIL */}
                 {thumbnailType === 'CUSTOM' && (
-                  <div className="space-y-3 p-3 bg-slate-950/60 rounded-xl border border-indigo-900/50">
-                    <label className="flex items-center justify-center p-3 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl bg-slate-900/60 cursor-pointer transition text-center group">
-                      <Upload className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 mr-2" />
-                      <span className="text-xs font-bold text-slate-200">Select Custom Thumbnail Cover Image</span>
+                  <div className="space-y-3 p-3 bg-white dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-indigo-900/50">
+                    <label className="flex items-center justify-center p-3 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 rounded-xl bg-slate-50 dark:bg-slate-900/60 cursor-pointer transition text-center group">
+                      <Upload className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 mr-2" />
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Select Custom Thumbnail Cover Image</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -1167,7 +1167,7 @@ export default function AIStudioPage() {
 
                     {thumbnailUrl && (
                       <div className="space-y-2">
-                        <span className="text-[11px] font-bold text-emerald-400 flex items-center space-x-1">
+                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center space-x-1">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Custom Thumbnail Cover Preview:</span>
                         </span>
@@ -1183,36 +1183,36 @@ export default function AIStudioPage() {
 
             {/* Media Upload Progress UI Card */}
             {uploadState.stage !== 'IDLE' && (
-              <div className="p-4 rounded-2xl border border-slate-700/80 bg-slate-900/90 shadow-xl space-y-3 font-sans">
+              <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900/90 shadow-xl space-y-3 font-sans">
                 {/* Stage 1: UPLOADING from device */}
                 {uploadState.stage === 'UPLOADING' && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <UploadCloud className="w-4 h-4 text-indigo-400 animate-bounce" />
+                        <UploadCloud className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-bounce" />
                         <div>
-                          <span className="text-xs font-bold text-slate-100 block">
+                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">
                             {uploadState.mediaType === 'video' ? '📹 Uploading video from device' : '🖼️ Uploading photo from device'}
                           </span>
-                          <span className="text-[10px] text-indigo-300">STAGE 1: Device → AI Post Automation Storage</span>
+                          <span className="text-[10px] text-indigo-600 dark:text-indigo-300">STAGE 1: Device → AI Post Automation Storage</span>
                         </div>
                       </div>
-                      <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/60">
+                      <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800/60">
                         {uploadState.progressPercent}%
                       </span>
                     </div>
 
                     {/* Real Progress Bar */}
-                    <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                    <div className="w-full h-3 bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-200 dark:border-slate-800">
                       <div
                         className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full transition-all duration-150"
                         style={{ width: `${uploadState.progressPercent}%` }}
                       />
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-0.5">
-                      <span className="truncate max-w-[200px] text-slate-300 font-semibold">{uploadState.fileName}</span>
-                      <span className="text-indigo-300 font-bold">
+                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-600 dark:text-slate-400 pt-0.5">
+                      <span className="truncate max-w-[200px] text-slate-800 dark:text-slate-300 font-semibold">{uploadState.fileName}</span>
+                      <span className="text-indigo-600 dark:text-indigo-300 font-bold">
                         {(uploadState.loadedBytes / (1024 * 1024)).toFixed(1)} MB / {(uploadState.totalBytes / (1024 * 1024)).toFixed(1)} MB
                       </span>
                     </div>
@@ -1224,25 +1224,25 @@ export default function AIStudioPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <RefreshCw className="w-4 h-4 text-amber-400 animate-spin" />
+                        <RefreshCw className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-spin" />
                         <div>
-                          <span className="text-xs font-bold text-slate-100 block">
+                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">
                             ⏳ Processing upload...
                           </span>
-                          <span className="text-[10px] text-amber-300">STAGE 2: Preparing video for publishing CDN</span>
+                          <span className="text-[10px] text-amber-600 dark:text-amber-300">STAGE 2: Preparing video for publishing CDN</span>
                         </div>
                       </div>
-                      <span className="text-xs font-mono font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/60">
+                      <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/80 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800/60">
                         100%
                       </span>
                     </div>
 
                     {/* Pulsing Progress Bar at 100% */}
-                    <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                    <div className="w-full h-3 bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-200 dark:border-slate-800">
                       <div className="h-full bg-gradient-to-r from-amber-500 via-indigo-500 to-emerald-500 rounded-full animate-pulse w-full" />
                     </div>
 
-                    <p className="text-[11px] text-amber-300/90 font-medium">
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300/90 font-medium">
                       Transfer complete! Processing video and transferring to secure CDN storage...
                     </p>
                   </div>
@@ -1250,14 +1250,14 @@ export default function AIStudioPage() {
 
                 {/* Stage 3: READY for publishing */}
                 {uploadState.stage === 'READY' && (
-                  <div className="flex items-center justify-between p-3 bg-emerald-950/50 border border-emerald-500/30 rounded-xl text-emerald-300">
+                  <div className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-500/30 rounded-xl text-emerald-800 dark:text-emerald-300">
                     <div className="flex items-center space-x-3 min-w-0">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-emerald-100">
+                        <p className="text-xs font-bold text-emerald-900 dark:text-emerald-100">
                           ✅ {uploadState.mediaType === 'video' ? 'Video' : 'Photo'} uploaded successfully
                         </p>
-                        <p className="text-[11px] text-emerald-300/90 truncate">
+                        <p className="text-[11px] text-emerald-700 dark:text-emerald-300/90 truncate">
                           {uploadState.fileName} ({(uploadState.totalBytes / (1024 * 1024)).toFixed(1)} MB) — Ready for publishing.
                         </p>
                       </div>
@@ -1265,7 +1265,7 @@ export default function AIStudioPage() {
                     <button
                       type="button"
                       onClick={() => setUploadState({ stage: 'IDLE', progressPercent: 0, loadedBytes: 0, totalBytes: 0, fileName: '', mediaType: 'image' })}
-                      className="text-xs font-bold text-emerald-400 hover:text-emerald-200 px-2 py-1 bg-emerald-900/60 rounded border border-emerald-700/50 transition ml-2 flex-shrink-0"
+                      className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 px-2 py-1 bg-emerald-100 dark:bg-emerald-900/60 rounded border border-emerald-200 dark:border-emerald-700/50 transition ml-2 flex-shrink-0"
                     >
                       Dismiss
                     </button>
@@ -1274,30 +1274,30 @@ export default function AIStudioPage() {
 
                 {/* Stage ERROR */}
                 {uploadState.stage === 'ERROR' && (
-                  <div className="p-3 bg-rose-950/50 border border-rose-500/30 rounded-xl space-y-2 text-rose-300">
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-500/30 rounded-xl space-y-2 text-rose-800 dark:text-rose-300">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                        <span className="text-xs font-bold text-rose-200">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0" />
+                        <span className="text-xs font-bold text-rose-900 dark:text-rose-200">
                           ❌ {uploadState.mediaType === 'video' ? 'Video' : 'Photo'} upload failed
                         </span>
                       </div>
                       <button
                         type="button"
                         onClick={() => setUploadState({ stage: 'IDLE', progressPercent: 0, loadedBytes: 0, totalBytes: 0, fileName: '', mediaType: 'image' })}
-                        className="text-rose-400 hover:text-rose-200 text-xs font-bold"
+                        className="text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-200 text-xs font-bold"
                       >
                         ✕
                       </button>
                     </div>
-                    <p className="text-[11px] text-rose-300/90">
+                    <p className="text-[11px] text-rose-700 dark:text-rose-300/90">
                       {uploadState.errorMessage || 'Please check your connection and try again.'}
                     </p>
                     {uploadState.currentFile && (
                       <button
                         type="button"
                         onClick={() => handleFileUploadWithProgress(uploadState.currentFile!, uploadState.mediaType === 'video')}
-                        className="px-3 py-1.5 bg-rose-800 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 transition"
+                        className="px-3 py-1.5 bg-rose-700 hover:bg-rose-600 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 transition"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                         <span>Retry Upload</span>
@@ -1309,13 +1309,13 @@ export default function AIStudioPage() {
             )}
 
             {/* AI Caption Generator (inside Pre-Made Mode) */}
-            <div className="bg-indigo-950/30 border border-indigo-500/25 rounded-xl p-4 space-y-3">
+            <div className="bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-500/25 rounded-xl p-4 space-y-3">
               <div className="flex items-center space-x-2">
-                <Sparkles className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs font-bold text-indigo-300">AI Caption Generator</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold">Optional</span>
+                <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span className="text-xs font-bold text-indigo-900 dark:text-indigo-300">AI Caption Generator</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 font-semibold">Optional</span>
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-600 dark:text-slate-400">
                 Describe what you want to create and let AI write a high-converting caption, hashtags & CTA for your post.
               </p>
 
@@ -1326,24 +1326,24 @@ export default function AIStudioPage() {
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                   placeholder="Tell AI what you want to create — describe your post, product, audience, tone, key points, or anything else you want it to focus on..."
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500 transition resize-y"
+                  className="w-full bg-white dark:bg-slate-900 border border-indigo-200 dark:border-slate-800 rounded-xl p-3 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition resize-y"
                 />
               </div>
 
               {/* Campaign Goal Dropdown */}
               <div>
-                <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                <label className="block text-[11px] font-medium text-slate-700 dark:text-slate-400 mb-1">
                   Campaign Goal
                 </label>
                 <select
                   value={campaignGoal}
                   onChange={(e) => setCampaignGoal(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                  className="w-full bg-white dark:bg-slate-900 border border-indigo-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
                 >
-                  <option>Lead Generation & Brand Awareness</option>
-                  <option>Product Launch & Direct Sales</option>
-                  <option>Community Engagement & Growth</option>
-                  <option>Educational / Thought Leadership</option>
+                  <option className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Lead Generation & Brand Awareness</option>
+                  <option className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Product Launch & Direct Sales</option>
+                  <option className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Community Engagement & Growth</option>
+                  <option className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Educational / Thought Leadership</option>
                 </select>
               </div>
 
@@ -1369,11 +1369,11 @@ export default function AIStudioPage() {
             {/* Caption Editor */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-medium text-slate-300">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                   Post Caption
                 </label>
                 {caption && (
-                  <span className="text-[10px] text-emerald-400 font-semibold">✓ Ready</span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">✓ Ready</span>
                 )}
               </div>
               <textarea
@@ -1381,7 +1381,7 @@ export default function AIStudioPage() {
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
                 placeholder="Write your custom caption here, or click 'Generate Caption with AI' above..."
-                className="w-full bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-pink-500 transition resize-none"
+                className="w-full bg-white dark:bg-slate-900/80 border border-slate-300 dark:border-slate-800 rounded-xl p-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition resize-none"
               />
             </div>
 
@@ -1424,12 +1424,12 @@ export default function AIStudioPage() {
           </div>
 
           {/* Section: Multi-Account Destination Selector (Visible in both AI Generator and Custom Premade Upload modes) */}
-          <div className="linear-panel p-4 rounded-lg space-y-3 border border-slate-800/80">
+          <div className="linear-panel p-4 rounded-lg space-y-3 border border-slate-200 dark:border-slate-800/80">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Share2 className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs font-bold text-slate-100">Publish Destinations</span>
-                <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-indigo-950/60 text-indigo-300 border border-indigo-800/60">
+                <Share2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Publish Destinations</span>
+                <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
                   {selectedAccountIds.filter(id => postCapableAccounts.some(a => a.id === id)).length} accounts selected
                 </span>
               </div>
@@ -1438,15 +1438,15 @@ export default function AIStudioPage() {
                 <button
                   type="button"
                   onClick={handleSelectAllAccounts}
-                  className="text-indigo-400 hover:text-indigo-300 font-semibold"
+                  className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-semibold"
                 >
                   Select all
                 </button>
-                <span className="text-slate-600">|</span>
+                <span className="text-slate-300 dark:text-slate-600">|</span>
                 <button
                   type="button"
                   onClick={handleClearAccountSelect}
-                  className="text-slate-400 hover:text-slate-300"
+                  className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
                 >
                   Clear
                 </button>
@@ -1455,11 +1455,11 @@ export default function AIStudioPage() {
 
             {/* Destination Accounts Checklist */}
             {postCapableAccounts.length === 0 ? (
-              <div className="p-3 rounded bg-slate-900/40 border border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <div className="p-3 rounded bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
                 <span>No social accounts connected yet.</span>
                 <a
                   href="/meta-connect"
-                  className="text-indigo-400 hover:text-indigo-300 font-semibold text-[11px] underline"
+                  className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-semibold text-[11px] underline"
                 >
                   + Connect Account
                 </a>
@@ -1469,7 +1469,7 @@ export default function AIStudioPage() {
                 {/* Instagram Group */}
                 {postCapableAccounts.some(a => a.platform === 'instagram') && (
                   <div>
-                    <span className="text-[10px] font-mono text-pink-300 uppercase tracking-wider block mb-1">Instagram</span>
+                    <span className="text-[10px] font-mono text-pink-600 dark:text-pink-300 uppercase tracking-wider block mb-1">Instagram</span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {postCapableAccounts.filter(a => a.platform === 'instagram').map((acc) => {
                         const isSelected = selectedAccountIds.includes(acc.id);
@@ -1479,16 +1479,16 @@ export default function AIStudioPage() {
                             type="button"
                             onClick={() => handleToggleAccountSelect(acc.id)}
                             className={`flex items-center justify-between p-2 rounded border text-left transition ${isSelected
-                                ? 'bg-indigo-950/40 border-indigo-500/50 text-slate-100'
-                                : 'bg-slate-900/40 border-slate-800/80 text-slate-400'
+                                ? 'bg-indigo-50 border-indigo-300 text-indigo-950 dark:bg-indigo-950/40 dark:border-indigo-500/50 dark:text-slate-100'
+                                : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-900/40 dark:border-slate-800/80 dark:text-slate-400 dark:hover:bg-slate-800/50'
                               }`}
                           >
                             <div className="flex items-center space-x-2 min-w-0">
-                              {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />}
+                              {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600 flex-shrink-0" />}
                               <span className="text-xs truncate font-medium">{acc.account_name}</span>
                             </div>
                             {acc.status === 'TOKEN_EXPIRED' && (
-                              <span className="text-[9px] font-mono text-amber-400 flex items-center space-x-1 flex-shrink-0">
+                              <span className="text-[9px] font-mono text-amber-600 dark:text-amber-400 flex items-center space-x-1 flex-shrink-0">
                                 <AlertTriangle className="w-3 h-3" />
                                 <span>Expired</span>
                               </span>
@@ -1503,7 +1503,7 @@ export default function AIStudioPage() {
                 {/* Facebook Group */}
                 {postCapableAccounts.some(a => a.platform === 'facebook') && (
                   <div>
-                    <span className="text-[10px] font-mono text-blue-300 uppercase tracking-wider block mb-1 mt-2">Facebook Pages</span>
+                    <span className="text-[10px] font-mono text-blue-600 dark:text-blue-300 uppercase tracking-wider block mb-1 mt-2">Facebook Pages</span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {postCapableAccounts.filter(a => a.platform === 'facebook').map((acc) => {
                         const isSelected = selectedAccountIds.includes(acc.id);
@@ -1513,12 +1513,12 @@ export default function AIStudioPage() {
                             type="button"
                             onClick={() => handleToggleAccountSelect(acc.id)}
                             className={`flex items-center justify-between p-2 rounded border text-left transition ${isSelected
-                                ? 'bg-indigo-950/40 border-indigo-500/50 text-slate-100'
-                                : 'bg-slate-900/40 border-slate-800/80 text-slate-400'
+                                ? 'bg-indigo-50 border-indigo-300 text-indigo-950 dark:bg-indigo-950/40 dark:border-indigo-500/50 dark:text-slate-100'
+                                : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-900/40 dark:border-slate-800/80 dark:text-slate-400 dark:hover:bg-slate-800/50'
                               }`}
                           >
                             <div className="flex items-center space-x-2 min-w-0">
-                              {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />}
+                              {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" /> : <Square className="w-3.5 h-3.5 text-slate-400 dark:text-slate-600 flex-shrink-0" />}
                               <span className="text-xs truncate font-medium">{acc.account_name}</span>
                             </div>
                           </button>
@@ -1534,26 +1534,26 @@ export default function AIStudioPage() {
 
         {/* Multi-Account Batch Progress Modal */}
         {isBatchModalOpen && activeBatch && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 select-none">
-            <div className="linear-panel p-6 rounded-lg max-w-lg w-full space-y-4 border border-slate-800 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="text-sm font-bold text-slate-100 flex items-center space-x-2">
-                  <Share2 className="w-4 h-4 text-indigo-400" />
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 dark:bg-slate-950/80 backdrop-blur-sm p-4 select-none">
+            <div className="linear-panel p-6 rounded-2xl max-w-lg w-full space-y-4 border border-slate-200 dark:border-slate-800 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-2">
+                  <Share2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   <span>Multi-Account Publishing Batch Status</span>
                 </h3>
-                <button onClick={() => setIsBatchModalOpen(false)} className="text-slate-400 hover:text-white">
+                <button onClick={() => setIsBatchModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="bg-slate-900/60 p-3 rounded border border-slate-800/80 space-y-1">
+              <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800/80 space-y-1">
                 <div className="flex justify-between text-xs font-mono">
-                  <span className="text-slate-400">Batch Status:</span>
-                  <span className={`font-bold ${activeBatch.status === 'SUCCESS' ? 'text-emerald-400' : activeBatch.status === 'PARTIAL_SUCCESS' ? 'text-amber-400' : 'text-rose-400'}`}>
+                  <span className="text-slate-600 dark:text-slate-400">Batch Status:</span>
+                  <span className={`font-bold ${activeBatch.status === 'SUCCESS' ? 'text-emerald-600 dark:text-emerald-400' : activeBatch.status === 'PARTIAL_SUCCESS' ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`}>
                     {activeBatch.status}
                   </span>
                 </div>
-                <div className="flex justify-between text-[11px] text-slate-400">
+                <div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-400">
                   <span>Destinations:</span>
                   <span>{activeBatch.successful_targets} / {activeBatch.total_targets} Successful</span>
                 </div>
@@ -1562,27 +1562,27 @@ export default function AIStudioPage() {
               {/* Target Jobs Breakdown */}
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                 {activeBatch.jobs.map((job) => (
-                  <div key={job.id} className="p-2.5 rounded bg-slate-900/40 border border-slate-800/60 flex items-center justify-between text-xs">
+                  <div key={job.id} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/60 flex items-center justify-between text-xs">
                     <div className="flex items-center space-x-2 min-w-0">
                       {job.platform === 'facebook' ? (
-                        <Facebook className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                        <Facebook className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                       ) : (
-                        <Instagram className="w-3.5 h-3.5 text-pink-400 flex-shrink-0" />
+                        <Instagram className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400 flex-shrink-0" />
                       )}
-                      <span className="font-semibold text-slate-200 truncate">{job.account_name || `${job.platform} account #${job.social_account_id}`}</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{job.account_name || `${job.platform} account #${job.social_account_id}`}</span>
                     </div>
 
                     <div className="flex items-center space-x-2">
                       {job.status === 'SUCCESS' ? (
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono">
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 text-[9px] font-mono">
                           ✓ Published
                         </span>
                       ) : job.status === 'FAILED' ? (
-                        <span className="px-2 py-0.5 rounded bg-rose-950/60 text-rose-300 border border-rose-800/60 text-[9px] font-mono" title={job.error_message}>
+                        <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 text-[9px] font-mono" title={job.error_message}>
                           ✕ Failed
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded bg-indigo-950/60 text-indigo-300 border border-indigo-800/60 text-[9px] font-mono flex items-center space-x-1">
+                        <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 text-[9px] font-mono flex items-center space-x-1">
                           <RefreshCw className="w-2.5 h-2.5 animate-spin" />
                           <span>Processing</span>
                         </span>
@@ -1597,7 +1597,7 @@ export default function AIStudioPage() {
                   <button
                     onClick={handleRetryBatch}
                     disabled={isPublishing}
-                    className="flex-1 py-2 rounded bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition flex items-center justify-center space-x-1.5"
+                    className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition flex items-center justify-center space-x-1.5"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isPublishing ? 'animate-spin' : ''}`} />
                     <span>Retry Failed ({activeBatch.failed_targets})</span>
@@ -1605,7 +1605,7 @@ export default function AIStudioPage() {
                 )}
                 <button
                   onClick={() => setIsBatchModalOpen(false)}
-                  className="flex-1 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition"
+                  className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-200 dark:border-transparent transition"
                 >
                   Done
                 </button>
@@ -1618,18 +1618,18 @@ export default function AIStudioPage() {
         <div className="lg:col-span-5 space-y-6">
           <div className="glass-panel p-5 rounded-2xl space-y-4 sticky top-20">
             {/* Preview Tabs Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-                <Layers className="w-4 h-4 text-indigo-400" />
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <span>Live Rich Post Preview</span>
               </h3>
 
-              <div className="flex items-center space-x-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+              <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
                 <button
                   onClick={() => setPreviewPlatform('instagram')}
                   className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${previewPlatform === 'instagram'
                       ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                     }`}
                 >
                   <Instagram className="w-3.5 h-3.5" />
@@ -1639,7 +1639,7 @@ export default function AIStudioPage() {
                   onClick={() => setPreviewPlatform('facebook')}
                   className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition ${previewPlatform === 'facebook'
                       ? 'bg-blue-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                     }`}
                 >
                   <Facebook className="w-3.5 h-3.5" />
@@ -1670,24 +1670,24 @@ export default function AIStudioPage() {
             </div>
 
             {/* Publishing Action Toolbar */}
-            <div className="pt-2 border-t border-slate-800 space-y-2.5">
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
               {/* Meta Account Status Indicator */}
               {selectedBrand?.meta_account?.is_connected ? (
-                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-[11px] text-emerald-300 flex items-center justify-between">
+                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
                   <div className="flex items-center space-x-1.5 font-medium truncate">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                     <span className="truncate">
                       Connected: {selectedBrand.meta_account.facebook_page_name || 'Facebook Page'} {selectedBrand.meta_account.instagram_username ? `(@${selectedBrand.meta_account.instagram_username})` : ''}
                     </span>
                   </div>
-                  <a href="/meta-connect" className="text-indigo-400 hover:text-white font-semibold text-[10px] underline ml-2 flex-shrink-0">
+                  <a href="/meta-connect" className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold text-[10px] ml-2 flex-shrink-0">
                     Edit
                   </a>
                 </div>
               ) : (
-                <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-[11px] text-indigo-200 flex items-center justify-between">
+                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 rounded-xl text-[11px] text-indigo-900 dark:text-indigo-200 flex items-center justify-between">
                   <span>💡 Publishing to FB Page & IG via Meta Graph API</span>
-                  <a href="/meta-connect" className="text-indigo-400 hover:text-white font-bold underline ml-2 flex-shrink-0">
+                  <a href="/meta-connect" className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold ml-2 flex-shrink-0">
                     Connect Meta →
                   </a>
                 </div>
@@ -1714,16 +1714,16 @@ export default function AIStudioPage() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={handleSaveDraft}
-                  className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center justify-center space-x-1.5"
+                  className="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold transition flex items-center justify-center space-x-1.5"
                 >
-                  <FileText className="w-3.5 h-3.5 text-amber-400" />
+                  <FileText className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                   <span>Save Draft</span>
                 </button>
                 <button
                   onClick={() => setIsScheduleModalOpen(true)}
-                  className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center justify-center space-x-1.5"
+                  className="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold transition flex items-center justify-center space-x-1.5"
                 >
-                  <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                  <Calendar className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
                   <span>Schedule Post</span>
                 </button>
               </div>
@@ -1735,16 +1735,16 @@ export default function AIStudioPage() {
 
       {/* Schedule Post Date Time Modal */}
       {isScheduleModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#111827] border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                <Calendar className="w-5 h-5 text-blue-400" />
+        <div className="fixed inset-0 z-50 bg-slate-950/60 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 <span>Schedule Social Post</span>
               </h3>
               <button
                 onClick={() => setIsScheduleModalOpen(false)}
-                className="text-slate-400 hover:text-white text-sm font-bold"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white text-sm font-bold"
               >
                 ✕
               </button>
@@ -1752,7 +1752,7 @@ export default function AIStudioPage() {
 
             <form onSubmit={handleSchedulePostSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Select Publishing Date & Time
                 </label>
                 <input
@@ -1760,18 +1760,18 @@ export default function AIStudioPage() {
                   required
                   value={scheduledDateTime}
                   onChange={(e) => setScheduledDateTime(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                 />
-                <p className="text-[11px] text-slate-400 mt-1.5">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
                   The Celery worker engine will automatically push your post to Facebook Page & Instagram Business account at this exact time.
                 </p>
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-end space-x-3 pt-2 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsScheduleModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-transparent text-xs font-semibold"
                 >
                   Cancel
                 </button>
