@@ -907,9 +907,12 @@ export default function PostSchedulerPage() {
           {/* ── CALENDAR SUB-VIEW: 1. WEEK VIEW (UNIFIED MATRIX TIME-GRID) ── */}
           {calendarView === 'week' && (
             <div className="overflow-x-auto">
-              <div className="min-w-[920px]">
-                {/* Unified Day Header Row */}
-                <div className="grid grid-cols-[76px_repeat(7,minmax(0,1fr))] border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 sticky top-0 z-20">
+              <div
+                ref={timelineScrollRef}
+                className="h-[620px] overflow-y-auto min-w-[920px]"
+              >
+                {/* Unified Day Header Row (Sticky inside the scroll container) */}
+                <div className="grid grid-cols-[76px_repeat(7,minmax(0,1fr))] border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 sticky top-0 z-20 shadow-xs">
                   {/* Fixed time column header */}
                   <div className="p-2.5 text-center border-r border-slate-200 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-center">
                     Time
@@ -938,109 +941,104 @@ export default function PostSchedulerPage() {
                   ))}
                 </div>
 
-                {/* 24-Hour Scrollable Time Grid Body */}
-                <div
-                  ref={timelineScrollRef}
-                  className="h-[620px] overflow-y-auto"
-                >
-                  <div className="grid grid-cols-[76px_repeat(7,minmax(0,1fr))] relative h-[1536px]">
-                    {/* Left Column: 24 Hour Labels */}
-                    <div className="border-r border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/30 divide-y divide-slate-200/80 dark:divide-slate-800/80">
-                      {hoursArray.map((h) => (
-                        <div
-                          key={h.hour24}
-                          className="h-[64px] px-2 pt-1 text-right text-[10px] font-mono text-slate-500 dark:text-slate-400"
-                        >
-                          {h.label}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* 7 Day Columns with identical vertical boundaries */}
-                    {weekDays.map((d) => {
-                      const dayItems = filteredItems.filter((item) => {
-                        const itemKey = getItemDateKey(item.scheduled_at || item.published_at || item.created_at);
-                        return itemKey === d.dateKey;
-                      });
-
-                      return (
-                        <div
-                          key={d.dateKey}
-                          className={`relative border-r border-slate-200 dark:border-slate-800 last:border-r-0 ${
-                            d.isToday ? 'bg-indigo-50/20 dark:bg-indigo-950/15' : 'bg-white dark:bg-slate-900'
-                          }`}
-                        >
-                          {/* Continuous Horizontal Hour Guideline Grid */}
-                          <div className="absolute inset-0 pointer-events-none divide-y divide-slate-200/80 dark:divide-slate-800/80">
-                            {hoursArray.map((h) => (
-                              <div key={h.hour24} className="h-[64px]" />
-                            ))}
-                          </div>
-
-                          {/* Positioned Content Items (Strictly inside day column) */}
-                          {dayItems.map((item) => {
-                            const mins = getItemMinutesFromMidnight(item.scheduled_at || item.published_at || item.created_at);
-                            const topPx = (mins / 60) * 64;
-                            const isStory = item.item_type === 'story';
-                            const isFb = item.platforms.includes('facebook');
-                            const isIg = item.platforms.includes('instagram');
-                            const isYt = (item.platforms as string[]).includes('youtube');
-                            const timeStr = formatShortTime(item.scheduled_at || item.published_at || item.created_at);
-
-                            return (
-                              <div
-                                key={`${item.item_type}-${item.id}`}
-                                onClick={() => {
-                                  if (isStory) setPreviewStory(item);
-                                  else setSelectedPostItem(item);
-                                }}
-                                style={{ top: `${topPx}px` }}
-                                className={`absolute left-1 right-1 z-10 p-1.5 rounded-lg border text-[11px] cursor-pointer transition-all hover:scale-[1.02] hover:z-20 shadow-xs flex flex-col space-y-1 ${
-                                  isStory
-                                    ? 'bg-fuchsia-50/95 dark:bg-fuchsia-950/85 border-fuchsia-300 dark:border-fuchsia-800 text-fuchsia-950 dark:text-fuchsia-100'
-                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100'
-                                }`}
-                                title={`${item.title || item.caption || 'Scheduled content'} (${timeStr})`}
-                              >
-                                {/* Header: Platform icon & Time */}
-                                <div className="flex items-center justify-between text-[10px]">
-                                  <div className="flex items-center space-x-1">
-                                    {isFb && <Facebook className="w-3 h-3 text-blue-600 flex-shrink-0" />}
-                                    {isIg && <Instagram className="w-3 h-3 text-pink-600 flex-shrink-0" />}
-                                    {isYt && <Youtube className="w-3 h-3 text-red-600 flex-shrink-0" />}
-                                    <span className="font-bold">{timeStr}</span>
-                                  </div>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${
-                                    item.status === 'PUBLISHED' ? 'bg-emerald-500' :
-                                    item.status === 'FAILED' ? 'bg-rose-500' :
-                                    item.status === 'DRAFT' ? 'bg-slate-400' : 'bg-sky-500'
-                                  }`} />
-                                </div>
-
-                                {/* Body: Thumbnail & Snippet */}
-                                <div className="flex items-center space-x-1.5 min-w-0">
-                                  {item.thumbnail_url ? (
-                                    <img
-                                      src={item.thumbnail_url}
-                                      alt=""
-                                      className="w-5 h-5 rounded object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
-                                    />
-                                  ) : isStory ? (
-                                    <Sparkles className="w-3.5 h-3.5 text-fuchsia-500 flex-shrink-0" />
-                                  ) : (
-                                    <ImageIcon className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                                  )}
-                                  <span className="truncate font-semibold text-[11px] leading-tight flex-1">
-                                    {item.title || item.caption || (isStory ? 'Story Asset' : 'Feed Post')}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
+                {/* 24-Hour Time Grid Body */}
+                <div className="grid grid-cols-[76px_repeat(7,minmax(0,1fr))] relative h-[1536px]">
+                  {/* Left Column: 24 Hour Labels */}
+                  <div className="border-r border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/30 divide-y divide-slate-200/80 dark:divide-slate-800/80">
+                    {hoursArray.map((h) => (
+                      <div
+                        key={h.hour24}
+                        className="h-[64px] px-2 pt-1 text-right text-[10px] font-mono text-slate-500 dark:text-slate-400"
+                      >
+                        {h.label}
+                      </div>
+                    ))}
                   </div>
+
+                  {/* 7 Day Columns with identical vertical boundaries */}
+                  {weekDays.map((d) => {
+                    const dayItems = filteredItems.filter((item) => {
+                      const itemKey = getItemDateKey(item.scheduled_at || item.published_at || item.created_at);
+                      return itemKey === d.dateKey;
+                    });
+
+                    return (
+                      <div
+                        key={d.dateKey}
+                        className={`relative border-r border-slate-200 dark:border-slate-800 last:border-r-0 ${
+                          d.isToday ? 'bg-indigo-50/20 dark:bg-indigo-950/15' : 'bg-white dark:bg-slate-900'
+                        }`}
+                      >
+                        {/* Continuous Horizontal Hour Guideline Grid */}
+                        <div className="absolute inset-0 pointer-events-none divide-y divide-slate-200/80 dark:divide-slate-800/80">
+                          {hoursArray.map((h) => (
+                            <div key={h.hour24} className="h-[64px]" />
+                          ))}
+                        </div>
+
+                        {/* Positioned Content Items (Strictly inside day column) */}
+                        {dayItems.map((item) => {
+                          const mins = getItemMinutesFromMidnight(item.scheduled_at || item.published_at || item.created_at);
+                          const topPx = (mins / 60) * 64;
+                          const isStory = item.item_type === 'story';
+                          const isFb = item.platforms.includes('facebook');
+                          const isIg = item.platforms.includes('instagram');
+                          const isYt = (item.platforms as string[]).includes('youtube');
+                          const timeStr = formatShortTime(item.scheduled_at || item.published_at || item.created_at);
+
+                          return (
+                            <div
+                              key={`${item.item_type}-${item.id}`}
+                              onClick={() => {
+                                if (isStory) setPreviewStory(item);
+                                else setSelectedPostItem(item);
+                              }}
+                              style={{ top: `${topPx}px` }}
+                              className={`absolute left-1 right-1 z-10 p-1.5 rounded-lg border text-[11px] cursor-pointer transition-all hover:scale-[1.02] hover:z-20 shadow-xs flex flex-col space-y-1 ${
+                                isStory
+                                  ? 'bg-fuchsia-50/95 dark:bg-fuchsia-950/85 border-fuchsia-300 dark:border-fuchsia-800 text-fuchsia-950 dark:text-fuchsia-100'
+                                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100'
+                              }`}
+                              title={`${item.title || item.caption || 'Scheduled content'} (${timeStr})`}
+                            >
+                              {/* Header: Platform icon & Time */}
+                              <div className="flex items-center justify-between text-[10px]">
+                                <div className="flex items-center space-x-1">
+                                  {isFb && <Facebook className="w-3 h-3 text-blue-600 flex-shrink-0" />}
+                                  {isIg && <Instagram className="w-3 h-3 text-pink-600 flex-shrink-0" />}
+                                  {isYt && <Youtube className="w-3 h-3 text-red-600 flex-shrink-0" />}
+                                  <span className="font-bold">{timeStr}</span>
+                                </div>
+                                <span className={`w-1.5 h-1.5 rounded-full ${
+                                  item.status === 'PUBLISHED' ? 'bg-emerald-500' :
+                                  item.status === 'FAILED' ? 'bg-rose-500' :
+                                  item.status === 'DRAFT' ? 'bg-slate-400' : 'bg-sky-500'
+                                }`} />
+                              </div>
+
+                              {/* Body: Thumbnail & Snippet */}
+                              <div className="flex items-center space-x-1.5 min-w-0">
+                                {item.thumbnail_url ? (
+                                  <img
+                                    src={item.thumbnail_url}
+                                    alt=""
+                                    className="w-5 h-5 rounded object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
+                                  />
+                                ) : isStory ? (
+                                  <Sparkles className="w-3.5 h-3.5 text-fuchsia-500 flex-shrink-0" />
+                                ) : (
+                                  <ImageIcon className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                )}
+                                <span className="truncate font-semibold text-[11px] leading-tight flex-1">
+                                  {item.title || item.caption || (isStory ? 'Story Asset' : 'Feed Post')}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1166,9 +1164,12 @@ export default function PostSchedulerPage() {
 
           {/* ── CALENDAR SUB-VIEW: 3. DAY VIEW (UNIFIED MATRIX TIMELINE) ────── */}
           {calendarView === 'day' && (
-            <div className="flex flex-col">
-              {/* Single Day Header matching time column */}
-              <div className="grid grid-cols-[76px_minmax(0,1fr)] border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 sticky top-0 z-20">
+            <div
+              ref={timelineScrollRef}
+              className="h-[620px] overflow-y-auto"
+            >
+              {/* Single Day Header matching time column (Sticky inside the scroll container) */}
+              <div className="grid grid-cols-[76px_minmax(0,1fr)] border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 sticky top-0 z-20 shadow-xs">
                 <div className="p-2.5 text-center border-r border-slate-200 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-center">
                   Time
                 </div>
@@ -1186,89 +1187,84 @@ export default function PostSchedulerPage() {
               </div>
 
               {/* Day 24-Hour Timeline */}
-              <div
-                ref={timelineScrollRef}
-                className="h-[620px] overflow-y-auto"
-              >
-                <div className="grid grid-cols-[76px_minmax(0,1fr)] relative h-[1536px]">
-                  {/* Left Column: Hours */}
-                  <div className="border-r border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/30 divide-y divide-slate-200/80 dark:divide-slate-800/80">
+              <div className="grid grid-cols-[76px_minmax(0,1fr)] relative h-[1536px]">
+                {/* Left Column: Hours */}
+                <div className="border-r border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/30 divide-y divide-slate-200/80 dark:divide-slate-800/80">
+                  {hoursArray.map((h) => (
+                    <div
+                      key={h.hour24}
+                      className="h-[64px] px-2 pt-1 text-right text-[10px] font-mono text-slate-500 dark:text-slate-400"
+                    >
+                      {h.label}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Right Column: Time Grid Workspace */}
+                <div className="relative bg-white dark:bg-slate-900">
+                  {/* Continuous Guidelines */}
+                  <div className="absolute inset-0 pointer-events-none divide-y divide-slate-200/80 dark:divide-slate-800/80">
                     {hoursArray.map((h) => (
-                      <div
-                        key={h.hour24}
-                        className="h-[64px] px-2 pt-1 text-right text-[10px] font-mono text-slate-500 dark:text-slate-400"
-                      >
-                        {h.label}
-                      </div>
+                      <div key={h.hour24} className="h-[64px]" />
                     ))}
                   </div>
 
-                  {/* Right Column: Time Grid Workspace */}
-                  <div className="relative bg-white dark:bg-slate-900">
-                    {/* Continuous Guidelines */}
-                    <div className="absolute inset-0 pointer-events-none divide-y divide-slate-200/80 dark:divide-slate-800/80">
-                      {hoursArray.map((h) => (
-                        <div key={h.hour24} className="h-[64px]" />
-                      ))}
-                    </div>
+                  {/* Content Items on this specific day */}
+                  {filteredItems
+                    .filter(i => getItemDateKey(i.scheduled_at || i.published_at || i.created_at) === getDateKey(currentDate))
+                    .map((item) => {
+                      const mins = getItemMinutesFromMidnight(item.scheduled_at || item.published_at || item.created_at);
+                      const topPx = (mins / 60) * 64;
+                      const isStory = item.item_type === 'story';
+                      const isFb = item.platforms.includes('facebook');
+                      const isIg = item.platforms.includes('instagram');
+                      const timeStr = formatShortTime(item.scheduled_at || item.published_at || item.created_at);
 
-                    {/* Content Items on this specific day */}
-                    {filteredItems
-                      .filter(i => getItemDateKey(i.scheduled_at || i.published_at || i.created_at) === getDateKey(currentDate))
-                      .map((item) => {
-                        const mins = getItemMinutesFromMidnight(item.scheduled_at || item.published_at || item.created_at);
-                        const topPx = (mins / 60) * 64;
-                        const isStory = item.item_type === 'story';
-                        const isFb = item.platforms.includes('facebook');
-                        const isIg = item.platforms.includes('instagram');
-                        const timeStr = formatShortTime(item.scheduled_at || item.published_at || item.created_at);
-
-                        return (
-                          <div
-                            key={`${item.item_type}-${item.id}`}
-                            onClick={() => {
-                              if (isStory) setPreviewStory(item);
-                              else setSelectedPostItem(item);
-                            }}
-                            style={{ top: `${topPx}px` }}
-                            className={`absolute left-4 right-4 sm:right-16 z-10 p-3 rounded-xl border cursor-pointer transition-all hover:scale-[1.01] hover:z-20 shadow-xs flex items-center justify-between space-x-3 ${
-                              isStory
-                                ? 'bg-fuchsia-50/95 dark:bg-fuchsia-950/85 border-fuchsia-300 dark:border-fuchsia-800'
-                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                            }`}
-                          >
-                            <div className="flex items-center space-x-3 min-w-0">
-                              {item.thumbnail_url ? (
-                                <img src={item.thumbnail_url} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
-                              ) : (
-                                <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 flex-shrink-0">
-                                  {isStory ? <Sparkles className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
-                                </div>
-                              )}
-                              <div className="min-w-0 space-y-0.5">
-                                <div className="flex items-center space-x-2">
-                                  <span className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate">
-                                    {item.title || item.caption || (isStory ? 'Story Asset' : 'Feed Post')}
-                                  </span>
-                                  {isFb && <Facebook className="w-3 h-3 text-blue-600" />}
-                                  {isIg && <Instagram className="w-3 h-3 text-pink-600" />}
-                                </div>
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                                  {item.caption || 'No caption text.'}
-                                </p>
+                      return (
+                        <div
+                          key={`${item.item_type}-${item.id}`}
+                          onClick={() => {
+                            if (isStory) setPreviewStory(item);
+                            else setSelectedPostItem(item);
+                          }}
+                          style={{ top: `${topPx}px` }}
+                          className={`absolute left-4 right-4 sm:right-16 z-10 p-3 rounded-xl border cursor-pointer transition-all hover:scale-[1.01] hover:z-20 shadow-xs flex items-center justify-between space-x-3 ${
+                            isStory
+                              ? 'bg-fuchsia-50/95 dark:bg-fuchsia-950/85 border-fuchsia-300 dark:border-fuchsia-800'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3 min-w-0">
+                            {item.thumbnail_url ? (
+                              <img src={item.thumbnail_url} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 flex-shrink-0">
+                                {isStory ? <Sparkles className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
                               </div>
-                            </div>
-
-                            <div className="flex items-center space-x-3 flex-shrink-0">
-                              <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                                {timeStr}
-                              </span>
-                              <PostStatusBadge status={item.status} />
+                            )}
+                            <div className="min-w-0 space-y-0.5">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate">
+                                  {item.title || item.caption || (isStory ? 'Story Asset' : 'Feed Post')}
+                                </span>
+                                {isFb && <Facebook className="w-3 h-3 text-blue-600" />}
+                                {isIg && <Instagram className="w-3 h-3 text-pink-600" />}
+                              </div>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                {item.caption || 'No caption text.'}
+                              </p>
                             </div>
                           </div>
-                        );
-                      })}
-                  </div>
+
+                          <div className="flex items-center space-x-3 flex-shrink-0">
+                            <span className="text-xs font-mono font-semibold text-slate-700 dark:text-slate-300">
+                              {timeStr || '—'}
+                            </span>
+                            <PostStatusBadge status={item.status} />
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             </div>
