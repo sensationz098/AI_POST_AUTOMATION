@@ -782,7 +782,7 @@ export function YouTubeComposer({
       )}
 
       {/* Top Bar: Target Channel Selector & Persona Banner */}
-      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+      <div className="bg-white dark:bg-slate-900/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center space-x-3.5">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center text-white shadow-md shadow-red-600/20 flex-shrink-0">
             <Youtube className="w-5 h-5 fill-white" />
@@ -830,7 +830,7 @@ export function YouTubeComposer({
         {/* ── Left Column: Media & Metadata Form (7 Cols) ───────────────────── */}
         <div className="lg:col-span-7 space-y-6">
           {/* Explicit Content Type Selector (Video vs Shorts) */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl space-y-3 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="bg-white dark:bg-slate-900/80 p-5 rounded-2xl space-y-3 border border-slate-200 dark:border-slate-800 shadow-xl">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center space-x-2">
                 <Sliders className="w-4 h-4 text-red-500 dark:text-red-400" />
@@ -965,7 +965,7 @@ export function YouTubeComposer({
           </div>
 
           {/* File Picker & Drag-Drop Card */}
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl space-y-4 border border-slate-200 dark:border-slate-800 border-l-4 border-l-red-500 shadow-sm">
+          <div className="bg-white dark:bg-slate-900/80 p-6 rounded-2xl space-y-4 border border-slate-200 dark:border-slate-800 border-l-4 border-l-red-500 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center space-x-2">
                 <FileVideo className="w-4 h-4 text-red-500 dark:text-red-400" />
@@ -1054,7 +1054,7 @@ export function YouTubeComposer({
           </div>
 
           {/* ── 2. Dedicated Thumbnail Card ── */}
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl space-y-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="bg-white dark:bg-slate-900/80 p-6 rounded-2xl space-y-4 border border-slate-200 dark:border-slate-800 shadow-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
               <div className="flex items-center space-x-2">
                 <ImageIcon className="w-4 h-4 text-red-500 dark:text-red-400" />
@@ -1230,7 +1230,7 @@ export function YouTubeComposer({
           </div>
 
           {/* Details & Metadata Card */}
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl space-y-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="bg-white dark:bg-slate-900/80 p-6 rounded-2xl space-y-5 border border-slate-200 dark:border-slate-800 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center space-x-2">
                 <Sliders className="w-4 h-4 text-red-500 dark:text-red-400" />
@@ -1510,7 +1510,7 @@ export function YouTubeComposer({
         {/* ── Right Column: Live Video Player Preview & Status (5 Cols) ─────── */}
         <div className="lg:col-span-5 space-y-6">
           {/* Live YouTube Player Preview Card */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl space-y-4 sticky top-20 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="bg-white dark:bg-slate-900/80 p-5 rounded-2xl space-y-4 sticky top-20 border border-slate-200 dark:border-slate-800 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center space-x-2">
                 <Film className="w-4 h-4 text-red-500 dark:text-red-400" />

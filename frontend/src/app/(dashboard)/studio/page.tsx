@@ -981,7 +981,7 @@ export default function AIStudioPage() {
         {/* Left Column: Form Controls */}
         <div className="lg:col-span-7 space-y-6">
           {/* Custom Post Upload Card */}
-          <div className="glass-panel p-6 rounded-2xl space-y-5 border-l-4 border-indigo-500">
+          <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-5 border-l-4 border-l-indigo-500 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
                 <ImageIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -1424,7 +1424,7 @@ export default function AIStudioPage() {
           </div>
 
           {/* Section: Multi-Account Destination Selector (Visible in both AI Generator and Custom Premade Upload modes) */}
-          <div className="linear-panel p-4 rounded-lg space-y-3 border border-slate-200 dark:border-slate-800/80">
+          <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-3 shadow-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Share2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -1616,7 +1616,7 @@ export default function AIStudioPage() {
 
         {/* Right Column: Live Rich Social Media Preview */}
         <div className="lg:col-span-5 space-y-6">
-          <div className="glass-panel p-5 rounded-2xl space-y-4 sticky top-20">
+          <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4 sticky top-20 shadow-xl">
             {/* Preview Tabs Header */}
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
