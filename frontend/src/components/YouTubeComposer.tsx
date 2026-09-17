@@ -741,15 +741,15 @@ export function YouTubeComposer({
   // Empty State if no YouTube accounts connected
   if (channels.length === 0) {
     return (
-      <div className="glass-panel p-8 sm:p-12 rounded-3xl border border-slate-800 text-center space-y-6 max-w-2xl mx-auto shadow-2xl">
-        <div className="w-16 h-16 rounded-2xl bg-red-600/20 border border-red-500/30 flex items-center justify-center text-red-400 mx-auto shadow-lg shadow-red-600/10">
+      <div className="bg-white dark:bg-slate-900 p-8 sm:p-12 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-6 max-w-2xl mx-auto shadow-sm">
+        <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-600/20 border border-red-200 dark:border-red-500/30 flex items-center justify-center text-red-600 dark:text-red-400 mx-auto shadow-sm">
           <Youtube className="w-8 h-8" />
         </div>
         <div className="space-y-2">
-          <h2 className="text-lg font-bold text-white tracking-tight">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
             Connect Your YouTube Channel
           </h2>
-          <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+          <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
             To publish YouTube Videos and Shorts directly from the Studio workspace, authorize your
             YouTube channel in Social Accounts.
           </p>
@@ -782,9 +782,9 @@ export function YouTubeComposer({
       )}
 
       {/* Top Bar: Target Channel Selector & Persona Banner */}
-      <div className="glass-panel p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center space-x-3.5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center text-white shadow-lg shadow-red-600/20 flex-shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-rose-700 flex items-center justify-center text-white shadow-md shadow-red-600/20 flex-shrink-0">
             <Youtube className="w-5 h-5 fill-white" />
           </div>
           <div>
@@ -802,7 +802,7 @@ export function YouTubeComposer({
 
         {/* Channel Dropdown */}
         <div className="flex items-center space-x-2">
-          <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden md:block">
+          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider hidden md:block">
             Channel:
           </label>
           <div className="relative min-w-[220px]">
@@ -810,7 +810,7 @@ export function YouTubeComposer({
               value={selectedAccountId || ''}
               onChange={(e) => setSelectedAccountId(Number(e.target.value))}
               disabled={uploadPhase !== 'idle'}
-              className="w-full pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-red-500 disabled:opacity-50 appearance-none shadow-inner"
+              className="w-full pl-3 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-red-500 disabled:opacity-50 appearance-none shadow-xs"
             >
               {channels.map((c) => (
                 <option key={c.id} value={c.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
@@ -830,7 +830,7 @@ export function YouTubeComposer({
         {/* ── Left Column: Media & Metadata Form (7 Cols) ───────────────────── */}
         <div className="lg:col-span-7 space-y-6">
           {/* Explicit Content Type Selector (Video vs Shorts) */}
-          <div className="glass-panel p-5 rounded-2xl space-y-3 border border-slate-200 dark:border-slate-800 shadow-xl">
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl space-y-3 border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center space-x-2">
                 <Sliders className="w-4 h-4 text-red-500 dark:text-red-400" />
@@ -965,10 +965,10 @@ export function YouTubeComposer({
           </div>
 
           {/* File Picker & Drag-Drop Card */}
-          <div className="glass-panel p-6 rounded-2xl space-y-4 border-l-4 border-red-500 shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-                <FileVideo className="w-4 h-4 text-red-400" />
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl space-y-4 border border-slate-200 dark:border-slate-800 border-l-4 border-l-red-500 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center space-x-2">
+                <FileVideo className="w-4 h-4 text-red-500 dark:text-red-400" />
                 <span>1. Select Video Asset</span>
               </h3>
               {selectedFile && (
@@ -976,7 +976,7 @@ export function YouTubeComposer({
                   type="button"
                   onClick={handleResetForNewUpload}
                   disabled={uploadPhase === 'uploading'}
-                  className="text-[11px] text-slate-400 hover:text-red-400 font-semibold transition disabled:opacity-30"
+                  className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 font-semibold transition disabled:opacity-30"
                 >
                   Change Video
                 </button>
@@ -984,19 +984,19 @@ export function YouTubeComposer({
             </div>
 
             {!selectedFile ? (
-              <label className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 hover:border-red-500 rounded-2xl bg-slate-900/60 cursor-pointer transition text-center group space-y-3">
-                <div className="w-14 h-14 rounded-2xl bg-red-950/60 border border-red-800/60 flex items-center justify-center text-red-400 group-hover:scale-105 transition">
+              <label className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-red-500 dark:hover:border-red-500 rounded-2xl bg-slate-50/70 dark:bg-slate-900/60 cursor-pointer transition text-center group space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/60 flex items-center justify-center text-red-600 dark:text-red-400 group-hover:scale-105 transition">
                   <UploadCloud className="w-7 h-7" />
                 </div>
                 <div className="space-y-1">
-                  <span className="text-xs font-bold text-slate-200 block group-hover:text-white">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block group-hover:text-red-600 dark:group-hover:text-white transition">
                     Click to select or drag and drop video file
                   </span>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     MP4, MOV, WebM, MKV, AVI (Supports large files up to 256 GB)
                   </p>
                 </div>
-                <span className="inline-block px-3 py-1 rounded-full bg-slate-800 text-[10px] font-mono text-slate-300 border border-slate-700">
+                <span className="inline-block px-3 py-1 rounded-full bg-white dark:bg-slate-800 text-[10px] font-mono text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-xs">
                   {contentType === 'short'
                     ? '⚡ YouTube Short Mode (Vertical 9:16 ≤ 3 mins)'
                     : '🎬 YouTube Video Mode (16:9 widescreen or longform)'}
@@ -1009,15 +1009,15 @@ export function YouTubeComposer({
                 />
               </label>
             ) : (
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3 min-w-0">
-                    <div className="w-10 h-10 rounded-lg bg-red-950/80 border border-red-800/80 flex items-center justify-center text-red-400 flex-shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-red-50 dark:bg-red-950/80 border border-red-200 dark:border-red-800/80 flex items-center justify-center text-red-600 dark:text-red-400 flex-shrink-0">
                       <Film className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-100 truncate">{selectedFile.name}</p>
-                      <p className="text-[11px] text-slate-400 font-mono">
+                      <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{selectedFile.name}</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                         {formatBytes(selectedFile.size)} • {selectedFile.type || 'video/mp4'}
                         {videoWidth && videoHeight ? ` • ${videoWidth}×${videoHeight}` : ''}
                         {videoDuration ? ` • ${Math.round(videoDuration)}s` : ''}
@@ -1028,13 +1028,13 @@ export function YouTubeComposer({
                   {/* Shorts vs Video Badge */}
                   <div>
                     {contentType === 'short' ? (
-                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-red-600/30 to-rose-600/30 text-red-300 border border-red-500/40 text-[10px] font-bold shadow-sm">
-                        <Zap className="w-3 h-3 text-red-400" />
+                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-red-50 dark:bg-gradient-to-r dark:from-red-600/30 dark:to-rose-600/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-500/40 text-[10px] font-bold shadow-xs">
+                        <Zap className="w-3 h-3 text-red-600 dark:text-red-400" />
                         <span>YouTube Short</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-bold">
-                        <Film className="w-3 h-3 text-indigo-400" />
+                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 text-[10px] font-bold">
+                        <Film className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
                         <span>Standard Video</span>
                       </span>
                     )}
@@ -1042,8 +1042,8 @@ export function YouTubeComposer({
                 </div>
 
                 {contentType === 'short' && validationResult.isValid && (
-                  <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/30 text-[11px] text-emerald-300 flex items-center space-x-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                     <span>
                       <strong>Shorts Validated:</strong> Aspect ratio and duration qualify for YouTube Shorts distribution.
                     </span>
@@ -1054,19 +1054,19 @@ export function YouTubeComposer({
           </div>
 
           {/* ── 2. Dedicated Thumbnail Card ── */}
-          <div className="glass-panel p-6 rounded-2xl space-y-4 border border-slate-800 shadow-xl">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl space-y-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
               <div className="flex items-center space-x-2">
-                <ImageIcon className="w-4 h-4 text-red-400" />
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                <ImageIcon className="w-4 h-4 text-red-500 dark:text-red-400" />
+                <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
                   2. Custom Thumbnail
                 </h3>
               </div>
               <div className="flex items-center space-x-2">
-                <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] text-slate-300 font-semibold">
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] text-slate-600 dark:text-slate-300 font-semibold">
                   Recommended: 16:9
                 </span>
-                <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] text-slate-300 font-semibold">
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] text-slate-600 dark:text-slate-300 font-semibold">
                   JPEG / PNG • Max 2 MB
                 </span>
               </div>
@@ -1085,30 +1085,30 @@ export function YouTubeComposer({
             {!thumbnailPreviewUrl ? (
               <label
                 onClick={() => thumbnailInputRef.current?.click()}
-                className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-700 hover:border-red-500/80 rounded-xl bg-slate-900/50 cursor-pointer transition group space-y-2.5"
+                className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-red-500/80 rounded-xl bg-slate-50/60 dark:bg-slate-900/50 cursor-pointer transition group space-y-2.5"
               >
-                <div className="w-10 h-10 rounded-xl bg-slate-800 group-hover:bg-red-950/60 border border-slate-700 group-hover:border-red-800/60 flex items-center justify-center text-slate-400 group-hover:text-red-400 transition shadow-inner">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 group-hover:bg-red-50 dark:group-hover:bg-red-950/60 border border-slate-200 dark:border-slate-700 group-hover:border-red-200 dark:group-hover:border-red-800/60 flex items-center justify-center text-slate-500 dark:text-slate-400 group-hover:text-red-600 dark:group-hover:text-red-400 transition shadow-xs">
                   {thumbnailUploading ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-red-400" />
+                    <Loader2 className="w-5 h-5 animate-spin text-red-500 dark:text-red-400" />
                   ) : (
                     <ImageIcon className="w-5 h-5" />
                   )}
                 </div>
                 <div className="text-center space-y-0.5">
-                  <span className="text-xs font-bold text-slate-200 block group-hover:text-white">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block group-hover:text-red-600 dark:group-hover:text-white transition">
                     {thumbnailUploading ? 'Uploading thumbnail...' : 'Upload custom thumbnail'}
                   </span>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     High-definition 1280×720 (16:9) image recommended • Max 2 MB
                   </p>
                 </div>
               </label>
             ) : (
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   {/* Thumbnail Preview Thumbnail */}
                   <div className="flex items-center space-x-3 min-w-0">
-                    <div className="relative w-24 h-14 rounded-lg overflow-hidden bg-black border border-slate-700 flex-shrink-0 shadow-md">
+                    <div className="relative w-24 h-14 rounded-lg overflow-hidden bg-black border border-slate-300 dark:border-slate-700 flex-shrink-0 shadow-md">
                       <img
                         src={thumbnailPreviewUrl}
                         alt="Custom thumbnail preview"
@@ -1121,10 +1121,10 @@ export function YouTubeComposer({
                       )}
                     </div>
                     <div className="min-w-0 space-y-0.5">
-                      <p className="text-xs font-bold text-slate-100 truncate">
+                      <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                         {thumbnailFile?.name || 'Custom Thumbnail'}
                       </p>
-                      <p className="text-[11px] text-slate-400 font-mono">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                         {thumbnailFile ? formatBytes(thumbnailFile.size) : ''}
                         {thumbnailDimensions ? ` • ${thumbnailDimensions.width}×${thumbnailDimensions.height}` : ''}
                       </p>
@@ -1132,12 +1132,12 @@ export function YouTubeComposer({
                       {thumbnailDimensions && (
                         <div className="pt-0.5">
                           {Math.abs(thumbnailDimensions.width / thumbnailDimensions.height - 16 / 9) < 0.08 ? (
-                            <span className="text-[10px] text-emerald-400 font-medium flex items-center space-x-1">
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center space-x-1">
                               <CheckCircle2 className="w-3 h-3" />
                               <span>Standard 16:9 aspect ratio</span>
                             </span>
                           ) : (
-                            <span className="text-[10px] text-amber-400 font-medium flex items-center space-x-1">
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center space-x-1">
                               <AlertTriangle className="w-3 h-3" />
                               <span>Not 16:9 (recommended for best display on YouTube)</span>
                             </span>
@@ -1155,7 +1155,7 @@ export function YouTubeComposer({
                           type="button"
                           onClick={() => thumbnailInputRef.current?.click()}
                           disabled={thumbnailUploading}
-                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition"
+                          className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition shadow-xs"
                         >
                           Change
                         </button>
@@ -1163,7 +1163,7 @@ export function YouTubeComposer({
                           type="button"
                           onClick={handleRemoveThumbnail}
                           disabled={thumbnailUploading}
-                          className="px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 text-xs font-semibold transition flex items-center space-x-1"
+                          className="px-3 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800/60 text-rose-700 dark:text-rose-300 text-xs font-semibold transition flex items-center space-x-1"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           <span>Remove</span>
@@ -1175,22 +1175,22 @@ export function YouTubeComposer({
 
                 {/* Status Badges during/after upload */}
                 {thumbnailStatus && (
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between text-xs">
                     <div className="flex items-center space-x-2">
                       {thumbnailStatus === 'PENDING' && (
-                        <span className="text-amber-400 flex items-center space-x-1.5 text-[11px] font-semibold">
+                        <span className="text-amber-600 dark:text-amber-400 flex items-center space-x-1.5 text-[11px] font-semibold">
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           <span>Thumbnail will be applied upon video creation</span>
                         </span>
                       )}
                       {thumbnailStatus === 'APPLIED' && (
-                        <span className="text-emerald-400 flex items-center space-x-1.5 text-[11px] font-semibold">
+                        <span className="text-emerald-600 dark:text-emerald-400 flex items-center space-x-1.5 text-[11px] font-semibold">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Thumbnail applied</span>
                         </span>
                       )}
                       {thumbnailStatus === 'FAILED' && (
-                        <span className="text-rose-400 flex items-center space-x-1.5 text-[11px] font-semibold">
+                        <span className="text-rose-600 dark:text-rose-400 flex items-center space-x-1.5 text-[11px] font-semibold">
                           <AlertTriangle className="w-3.5 h-3.5" />
                           <span>
                             Thumbnail couldn&apos;t be applied
@@ -1205,7 +1205,7 @@ export function YouTubeComposer({
                         type="button"
                         onClick={handleRetryThumbnail}
                         disabled={isRetryingThumbnail}
-                        className="px-2.5 py-1 rounded-md bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 text-[11px] font-bold transition flex items-center space-x-1 shadow-sm"
+                        className="px-2.5 py-1 rounded-md bg-rose-100 dark:bg-rose-900/60 hover:bg-rose-200 dark:hover:bg-rose-800 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200 text-[11px] font-bold transition flex items-center space-x-1 shadow-xs"
                       >
                         {isRetryingThumbnail ? (
                           <Loader2 className="w-3 h-3 animate-spin" />
@@ -1222,18 +1222,18 @@ export function YouTubeComposer({
 
             {/* Thumbnail Validation Error Message */}
             {thumbnailValidationError && (
-              <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs flex items-start space-x-2">
-                <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800/80 text-rose-800 dark:text-rose-300 text-xs flex items-start space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
                 <span className="leading-relaxed">{thumbnailValidationError}</span>
               </div>
             )}
           </div>
 
           {/* Details & Metadata Card */}
-          <div className="glass-panel p-6 rounded-2xl space-y-5 border border-slate-800 shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-                <Sliders className="w-4 h-4 text-red-400" />
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl space-y-5 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center space-x-2">
+                <Sliders className="w-4 h-4 text-red-500 dark:text-red-400" />
                 <span>3. Video Details & SEO Metadata</span>
               </h3>
             </div>
@@ -1241,10 +1241,10 @@ export function YouTubeComposer({
             {/* Title Input */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-200">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
                   Title (Required)
                 </label>
-                <span className={`text-[10px] font-mono ${title.length > 90 ? 'text-amber-400 font-bold' : 'text-slate-500'}`}>
+                <span className={`text-[10px] font-mono ${title.length > 90 ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-slate-400 dark:text-slate-500'}`}>
                   {title.length} / 100
                 </span>
               </div>
@@ -1259,17 +1259,17 @@ export function YouTubeComposer({
                     ? 'Add a catchy title for your Short (e.g. Quick AI Automation Hack #Shorts)'
                     : 'Add a title that describes your video (e.g. Next-Gen Social AI Automation Demo)'
                 }
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 disabled:opacity-50 transition"
+                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 disabled:opacity-50 transition"
               />
             </div>
 
             {/* Description Textarea */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-200">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
                   Description
                 </label>
-                <span className="text-[10px] font-mono text-slate-500">
+                <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
                   {description.length} / 5000
                 </span>
               </div>
@@ -1280,12 +1280,12 @@ export function YouTubeComposer({
                 disabled={uploadPhase !== 'idle'}
                 rows={4}
                 placeholder="Tell viewers about your video, links, and hashtags..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 disabled:opacity-50 resize-none transition leading-relaxed"
+                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 disabled:opacity-50 resize-none transition leading-relaxed"
               />
 
               {/* Quick Hashtag Inserters */}
               <div className="flex items-center flex-wrap gap-1.5 pt-1">
-                <span className="text-[10px] text-slate-500 font-semibold mr-1">Insert:</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold mr-1">Insert:</span>
                 {(contentType === 'short'
                   ? ['#Shorts', '#Viral', '#Trending', '#QuickTip', '#AI']
                   : ['#Tutorial', '#Automation', '#AI', '#Tech', '#Marketing']
@@ -1295,7 +1295,7 @@ export function YouTubeComposer({
                     type="button"
                     onClick={() => handleInsertDescriptionHashtag(ht)}
                     disabled={uploadPhase !== 'idle'}
-                    className="px-2 py-0.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-semibold text-slate-300 hover:text-red-300 transition"
+                    className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-[10px] font-semibold text-slate-700 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-300 transition"
                   >
                     + {ht}
                   </button>
@@ -1306,11 +1306,11 @@ export function YouTubeComposer({
             {/* Tags Pill Input */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-200 flex items-center space-x-1.5">
-                  <Tag className="w-3.5 h-3.5 text-red-400" />
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center space-x-1.5">
+                  <Tag className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
                   <span>Tags / Keywords</span>
                 </label>
-                <span className="text-[10px] font-mono text-slate-500">
+                <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
                   {tags.length} / 30 tags
                 </span>
               </div>
@@ -1323,13 +1323,13 @@ export function YouTubeComposer({
                   onKeyDown={handleTagKeyDown}
                   disabled={uploadPhase !== 'idle'}
                   placeholder="Type tag and press Enter or comma (e.g. ai, tech, tutorial)"
-                  className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 disabled:opacity-50"
+                  className="flex-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 disabled:opacity-50"
                 />
                 <button
                   type="button"
                   onClick={() => handleAddTag(tagInput)}
                   disabled={!tagInput.trim() || uploadPhase !== 'idle'}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition disabled:opacity-40"
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold transition disabled:opacity-40"
                 >
                   Add
                 </button>
@@ -1341,14 +1341,14 @@ export function YouTubeComposer({
                   {tags.map((t) => (
                     <span
                       key={t}
-                      className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-red-950/40 text-red-200 border border-red-800/50 text-[11px] font-medium"
+                      className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-200 dark:border-red-800/50 text-[11px] font-medium"
                     >
                       <span>#{t}</span>
                       {uploadPhase === 'idle' && (
                         <button
                           type="button"
                           onClick={() => handleRemoveTag(t)}
-                          className="text-red-400 hover:text-white transition p-0.5"
+                          className="text-red-400 hover:text-red-700 dark:hover:text-white transition p-0.5"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -1361,17 +1361,17 @@ export function YouTubeComposer({
 
             {/* Category Select */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-200">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
                 YouTube Category
               </label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 disabled={uploadPhase !== 'idle'}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-red-500 disabled:opacity-50"
+                className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 disabled:opacity-50"
               >
                 {YOUTUBE_CATEGORIES.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
+                  <option key={cat.id} value={cat.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
                     {cat.name}
                   </option>
                 ))}
@@ -1379,12 +1379,12 @@ export function YouTubeComposer({
             </div>
 
             {/* COPPA Made for Kids Section */}
-            <div className="space-y-2 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+            <div className="space-y-2 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
               <div className="flex items-center space-x-2">
-                <UserCheck className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs font-bold text-white">Audience & Made for Kids (COPPA)</span>
+                <UserCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span className="text-xs font-bold text-slate-900 dark:text-white">Audience & Made for Kids (COPPA)</span>
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
                 Regardless of your location, you’re legally required to comply with COPPA and other laws.
               </p>
 
@@ -1395,14 +1395,18 @@ export function YouTubeComposer({
                   disabled={uploadPhase !== 'idle'}
                   className={`p-3 rounded-xl border text-left transition flex items-start space-x-2.5 ${
                     !madeForKids
-                      ? 'bg-red-950/40 border-red-500/80 text-white shadow-sm'
-                      : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:text-slate-200'
+                      ? 'bg-red-50 border-red-300 text-red-900 dark:bg-red-950/40 dark:border-red-500/80 dark:text-white shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-950/40 dark:border-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-base mt-0.5">{!madeForKids ? '●' : '○'}</span>
+                  <span className={`text-base mt-0.5 ${!madeForKids ? 'text-red-600 dark:text-red-400' : 'text-slate-400'}`}>
+                    {!madeForKids ? '●' : '○'}
+                  </span>
                   <div>
                     <span className="text-xs font-bold block">No, not made for kids</span>
-                    <span className="text-[10px] text-slate-400">Standard audience (recommended)</span>
+                    <span className={`text-[10px] ${!madeForKids ? 'text-red-700/80 dark:text-slate-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      Standard audience (recommended)
+                    </span>
                   </div>
                 </button>
 
@@ -1412,14 +1416,18 @@ export function YouTubeComposer({
                   disabled={uploadPhase !== 'idle'}
                   className={`p-3 rounded-xl border text-left transition flex items-start space-x-2.5 ${
                     madeForKids
-                      ? 'bg-red-950/40 border-red-500/80 text-white shadow-sm'
-                      : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:text-slate-200'
+                      ? 'bg-red-50 border-red-300 text-red-900 dark:bg-red-950/40 dark:border-red-500/80 dark:text-white shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-950/40 dark:border-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
-                  <span className="text-base mt-0.5">{madeForKids ? '●' : '○'}</span>
+                  <span className={`text-base mt-0.5 ${madeForKids ? 'text-red-600 dark:text-red-400' : 'text-slate-400'}`}>
+                    {madeForKids ? '●' : '○'}
+                  </span>
                   <div>
                     <span className="text-xs font-bold block">Yes, it’s made for kids</span>
-                    <span className="text-[10px] text-slate-400">Child-directed content</span>
+                    <span className={`text-[10px] ${madeForKids ? 'text-red-700/80 dark:text-slate-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      Child-directed content
+                    </span>
                   </div>
                 </button>
               </div>
@@ -1427,7 +1435,7 @@ export function YouTubeComposer({
 
             {/* Visibility & Privacy Cards */}
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-200">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
                 3. Visibility & Publishing Privacy
               </label>
 
@@ -1439,17 +1447,17 @@ export function YouTubeComposer({
                   disabled={uploadPhase !== 'idle'}
                   className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between space-y-2 ${
                     privacyStatus === 'public'
-                      ? 'bg-gradient-to-br from-red-950/50 to-rose-950/50 border-red-500 text-white shadow-md'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'
+                      ? 'bg-emerald-50 border-emerald-500 text-emerald-950 dark:bg-gradient-to-br dark:from-emerald-950/50 dark:to-slate-950/50 dark:border-emerald-500 dark:text-white shadow-xs ring-1 ring-emerald-500/30'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-900/60 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <Globe className="w-4 h-4 text-emerald-400" />
-                    {privacyStatus === 'public' && <Check className="w-4 h-4 text-red-400" />}
+                    <Globe className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    {privacyStatus === 'public' && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
                   </div>
                   <div>
-                    <span className="text-xs font-bold block text-white">Public</span>
-                    <span className="text-[10px] text-slate-400">Everyone can watch and search</span>
+                    <span className="text-xs font-bold block text-slate-900 dark:text-white">Public</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Everyone can watch and search</span>
                   </div>
                 </button>
 
@@ -1460,17 +1468,17 @@ export function YouTubeComposer({
                   disabled={uploadPhase !== 'idle'}
                   className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between space-y-2 ${
                     privacyStatus === 'unlisted'
-                      ? 'bg-gradient-to-br from-red-950/50 to-rose-950/50 border-red-500 text-white shadow-md'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'
+                      ? 'bg-amber-50 border-amber-500 text-amber-950 dark:bg-gradient-to-br dark:from-amber-950/50 dark:to-slate-950/50 dark:border-amber-500 dark:text-white shadow-xs ring-1 ring-amber-500/30'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-900/60 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <EyeOff className="w-4 h-4 text-amber-400" />
-                    {privacyStatus === 'unlisted' && <Check className="w-4 h-4 text-red-400" />}
+                    <EyeOff className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    {privacyStatus === 'unlisted' && <Check className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
                   </div>
                   <div>
-                    <span className="text-xs font-bold block text-white">Unlisted</span>
-                    <span className="text-[10px] text-slate-400">Anyone with the link can view</span>
+                    <span className="text-xs font-bold block text-slate-900 dark:text-white">Unlisted</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Anyone with the link can view</span>
                   </div>
                 </button>
 
@@ -1481,17 +1489,17 @@ export function YouTubeComposer({
                   disabled={uploadPhase !== 'idle'}
                   className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between space-y-2 ${
                     privacyStatus === 'private'
-                      ? 'bg-gradient-to-br from-red-950/50 to-rose-950/50 border-red-500 text-white shadow-md'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'
+                      ? 'bg-slate-100 border-slate-400 text-slate-900 dark:bg-gradient-to-br dark:from-slate-800/80 dark:to-slate-900/80 dark:border-slate-500 dark:text-white shadow-xs ring-1 ring-slate-400/30'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-900/60 dark:border-slate-800 dark:text-slate-400 dark:hover:text-white'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <Lock className="w-4 h-4 text-rose-400" />
-                    {privacyStatus === 'private' && <Check className="w-4 h-4 text-red-400" />}
+                    <Lock className="w-4 h-4 text-slate-600 dark:text-rose-400" />
+                    {privacyStatus === 'private' && <Check className="w-4 h-4 text-slate-800 dark:text-slate-200" />}
                   </div>
                   <div>
-                    <span className="text-xs font-bold block text-white">Private</span>
-                    <span className="text-[10px] text-slate-400">Only you can view</span>
+                    <span className="text-xs font-bold block text-slate-900 dark:text-white">Private</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Only you can view</span>
                   </div>
                 </button>
               </div>
@@ -1502,20 +1510,20 @@ export function YouTubeComposer({
         {/* ── Right Column: Live Video Player Preview & Status (5 Cols) ─────── */}
         <div className="lg:col-span-5 space-y-6">
           {/* Live YouTube Player Preview Card */}
-          <div className="glass-panel p-5 rounded-2xl space-y-4 sticky top-20 border border-slate-800 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-                <Film className="w-4 h-4 text-red-400" />
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl space-y-4 sticky top-20 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center space-x-2">
+                <Film className="w-4 h-4 text-red-500 dark:text-red-400" />
                 <span>Live YouTube Preview</span>
               </h3>
               {contentType === 'short' ? (
-                <span className="px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-300 font-mono text-[9px] font-bold flex items-center space-x-1">
-                  <Zap className="w-3 h-3 text-red-400" />
+                <span className="px-2.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/20 dark:text-red-300 font-mono text-[9px] font-bold flex items-center space-x-1">
+                  <Zap className="w-3 h-3 text-red-500 dark:text-red-400" />
                   <span>9:16 Shorts Mode</span>
                 </span>
               ) : (
-                <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono text-[9px] font-bold flex items-center space-x-1">
-                  <Film className="w-3 h-3 text-indigo-400" />
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-300 font-mono text-[9px] font-bold flex items-center space-x-1">
+                  <Film className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
                   <span>16:9 Video Mode</span>
                 </span>
               )}
@@ -1523,7 +1531,7 @@ export function YouTubeComposer({
 
             {/* Video Container (Adapts between 9:16 vertical Short and 16:9 widescreen Video) */}
             <div
-              className={`relative rounded-xl overflow-hidden bg-black border border-slate-800 flex items-center justify-center mx-auto transition-all duration-300 ${
+              className={`relative rounded-xl overflow-hidden bg-black border border-slate-200 dark:border-slate-800 flex items-center justify-center mx-auto transition-all duration-300 ${
                 contentType === 'short' ? 'max-w-[240px] aspect-[9/16]' : 'w-full aspect-video'
               }`}
             >
@@ -1547,8 +1555,8 @@ export function YouTubeComposer({
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center p-6 text-center space-y-2 text-slate-500">
-                  <FileVideo className="w-10 h-10 text-slate-600 animate-pulse" />
+                <div className="flex flex-col items-center justify-center p-6 text-center space-y-2 text-slate-400 dark:text-slate-500">
+                  <FileVideo className="w-10 h-10 text-slate-300 dark:text-slate-600 animate-pulse" />
                   <span className="text-xs font-medium">
                     {contentType === 'short'
                       ? 'Select vertical video for Shorts preview'
@@ -1559,17 +1567,17 @@ export function YouTubeComposer({
             </div>
 
             {/* Video Details Preview */}
-            <div className="space-y-2 bg-slate-900/70 p-3.5 rounded-xl border border-slate-800/80 text-xs">
-              <h4 className="font-bold text-white text-sm line-clamp-2 leading-snug">
+            <div className="space-y-2 bg-slate-50 dark:bg-slate-900/70 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800/80 text-xs">
+              <h4 className="font-bold text-slate-900 dark:text-white text-sm line-clamp-2 leading-snug">
                 {title || 'Untitled Video'}
               </h4>
 
-              <div className="flex items-center space-x-2 text-[11px] text-slate-400">
-                <span className="font-semibold text-slate-200">
+              <div className="flex items-center space-x-2 text-[11px] text-slate-500 dark:text-slate-400">
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
                   {selectedChannel?.account_name || 'YouTube Channel'}
                 </span>
                 <span>•</span>
-                <span className="capitalize font-mono text-red-400 font-semibold">{privacyStatus}</span>
+                <span className="capitalize font-mono text-red-600 dark:text-red-400 font-semibold">{privacyStatus}</span>
                 {videoDuration && (
                   <>
                     <span>•</span>
@@ -1577,11 +1585,11 @@ export function YouTubeComposer({
                   </>
                 )}
                 <span>•</span>
-                <span className="font-bold text-slate-300">{contentType === 'short' ? 'Short' : 'Video'}</span>
+                <span className="font-bold text-slate-700 dark:text-slate-300">{contentType === 'short' ? 'Short' : 'Video'}</span>
                 {thumbnailUrl && (
                   <>
                     <span>•</span>
-                    <span className="text-red-400 font-semibold flex items-center space-x-1">
+                    <span className="text-red-600 dark:text-red-400 font-semibold flex items-center space-x-1">
                       <ImageIcon className="w-3 h-3" />
                       <span>Custom Thumb</span>
                     </span>
@@ -1590,39 +1598,39 @@ export function YouTubeComposer({
               </div>
 
               {description && (
-                <p className="text-[11px] text-slate-400 line-clamp-3 whitespace-pre-line pt-1 border-t border-slate-800/60">
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-3 whitespace-pre-line pt-1 border-t border-slate-200 dark:border-slate-800/60">
                   {description}
                 </p>
               )}
             </div>
 
             {/* Security Assurance Banner */}
-            <div className="flex items-start space-x-2.5 p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-[10px] text-slate-400">
-              <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start space-x-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-[10px] text-slate-600 dark:text-slate-400">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
               <div>
-                <strong className="text-emerald-300 font-semibold">Resumable Chunk Engine:</strong> Video is streamed via 8 MB encrypted chunks through server-side authorization.
+                <strong className="text-emerald-700 dark:text-emerald-300 font-semibold">Resumable Chunk Engine:</strong> Video is streamed via 8 MB encrypted chunks through server-side authorization.
               </div>
             </div>
 
             {/* ── Live Upload Progress Stage Card ───────────────────────────── */}
             {uploadPhase !== 'idle' && (
-              <div className="p-4 rounded-xl bg-slate-950/90 border border-slate-800 space-y-3.5 shadow-2xl">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800 space-y-3.5 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     {uploadPhase === 'uploading' && (
-                      <Loader2 className="w-4 h-4 animate-spin text-red-400" />
+                      <Loader2 className="w-4 h-4 animate-spin text-red-600 dark:text-red-400" />
                     )}
                     {uploadPhase === 'processing' && (
-                      <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                      <RefreshCw className="w-4 h-4 animate-spin text-amber-600 dark:text-amber-400" />
                     )}
                     {uploadPhase === 'ready' && (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     )}
-                    {uploadPhase === 'paused' && <Pause className="w-4 h-4 text-amber-400" />}
-                    {uploadPhase === 'failed' && <AlertCircle className="w-4 h-4 text-rose-400" />}
-                    {uploadPhase === 'cancelled' && <X className="w-4 h-4 text-rose-400" />}
+                    {uploadPhase === 'paused' && <Pause className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
+                    {uploadPhase === 'failed' && <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />}
+                    {uploadPhase === 'cancelled' && <X className="w-4 h-4 text-rose-600 dark:text-rose-400" />}
 
-                    <span className="font-bold text-xs text-white uppercase tracking-wider">
+                    <span className="font-bold text-xs text-slate-900 dark:text-white uppercase tracking-wider">
                       {uploadPhase === 'initiating' && 'Initiating Session...'}
                       {uploadPhase === 'uploading' && `Uploading (${currentChunkIndex}/${totalChunks} chunks)`}
                       {uploadPhase === 'paused' && 'Upload Paused'}
@@ -1633,13 +1641,13 @@ export function YouTubeComposer({
                     </span>
                   </div>
 
-                  <span className="font-mono text-xs font-bold text-red-400">
+                  <span className="font-mono text-xs font-bold text-red-600 dark:text-red-400">
                     {progressPercentage}%
                   </span>
                 </div>
 
                 {/* Real Progress Bar */}
-                <div className="w-full bg-slate-900 rounded-full h-3 overflow-hidden p-0.5 border border-slate-800">
+                <div className="w-full bg-slate-200 dark:bg-slate-900 rounded-full h-3 overflow-hidden p-0.5 border border-slate-300 dark:border-slate-800">
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${
                       uploadPhase === 'ready'
@@ -1655,15 +1663,15 @@ export function YouTubeComposer({
                 </div>
 
                 {/* Progress Numbers */}
-                <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-400 font-mono">
+                <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                   <div>
                     <span>Transferred: </span>
-                    <span className="text-slate-200 font-bold">{formatBytes(bytesUploaded)}</span>
+                    <span className="text-slate-800 dark:text-slate-200 font-bold">{formatBytes(bytesUploaded)}</span>
                     <span> / {formatBytes(totalBytes)}</span>
                   </div>
                   <div className="text-right">
                     {retryCount > 0 && (
-                      <span className="text-amber-400 font-bold mr-1">
+                      <span className="text-amber-600 dark:text-amber-400 font-bold mr-1">
                         Retry {retryCount}/5 •
                       </span>
                     )}
@@ -1673,18 +1681,18 @@ export function YouTubeComposer({
 
                 {/* Processing State Details */}
                 {uploadPhase === 'processing' && (
-                  <p className="text-[11px] text-amber-300/90 font-medium bg-amber-950/30 p-2.5 rounded-lg border border-amber-500/20">
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300/90 font-medium bg-amber-50 dark:bg-amber-950/30 p-2.5 rounded-lg border border-amber-200 dark:border-amber-500/20">
                     ⏳ Chunk transfer complete! YouTube background poller is checking {contentType === 'short' ? 'Short' : 'video'} processing status...
                   </p>
                 )}
 
                 {/* Action Controls */}
-                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-200 dark:border-slate-800">
                   {uploadPhase === 'uploading' && (
                     <button
                       type="button"
                       onClick={handlePause}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center space-x-1"
+                      className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center space-x-1 border border-slate-300 dark:border-slate-700 shadow-xs"
                     >
                       <Pause className="w-3.5 h-3.5" />
                       <span>Pause</span>
@@ -1695,7 +1703,7 @@ export function YouTubeComposer({
                     <button
                       type="button"
                       onClick={handleResume}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center space-x-1"
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center space-x-1 shadow-xs"
                     >
                       <Play className="w-3.5 h-3.5" />
                       <span>Resume</span>
@@ -1706,7 +1714,7 @@ export function YouTubeComposer({
                     <button
                       type="button"
                       onClick={handleCancel}
-                      className="px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-semibold transition flex items-center space-x-1"
+                      className="px-3 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold transition flex items-center space-x-1"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Cancel</span>
@@ -1718,9 +1726,9 @@ export function YouTubeComposer({
 
             {/* ── Success / READY Card ───────────────────────────────────────── */}
             {uploadPhase === 'ready' && statusDetail && (
-              <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-950/60 to-slate-900 border border-emerald-500/50 space-y-3 shadow-2xl animate-in fade-in">
-                <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+              <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-gradient-to-br dark:from-emerald-950/60 dark:to-slate-900 border border-emerald-200 dark:border-emerald-500/50 space-y-3 shadow-sm animate-in fade-in">
+                <div className="flex items-center space-x-2 text-emerald-700 dark:text-emerald-400 font-bold text-xs">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                   <span>
                     {contentType === 'short'
                       ? 'YouTube Short Published Successfully!'
@@ -1728,31 +1736,31 @@ export function YouTubeComposer({
                   </span>
                 </div>
 
-                <p className="text-[11px] text-slate-300">
+                <p className="text-[11px] text-slate-700 dark:text-slate-300">
                   Your {contentType === 'short' ? 'Short' : 'video'} is ready to view and share across the web.
                 </p>
 
                 {/* Thumbnail Status in Success Card */}
                 {(statusDetail.thumbnail_url || thumbnailUrl) && (
-                  <div className="p-2.5 rounded-lg bg-slate-900/80 border border-emerald-600/30 flex items-center justify-between text-xs">
+                  <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900/80 border border-emerald-200 dark:border-emerald-600/30 flex items-center justify-between text-xs">
                     <div className="flex items-center space-x-2">
-                      <ImageIcon className="w-4 h-4 text-emerald-400" />
+                      <ImageIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                       {thumbnailStatus === 'APPLIED' ? (
-                        <span className="text-emerald-300 font-semibold flex items-center space-x-1 text-[11px]">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        <span className="text-emerald-700 dark:text-emerald-300 font-semibold flex items-center space-x-1 text-[11px]">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                           <span>Thumbnail applied</span>
                         </span>
                       ) : thumbnailStatus === 'FAILED' ? (
-                        <span className="text-rose-300 font-semibold flex items-center space-x-1 text-[11px]">
-                          <AlertTriangle className="w-3 h-3 text-rose-400" />
+                        <span className="text-rose-700 dark:text-rose-300 font-semibold flex items-center space-x-1 text-[11px]">
+                          <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400" />
                           <span>
                             Thumbnail couldn&apos;t be applied
                             {thumbnailError ? `: ${thumbnailError}` : ''}
                           </span>
                         </span>
                       ) : (
-                        <span className="text-amber-300 font-medium flex items-center space-x-1 text-[11px]">
-                          <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                        <span className="text-amber-700 dark:text-amber-300 font-medium flex items-center space-x-1 text-[11px]">
+                          <Loader2 className="w-3 h-3 animate-spin text-amber-600 dark:text-amber-400" />
                           <span>Applying thumbnail...</span>
                         </span>
                       )}
@@ -1763,7 +1771,7 @@ export function YouTubeComposer({
                         type="button"
                         onClick={handleRetryThumbnail}
                         disabled={isRetryingThumbnail}
-                        className="px-2.5 py-1 rounded-md bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 text-[11px] font-bold transition flex items-center space-x-1 shadow-sm"
+                        className="px-2.5 py-1 rounded-md bg-rose-100 dark:bg-rose-900/60 hover:bg-rose-200 dark:hover:bg-rose-800 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200 text-[11px] font-bold transition flex items-center space-x-1 shadow-xs"
                       >
                         {isRetryingThumbnail ? (
                           <Loader2 className="w-3 h-3 animate-spin" />
@@ -1783,12 +1791,12 @@ export function YouTubeComposer({
                         type="text"
                         readOnly
                         value={statusDetail.video_url}
-                        className="flex-1 bg-slate-950 border border-emerald-600/40 rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-emerald-300"
+                        className="flex-1 bg-white dark:bg-slate-950 border border-emerald-300 dark:border-emerald-600/40 rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-emerald-800 dark:text-emerald-300"
                       />
                       <button
                         type="button"
                         onClick={handleCopyLink}
-                        className="px-2.5 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 text-xs font-semibold transition flex items-center space-x-1"
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition flex items-center space-x-1 shadow-xs"
                       >
                         {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>{copiedLink ? 'Copied' : 'Copy'}</span>
@@ -1811,9 +1819,9 @@ export function YouTubeComposer({
                         <button
                           type="button"
                           onClick={() => setIsEditModalOpen(true)}
-                          className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center space-x-1 border border-slate-700"
+                          className="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center space-x-1 border border-slate-300 dark:border-slate-700 shadow-xs"
                         >
-                          <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                          <Sliders className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                           <span>Edit Video Details</span>
                         </button>
                       )}
@@ -1821,7 +1829,7 @@ export function YouTubeComposer({
                       <button
                         type="button"
                         onClick={handleResetForNewUpload}
-                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
+                        className="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition border border-slate-300 dark:border-slate-700 shadow-xs"
                       >
                         Upload Another
                       </button>
@@ -1851,8 +1859,8 @@ export function YouTubeComposer({
 
             {/* Error Message */}
             {errorMsg && (
-              <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs flex items-start space-x-2.5">
-                <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+              <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800/80 text-rose-800 dark:text-rose-300 text-xs flex items-start space-x-2.5">
+                <AlertCircle className="w-4 h-4 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
                 <span className="leading-relaxed">{errorMsg}</span>
               </div>
             )}
@@ -1882,7 +1890,7 @@ export function YouTubeComposer({
               <button
                 type="button"
                 onClick={handleStartUpload}
-                className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs transition flex items-center justify-center space-x-2"
+                className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs transition flex items-center justify-center space-x-2 shadow-md shadow-red-600/20"
               >
                 <RefreshCw className="w-4 h-4" />
                 <span>Retry Upload</span>
