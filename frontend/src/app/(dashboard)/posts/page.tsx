@@ -24,10 +24,10 @@ import {
   Layers,
   ShieldCheck,
   List,
-  LayoutGrid,
   CalendarDays,
-  ArrowRight,
-  Globe
+  Facebook,
+  Instagram,
+  Youtube
 } from 'lucide-react';
 import { PostStatusBadge } from '@/components/PostStatusBadge';
 import { SchedulerItem, SchedulerItemType } from '@/lib/types';
@@ -88,7 +88,7 @@ function ViewPostButton({ item }: { item: SchedulerItem }) {
                 className="flex items-center px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-300 rounded-lg transition-colors"
                 role="menuitem"
               >
-                <span className="w-2 h-2 rounded-full bg-blue-500 mr-2 flex-shrink-0" />
+                <Facebook className="w-3.5 h-3.5 text-blue-600 mr-2 flex-shrink-0" />
                 <span>Facebook Page</span>
               </a>
               <a
@@ -99,7 +99,7 @@ function ViewPostButton({ item }: { item: SchedulerItem }) {
                 className="flex items-center px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-pink-600 dark:hover:text-pink-300 rounded-lg transition-colors"
                 role="menuitem"
               >
-                <span className="w-2 h-2 rounded-full bg-pink-500 mr-2 flex-shrink-0" />
+                <Instagram className="w-3.5 h-3.5 text-pink-600 mr-2 flex-shrink-0" />
                 <span>Instagram Feed</span>
               </a>
             </div>
@@ -111,17 +111,21 @@ function ViewPostButton({ item }: { item: SchedulerItem }) {
 
   const singleUrl = hasFb ? fbUrl! : igUrl!;
   const platformName = hasFb ? 'Facebook' : 'Instagram';
-  const platformColor = hasFb ? 'text-blue-500 dark:text-blue-400' : 'text-pink-500 dark:text-pink-400';
+  const platformIcon = hasFb ? (
+    <Facebook className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+  ) : (
+    <Instagram className="w-3 h-3 text-pink-600 dark:text-pink-400" />
+  );
 
   return (
     <a
       href={singleUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-[11px] transition flex items-center space-x-1 focus-ring shadow-xs"
+      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-[11px] transition flex items-center space-x-1.5 focus-ring shadow-xs"
       title={`Open live post on ${platformName}`}
     >
-      <ExternalLink className={`w-3 h-3 ${platformColor}`} />
+      {platformIcon}
       <span>View Post</span>
     </a>
   );
@@ -182,7 +186,7 @@ export default function PostSchedulerPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   
-  // View mode: Month Calendar vs Detailed Queue List
+  // View mode: 'calendar' (dominant full-width workspace) vs 'list' (queue table)
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
 
   // Calendar period state
@@ -195,6 +199,7 @@ export default function PostSchedulerPage() {
   // Modals & Selected details
   const [previewStory, setPreviewStory] = useState<SchedulerItem | null>(null);
   const [selectedPostItem, setSelectedPostItem] = useState<SchedulerItem | null>(null);
+  const [viewDayModal, setViewDayModal] = useState<{ dateStr: string; items: SchedulerItem[] } | null>(null);
 
   // Deletion UI State
   const [deletingItemId, setDeletingItemId] = useState<number | null>(null);
@@ -575,7 +580,7 @@ export default function PostSchedulerPage() {
   const storyCount = items.filter(i => i.item_type === 'story').length;
 
   return (
-    <div className="space-y-5 select-none font-sans text-xs">
+    <div className="space-y-4 select-none font-sans text-xs">
       {/* ── Page Header ────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
         <div>
@@ -588,17 +593,11 @@ export default function PostSchedulerPage() {
             </span>
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            Plan, schedule, and review social media feed posts and 24-hour stories.
+            Plan, schedule and manage your social content.
           </p>
         </div>
 
         <div className="flex items-center space-x-2 flex-shrink-0">
-          <button
-            onClick={handleToday}
-            className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs transition shadow-xs"
-          >
-            Today
-          </button>
           <Link
             href="/studio?tab=stories"
             className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-semibold text-xs transition shadow-xs"
@@ -611,12 +610,12 @@ export default function PostSchedulerPage() {
             className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>+ Create Post</span>
+            <span>+ New Post</span>
           </Link>
         </div>
       </div>
 
-      {/* ── Status Message Alert ──────────────────────────────────────── */}
+      {/* ── Status Message Alert Banner ───────────────────────────────── */}
       {deleteStatusMessage && deleteStatusMessage.type === 'success' && (
         <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-200 text-xs flex items-center justify-between shadow-xs">
           <div className="flex items-center space-x-2">
@@ -632,11 +631,11 @@ export default function PostSchedulerPage() {
         </div>
       )}
 
-      {/* ── Calendar Toolbar & Unified Filters ────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* ── Calendar Toolbar ──────────────────────────────────────────── */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         
-        {/* Left: Navigation (Prev, Month Title, Next) */}
-        <div className="flex items-center space-x-3">
+        {/* Left: Navigation Controls (Prev, Today, Next + Month Label + Refresh) */}
+        <div className="flex items-center space-x-2.5">
           <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
             <button
               onClick={handlePrevMonth}
@@ -645,6 +644,12 @@ export default function PostSchedulerPage() {
               aria-label="Previous Month"
             >
               <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleToday}
+              className="px-2.5 py-1 text-xs font-semibold rounded-md text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition"
+            >
+              Today
             </button>
             <button
               onClick={handleNextMonth}
@@ -656,21 +661,21 @@ export default function PostSchedulerPage() {
             </button>
           </div>
           
-          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 min-w-[160px]">
+          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 min-w-[150px]">
             {monthLabel}
           </h2>
 
           <button
             onClick={fetchQueue}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 border border-transparent hover:border-slate-200 dark:hover:border-slate-800 transition"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs"
             title="Refresh schedule feed"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-indigo-600' : ''}`} />
           </button>
         </div>
 
-        {/* Center: Type & Status Filters */}
-        <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+        {/* Center/Right: Filters & View Mode Switcher */}
+        <div className="flex items-center space-x-2.5 flex-wrap gap-y-2">
           {/* Type Filter */}
           <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
             <button
@@ -708,45 +713,43 @@ export default function PostSchedulerPage() {
           </div>
 
           {/* Status Filter */}
-          <div className="flex items-center space-x-1">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg px-2.5 py-1 text-[11px] font-medium focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="SCHEDULED">Scheduled</option>
-              <option value="PUBLISHED">Published</option>
-              <option value="DRAFT">Draft</option>
-              <option value="FAILED">Failed</option>
-            </select>
-          </div>
-        </div>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg px-2.5 py-1 text-[11px] font-medium focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="SCHEDULED">Scheduled</option>
+            <option value="PUBLISHED">Published</option>
+            <option value="DRAFT">Draft</option>
+            <option value="FAILED">Failed</option>
+          </select>
 
-        {/* Right: View Switcher (Month Calendar vs List) */}
-        <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60 self-start md:self-auto">
-          <button
-            onClick={() => setViewMode('calendar')}
-            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition flex items-center space-x-1.5 ${
-              viewMode === 'calendar'
-                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
-          >
-            <CalendarDays className="w-3.5 h-3.5" />
-            <span>Calendar</span>
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition flex items-center space-x-1.5 ${
-              viewMode === 'list'
-                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
-          >
-            <List className="w-3.5 h-3.5" />
-            <span>List View</span>
-          </button>
+          {/* View Switcher: Calendar vs List */}
+          <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition flex items-center space-x-1.5 ${
+                viewMode === 'calendar'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>Calendar</span>
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition flex items-center space-x-1.5 ${
+                viewMode === 'list'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>List</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -766,11 +769,11 @@ export default function PostSchedulerPage() {
         </div>
       )}
 
-      {/* ── View 1: Month Calendar View ───────────────────────────────── */}
+      {/* ── PRIMARY WORKSPACE: ONLY CALENDAR VIEW ─────────────────────── */}
       {viewMode === 'calendar' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
           {/* Weekday Row */}
-          <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/90 text-center text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider py-2.5">
+          <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 text-center text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider py-2.5">
             <div>Mon</div>
             <div>Tue</div>
             <div>Wed</div>
@@ -784,25 +787,26 @@ export default function PostSchedulerPage() {
           {isLoading ? (
             <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 dark:divide-slate-800/60">
               {Array.from({ length: 35 }).map((_, i) => (
-                <div key={i} className="min-h-[105px] p-2 space-y-1.5 animate-pulse">
-                  <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800" />
-                  <div className="h-6 rounded bg-slate-100 dark:bg-slate-800/60 w-full" />
+                <div key={i} className="min-h-[140px] p-2 space-y-2 animate-pulse bg-white dark:bg-slate-900">
+                  <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800" />
+                  <div className="h-10 rounded bg-slate-100 dark:bg-slate-800/60 w-full" />
+                  <div className="h-10 rounded bg-slate-100 dark:bg-slate-800/60 w-full" />
                 </div>
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-7 divide-x divide-y divide-slate-200/70 dark:divide-slate-800/80">
+            <div className="grid grid-cols-7 divide-x divide-y divide-slate-200/80 dark:divide-slate-800">
               {calendarGrid.map((cell) => {
                 return (
                   <div
                     key={cell.dateKey}
-                    className={`min-h-[110px] p-1.5 sm:p-2 flex flex-col justify-between transition-colors ${
+                    className={`min-h-[135px] sm:min-h-[145px] p-2 flex flex-col justify-between transition-colors ${
                       cell.isCurrentMonth
-                        ? 'bg-white dark:bg-slate-900/90'
-                        : 'bg-slate-50/70 dark:bg-slate-950/40 text-slate-400 dark:text-slate-600'
-                    } ${cell.isToday ? 'ring-1 ring-inset ring-indigo-500/40' : ''}`}
+                        ? 'bg-white dark:bg-slate-900'
+                        : 'bg-slate-50/60 dark:bg-slate-950/40 text-slate-400 dark:text-slate-600'
+                    } ${cell.isToday ? 'ring-2 ring-inset ring-indigo-500/50' : ''}`}
                   >
-                    {/* Top: Day Number & Today indicator */}
+                    {/* Top: Day Number + Item Count */}
                     <div className="flex items-center justify-between">
                       <span
                         className={`text-xs font-semibold inline-flex items-center justify-center w-6 h-6 rounded-full ${
@@ -818,18 +822,19 @@ export default function PostSchedulerPage() {
 
                       {cell.items.length > 0 && (
                         <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-medium">
-                          {cell.items.length} {cell.items.length === 1 ? 'item' : 'items'}
+                          {cell.items.length} {cell.items.length === 1 ? 'post' : 'posts'}
                         </span>
                       )}
                     </div>
 
-                    {/* Middle: Content items in this day */}
-                    <div className="space-y-1 mt-1 flex-1">
-                      {cell.items.slice(0, 2).map((item) => {
+                    {/* Middle: Content Cards in this Day */}
+                    <div className="space-y-1.5 mt-1.5 flex-1">
+                      {cell.items.slice(0, 3).map((item) => {
                         const isStory = item.item_type === 'story';
                         const timeStr = formatShortTime(item.scheduled_at || item.published_at || item.created_at);
                         const isFb = item.platforms.includes('facebook');
                         const isIg = item.platforms.includes('instagram');
+                        const isYt = (item.platforms as string[]).includes('youtube');
 
                         return (
                           <div
@@ -838,42 +843,72 @@ export default function PostSchedulerPage() {
                               if (isStory) setPreviewStory(item);
                               else setSelectedPostItem(item);
                             }}
-                            className={`p-1.5 rounded-lg border text-[11px] cursor-pointer transition-all hover:scale-[1.02] shadow-xs flex items-center space-x-1.5 ${
+                            className={`p-1.5 rounded-lg border text-[11px] cursor-pointer transition-all hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-xs flex flex-col space-y-1 ${
                               isStory
-                                ? 'bg-fuchsia-50/80 dark:bg-fuchsia-950/40 border-fuchsia-200 dark:border-fuchsia-800/60 text-fuchsia-900 dark:text-fuchsia-200'
-                                : 'bg-slate-50 dark:bg-slate-800/70 border-slate-200 dark:border-slate-700/80 text-slate-900 dark:text-slate-100'
+                                ? 'bg-fuchsia-50/70 dark:bg-fuchsia-950/30 border-fuchsia-200 dark:border-fuchsia-800/60 text-fuchsia-950 dark:text-fuchsia-200'
+                                : 'bg-slate-50/90 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100'
                             }`}
-                            title={`${item.title || item.caption || 'Scheduled item'} — Click to view details`}
+                            title={`${item.title || item.caption || 'Scheduled content'} — Click for details`}
                           >
-                            {/* Platform dot / indicator */}
-                            <div className="flex items-center -space-x-1 flex-shrink-0">
-                              {isFb && <span className="w-2 h-2 rounded-full bg-blue-500 border border-white dark:border-slate-900" />}
-                              {isIg && <span className="w-2 h-2 rounded-full bg-pink-500 border border-white dark:border-slate-900" />}
-                              {!isFb && !isIg && <span className="w-2 h-2 rounded-full bg-indigo-500" />}
+                            {/* Card Header: Platform badge & Type */}
+                            <div className="flex items-center justify-between text-[10px]">
+                              <div className="flex items-center space-x-1">
+                                {isFb && <Facebook className="w-3 h-3 text-blue-600 flex-shrink-0" />}
+                                {isIg && <Instagram className="w-3 h-3 text-pink-600 flex-shrink-0" />}
+                                {isYt && <Youtube className="w-3 h-3 text-red-600 flex-shrink-0" />}
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                  {isFb ? 'FB' : isIg ? 'IG' : 'Post'}
+                                </span>
+                              </div>
+
+                              {isStory ? (
+                                <span className="px-1.5 py-0.2 rounded bg-fuchsia-100 dark:bg-fuchsia-900/60 text-fuchsia-700 dark:text-fuchsia-300 font-bold text-[9px] uppercase">
+                                  Story
+                                </span>
+                              ) : (
+                                <span className={`w-1.5 h-1.5 rounded-full ${
+                                  item.status === 'PUBLISHED' ? 'bg-emerald-500' :
+                                  item.status === 'FAILED' ? 'bg-rose-500' :
+                                  item.status === 'DRAFT' ? 'bg-slate-400' : 'bg-sky-500'
+                                }`} />
+                              )}
                             </div>
 
-                            {/* Title / Caption truncated */}
-                            <span className="truncate font-medium flex-1">
-                              {item.title || item.caption || (isStory ? 'Story Asset' : 'Feed Post')}
-                            </span>
+                            {/* Card Body: Thumbnail & Snippet */}
+                            <div className="flex items-center space-x-1.5">
+                              {item.thumbnail_url ? (
+                                <img
+                                  src={item.thumbnail_url}
+                                  alt=""
+                                  className="w-5 h-5 rounded object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
+                                />
+                              ) : isStory ? (
+                                <Sparkles className="w-3.5 h-3.5 text-fuchsia-500 flex-shrink-0" />
+                              ) : (
+                                <ImageIcon className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                              )}
 
-                            {/* Time badge */}
-                            {timeStr && (
-                              <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 flex-shrink-0">
-                                {timeStr}
+                              <span className="truncate font-medium text-[11px] leading-tight flex-1">
+                                {item.title || (item.caption && item.caption.trim() ? item.caption.slice(0, 30) : isStory ? 'Story Asset' : 'Untitled Post')}
                               </span>
-                            )}
+                            </div>
+
+                            {/* Card Footer: Time & Status */}
+                            <div className="flex items-center justify-between text-[9px] font-mono text-slate-500 dark:text-slate-400 pt-0.5">
+                              <span>{timeStr || '—'}</span>
+                              <span className="capitalize">{item.status.toLowerCase()}</span>
+                            </div>
                           </div>
                         );
                       })}
 
                       {/* "+N more" items indicator */}
-                      {cell.items.length > 2 && (
+                      {cell.items.length > 3 && (
                         <button
-                          onClick={() => setViewMode('list')}
-                          className="w-full text-center text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline pt-0.5 block"
+                          onClick={() => setViewDayModal({ dateStr: cell.dateKey, items: cell.items })}
+                          className="w-full text-center text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline py-0.5 bg-indigo-50/50 dark:bg-indigo-950/30 rounded"
                         >
-                          +{cell.items.length - 2} more
+                          +{cell.items.length - 3} more
                         </button>
                       )}
                     </div>
@@ -885,18 +920,16 @@ export default function PostSchedulerPage() {
 
           {/* Empty Calendar State */}
           {!isLoading && filteredItems.length === 0 && (
-            <div className="py-12 px-6 text-center space-y-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
-              <div className="w-10 h-10 rounded-xl bg-slate-200/70 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 mx-auto">
+            <div className="py-14 px-6 text-center space-y-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+              <div className="w-11 h-11 rounded-xl bg-slate-200/70 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 mx-auto">
                 <CalendarIcon className="w-5 h-5" />
               </div>
               <div className="space-y-1">
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  Your calendar is clear
+                  No scheduled content
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
-                  {filterType !== 'ALL' || filterStatus !== 'ALL'
-                    ? `No scheduled content matches active filters (${filterType} • ${filterStatus}).`
-                    : 'Schedule your first feed post or story in Creator Studio to start planning your social media schedule.'}
+                  Your calendar is clear. Create your first post or story to start planning your social content schedule.
                 </p>
               </div>
               <div className="pt-1">
@@ -913,234 +946,303 @@ export default function PostSchedulerPage() {
         </div>
       )}
 
-      {/* ── View 2: Schedule Queue List View ──────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xs">
-        <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-              Content Schedule Queue ({filteredItems.length})
-            </h3>
+      {/* ── SECONDARY WORKSPACE: ONLY LIST VIEW ─────────────────────────── */}
+      {viewMode === 'list' && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                Content Schedule Queue ({filteredItems.length})
+              </h3>
+            </div>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {userTimeZone}
+            </span>
           </div>
-          <span className="text-xs text-slate-500 dark:text-slate-400">
-            {userTimeZone}
-          </span>
-        </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                <th className="p-3 w-40">Type & Preview</th>
-                <th className="p-3">Title & Summary</th>
-                <th className="p-3">Platforms</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Scheduled / Published</th>
-                <th className="p-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="p-12 text-center text-slate-500 dark:text-slate-400">
-                    <div className="flex flex-col items-center justify-center space-y-2">
-                      <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-                      <span className="text-xs font-semibold">Loading content schedule queue...</span>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="p-3 w-40">Type & Preview</th>
+                  <th className="p-3">Title & Summary</th>
+                  <th className="p-3">Platforms</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">Scheduled / Published</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
-              ) : filteredItems.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-10 text-center text-slate-500 dark:text-slate-400">
-                    <div className="flex flex-col items-center justify-center space-y-1.5">
-                      <CalendarIcon className="w-7 h-7 text-slate-400 dark:text-slate-600" />
-                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">No scheduled content in queue</span>
-                      <p className="text-xs text-slate-500 max-w-sm">
-                        Click "+ Create Post" or "+ Create Story" to start scheduling content.
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredItems.map((item) => {
-                  const isStory = item.item_type === 'story';
-                  const isVideo = item.media_type === 'video' || (item.media_url && Boolean(item.media_url.match(/\.(mp4|mov|webm)$/i)));
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="p-12 text-center text-slate-500 dark:text-slate-400">
+                      <div className="flex flex-col items-center justify-center space-y-2">
+                        <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                        <span className="text-xs font-semibold">Loading content schedule queue...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-10 text-center text-slate-500 dark:text-slate-400">
+                      <div className="flex flex-col items-center justify-center space-y-1.5">
+                        <CalendarIcon className="w-7 h-7 text-slate-400 dark:text-slate-600" />
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">No scheduled content in queue</span>
+                        <p className="text-xs text-slate-500 max-w-sm">
+                          Click "+ Create Post" or "+ Create Story" to start scheduling content.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredItems.map((item) => {
+                    const isStory = item.item_type === 'story';
+                    const isVideo = item.media_type === 'video' || (item.media_url && Boolean(item.media_url.match(/\.(mp4|mov|webm)$/i)));
 
-                  return (
-                    <tr key={`${item.item_type}-${item.id}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                      {/* Column 1: Type & Visual */}
-                      <td className="p-3">
-                        <div className="flex items-center space-x-3">
-                          {isStory ? (
-                            <div
-                              onClick={() => setPreviewStory(item)}
-                              className="relative w-10 h-[64px] rounded-lg overflow-hidden border border-fuchsia-300 dark:border-fuchsia-700/60 bg-black flex-shrink-0 cursor-pointer group shadow-xs hover:border-fuchsia-500 transition"
-                              title="Click to view 9:16 Story Preview"
-                            >
-                              {item.media_url ? (
-                                isVideo ? (
-                                  <div className="w-full h-full relative flex items-center justify-center bg-slate-900">
-                                    <video src={item.media_url} className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/10 transition">
-                                      <Film className="w-3.5 h-3.5 text-fuchsia-300 drop-shadow" />
+                    return (
+                      <tr key={`${item.item_type}-${item.id}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                        {/* Column 1: Type & Visual */}
+                        <td className="p-3">
+                          <div className="flex items-center space-x-3">
+                            {isStory ? (
+                              <div
+                                onClick={() => setPreviewStory(item)}
+                                className="relative w-10 h-[64px] rounded-lg overflow-hidden border border-fuchsia-300 dark:border-fuchsia-700/60 bg-black flex-shrink-0 cursor-pointer group shadow-xs hover:border-fuchsia-500 transition"
+                                title="Click to view 9:16 Story Preview"
+                              >
+                                {item.media_url ? (
+                                  isVideo ? (
+                                    <div className="w-full h-full relative flex items-center justify-center bg-slate-900">
+                                      <video src={item.media_url} className="w-full h-full object-cover" />
+                                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/10 transition">
+                                        <Film className="w-3.5 h-3.5 text-fuchsia-300 drop-shadow" />
+                                      </div>
                                     </div>
-                                  </div>
+                                  ) : (
+                                    <img
+                                      src={item.media_url}
+                                      alt={item.title || 'Story Visual'}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                                    />
+                                  )
                                 ) : (
+                                  <div className="w-full h-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-fuchsia-600 dark:text-fuchsia-400">
+                                    <Sparkles className="w-4 h-4" />
+                                  </div>
+                                )}
+                                <div className="absolute top-0.5 right-0.5 bg-black/70 rounded p-0.5 text-[8px] text-fuchsia-300 font-mono">
+                                  9:16
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="relative w-11 h-11 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 flex items-center justify-center flex-shrink-0">
+                                {item.media_url ? (
                                   <img
                                     src={item.media_url}
-                                    alt={item.title || 'Story Visual'}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                                    alt={item.title || 'Post thumbnail'}
+                                    className="w-full h-full object-cover"
                                   />
-                                )
-                              ) : (
-                                <div className="w-full h-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-fuchsia-600 dark:text-fuchsia-400">
-                                  <Sparkles className="w-4 h-4" />
-                                </div>
-                              )}
-                              <div className="absolute top-0.5 right-0.5 bg-black/70 rounded p-0.5 text-[8px] text-fuchsia-300 font-mono">
-                                9:16
+                                ) : (
+                                  <ImageIcon className="w-4 h-4 text-slate-400" />
+                                )}
                               </div>
-                            </div>
-                          ) : (
-                            <div className="relative w-11 h-11 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 flex items-center justify-center flex-shrink-0">
-                              {item.media_url ? (
-                                <img
-                                  src={item.media_url}
-                                  alt={item.title || 'Post thumbnail'}
-                                  className="w-full h-full object-cover"
-                                />
+                            )}
+
+                            <div className="flex flex-col space-y-1">
+                              {isStory ? (
+                                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-fuchsia-50 dark:bg-fuchsia-950/60 border border-fuchsia-200 dark:border-fuchsia-800/60 text-fuchsia-700 dark:text-fuchsia-300 text-[10px] font-bold uppercase tracking-wider w-fit">
+                                  <Sparkles className="w-2.5 h-2.5 text-fuchsia-600 dark:text-fuchsia-400" />
+                                  <span>Story</span>
+                                </span>
                               ) : (
-                                <ImageIcon className="w-4 h-4 text-slate-400" />
+                                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold uppercase tracking-wider w-fit">
+                                  <span>Post</span>
+                                </span>
                               )}
+                              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">#{item.id}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Column 2: Title & Summary */}
+                        <td className="p-3 max-w-xs sm:max-w-sm">
+                          <h4 className="font-semibold text-slate-900 dark:text-slate-100 text-xs truncate">
+                            {item.title || (item.caption && item.caption.trim() ? item.caption.slice(0, 45) + '...' : isStory ? '24-Hour Story' : 'Untitled Post')}
+                          </h4>
+                          <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate mt-0.5">
+                            {item.caption || (isStory ? `Story Media (${item.media_type || 'image'})` : 'No caption')}
+                          </p>
+                          {(item.fb_id || item.ig_id) && (
+                            <div className="flex items-center space-x-2 mt-1 text-[10px] font-mono text-indigo-600 dark:text-indigo-400">
+                              {item.fb_id && <span>FB: {item.fb_id}</span>}
+                              {item.ig_id && <span>IG: {item.ig_id}</span>}
                             </div>
                           )}
+                        </td>
 
-                          <div className="flex flex-col space-y-1">
-                            {isStory ? (
-                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-fuchsia-50 dark:bg-fuchsia-950/60 border border-fuchsia-200 dark:border-fuchsia-800/60 text-fuchsia-700 dark:text-fuchsia-300 text-[10px] font-bold uppercase tracking-wider w-fit">
-                                <Sparkles className="w-2.5 h-2.5 text-fuchsia-600 dark:text-fuchsia-400" />
-                                <span>Story</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold uppercase tracking-wider w-fit">
-                                <span>Post</span>
+                        {/* Column 3: Targets & Platforms */}
+                        <td className="p-3">
+                          <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                            {item.platforms.includes('facebook') && (
+                              <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-300 text-[10px] font-semibold">
+                                Facebook
                               </span>
                             )}
-                            <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">#{item.id}</span>
+                            {item.platforms.includes('instagram') && (
+                              <span className="px-2 py-0.5 rounded bg-pink-50 dark:bg-pink-950/60 border border-pink-200 dark:border-pink-800/60 text-pink-700 dark:text-pink-300 text-[10px] font-semibold">
+                                Instagram
+                              </span>
+                            )}
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Column 2: Title & Summary */}
-                      <td className="p-3 max-w-xs sm:max-w-sm">
-                        <h4 className="font-semibold text-slate-900 dark:text-slate-100 text-xs truncate">
-                          {item.title || (item.caption && item.caption.trim() ? item.caption.slice(0, 45) + '...' : isStory ? '24-Hour Story' : 'Untitled Post')}
-                        </h4>
-                        <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate mt-0.5">
-                          {item.caption || (isStory ? `Story Media (${item.media_type || 'image'})` : 'No caption')}
-                        </p>
-                        {(item.fb_id || item.ig_id) && (
-                          <div className="flex items-center space-x-2 mt-1 text-[10px] font-mono text-indigo-600 dark:text-indigo-400">
-                            {item.fb_id && <span>FB: {item.fb_id}</span>}
-                            {item.ig_id && <span>IG: {item.ig_id}</span>}
-                          </div>
-                        )}
-                      </td>
+                        {/* Column 4: Status */}
+                        <td className="p-3">
+                          <PostStatusBadge status={item.status} />
+                        </td>
 
-                      {/* Column 3: Targets & Platforms */}
-                      <td className="p-3">
-                        <div className="flex items-center space-x-1.5 flex-wrap gap-1">
-                          {item.platforms.includes('facebook') && (
-                            <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-300 text-[10px] font-semibold">
-                              Facebook
+                        {/* Column 5: Scheduled / Published */}
+                        <td className="p-3 text-slate-700 dark:text-slate-300 font-mono text-[11px]">
+                          {item.published_at ? (
+                            <span className="text-indigo-700 dark:text-indigo-300 flex items-center space-x-1">
+                              <CheckCircle className="w-3 h-3 text-indigo-600 dark:text-indigo-400 inline flex-shrink-0" />
+                              <span>{formatToLocalDateTime(item.published_at)}</span>
                             </span>
-                          )}
-                          {item.platforms.includes('instagram') && (
-                            <span className="px-2 py-0.5 rounded bg-pink-50 dark:bg-pink-950/60 border border-pink-200 dark:border-pink-800/60 text-pink-700 dark:text-pink-300 text-[10px] font-semibold">
-                              Instagram
+                          ) : item.scheduled_at ? (
+                            <span className="text-sky-700 dark:text-sky-300 flex items-center space-x-1">
+                              <Clock className="w-3 h-3 text-sky-600 dark:text-sky-400 inline flex-shrink-0" />
+                              <span>{formatToLocalDateTime(item.scheduled_at)}</span>
                             </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Column 4: Status */}
-                      <td className="p-3">
-                        <PostStatusBadge status={item.status} />
-                      </td>
-
-                      {/* Column 5: Scheduled / Published */}
-                      <td className="p-3 text-slate-700 dark:text-slate-300 font-mono text-[11px]">
-                        {item.published_at ? (
-                          <span className="text-indigo-700 dark:text-indigo-300 flex items-center space-x-1">
-                            <CheckCircle className="w-3 h-3 text-indigo-600 dark:text-indigo-400 inline flex-shrink-0" />
-                            <span>{formatToLocalDateTime(item.published_at)}</span>
-                          </span>
-                        ) : item.scheduled_at ? (
-                          <span className="text-sky-700 dark:text-sky-300 flex items-center space-x-1">
-                            <Clock className="w-3 h-3 text-sky-600 dark:text-sky-400 inline flex-shrink-0" />
-                            <span>{formatToLocalDateTime(item.scheduled_at)}</span>
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 dark:text-slate-500">—</span>
-                        )}
-                      </td>
-
-                      {/* Column 6: Actions */}
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end space-x-1.5">
-                          {isStory ? (
-                            <StoryActionButtons
-                              item={item}
-                              onOpenPreview={() => setPreviewStory(item)}
-                            />
                           ) : (
-                            <ViewPostButton item={item} />
+                            <span className="text-slate-400 dark:text-slate-500">—</span>
                           )}
+                        </td>
 
-                          {item.status === 'FAILED' ? (
-                            <button
-                              onClick={() => handleRetryItem(item.id, item.item_type)}
-                              className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold text-[11px] transition flex items-center space-x-1 focus-ring shadow-xs"
-                            >
-                              <RefreshCw className="w-3 h-3" />
-                              <span>Retry</span>
-                            </button>
-                          ) : item.status === 'APPROVED' || item.status === 'DRAFT' ? (
-                            <button
-                              onClick={() => handlePublishNowItem(item.id, item.item_type)}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] transition flex items-center space-x-1 focus-ring shadow-xs"
-                            >
-                              <Send className="w-3 h-3" />
-                              <span>Publish</span>
-                            </button>
-                          ) : null}
-
-                          <button
-                            disabled={deletingItemId === item.id && deletingItemType === item.item_type}
-                            onClick={() => {
-                              setDeleteStatusMessage(null);
-                              setConfirmDeleteItem(item);
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/60 border border-slate-200 hover:border-rose-200 dark:border-slate-700 dark:hover:border-rose-800/60 text-slate-600 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-300 font-semibold text-[11px] transition flex items-center space-x-1 shadow-xs disabled:opacity-50"
-                            title={isStory ? 'Delete / cancel story' : 'Delete post'}
-                          >
-                            {deletingItemId === item.id && deletingItemType === item.item_type ? (
-                              <Loader2 className="w-3 h-3 animate-spin text-rose-500 dark:text-rose-400" />
+                        {/* Column 6: Actions */}
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end space-x-1.5">
+                            {isStory ? (
+                              <StoryActionButtons
+                                item={item}
+                                onOpenPreview={() => setPreviewStory(item)}
+                              />
                             ) : (
-                              <Trash2 className="w-3 h-3" />
+                              <ViewPostButton item={item} />
                             )}
-                            <span>{item.status === 'SCHEDULED' ? 'Cancel' : 'Delete'}</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+
+                            {item.status === 'FAILED' ? (
+                              <button
+                                onClick={() => handleRetryItem(item.id, item.item_type)}
+                                className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold text-[11px] transition flex items-center space-x-1 focus-ring shadow-xs"
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                <span>Retry</span>
+                              </button>
+                            ) : item.status === 'APPROVED' || item.status === 'DRAFT' ? (
+                              <button
+                                onClick={() => handlePublishNowItem(item.id, item.item_type)}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] transition flex items-center space-x-1 focus-ring shadow-xs"
+                              >
+                                <Send className="w-3 h-3" />
+                                <span>Publish</span>
+                              </button>
+                            ) : null}
+
+                            <button
+                              disabled={deletingItemId === item.id && deletingItemType === item.item_type}
+                              onClick={() => {
+                                setDeleteStatusMessage(null);
+                                setConfirmDeleteItem(item);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/60 border border-slate-200 hover:border-rose-200 dark:border-slate-700 dark:hover:border-rose-800/60 text-slate-600 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-300 font-semibold text-[11px] transition flex items-center space-x-1 shadow-xs disabled:opacity-50"
+                              title={isStory ? 'Delete / cancel story' : 'Delete post'}
+                            >
+                              {deletingItemId === item.id && deletingItemType === item.item_type ? (
+                                <Loader2 className="w-3 h-3 animate-spin text-rose-500 dark:text-rose-400" />
+                              ) : (
+                                <Trash2 className="w-3 h-3" />
+                              )}
+                              <span>{item.status === 'SCHEDULED' ? 'Cancel' : 'Delete'}</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ── Day Items Modal (for +N more on calendar) ─────────────────── */}
+      {viewDayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 max-w-lg w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <CalendarDays className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  Scheduled on {viewDayModal.dateStr} ({viewDayModal.items.length})
+                </h3>
+              </div>
+              <button
+                onClick={() => setViewDayModal(null)}
+                className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              {viewDayModal.items.map((item) => {
+                const isStory = item.item_type === 'story';
+                return (
+                  <div
+                    key={`${item.item_type}-${item.id}`}
+                    onClick={() => {
+                      setViewDayModal(null);
+                      if (isStory) setPreviewStory(item);
+                      else setSelectedPostItem(item);
+                    }}
+                    className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 hover:border-indigo-400 dark:hover:border-indigo-600 cursor-pointer transition flex items-center justify-between space-x-3"
+                  >
+                    <div className="flex items-center space-x-3 min-w-0">
+                      {item.thumbnail_url ? (
+                        <img src={item.thumbnail_url} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 flex-shrink-0">
+                          {isStory ? <Sparkles className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
+                          {item.title || item.caption || (isStory ? 'Story Asset' : 'Feed Post')}
+                        </h4>
+                        <p className="text-[10px] font-mono text-slate-500">
+                          {formatShortTime(item.scheduled_at || item.published_at || item.created_at)} • {item.platforms.join(', ')}
+                        </p>
+                      </div>
+                    </div>
+                    <PostStatusBadge status={item.status} />
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+              <button
+                onClick={() => setViewDayModal(null)}
+                className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Post Detail Modal ─────────────────────────────────────────── */}
       {selectedPostItem && (
