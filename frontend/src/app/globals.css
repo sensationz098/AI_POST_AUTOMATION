@@ -149,3 +149,75 @@ html[data-theme='light'] {
 .focus-ring {
   @apply focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-1;
 }
+
+/* 🧱 DESIGN SYSTEM PRIMITIVES 🧱 */
+@layer components {
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center font-medium transition-colors duration-150 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none shadow-xs px-3 py-1.5 text-xs;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center font-medium transition-colors duration-150 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none shadow-xs px-3 py-1.5 text-xs;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center font-medium transition-colors duration-150 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 disabled:opacity-50 disabled:pointer-events-none px-2.5 py-1.5 text-xs;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center font-medium transition-colors duration-150 rounded-lg bg-rose-600 hover:bg-rose-700 text-white focus:outline-none focus:ring-2 focus:ring-rose-500/40 disabled:opacity-50 disabled:pointer-events-none shadow-xs px-3 py-1.5 text-xs;
+  }
+
+  /* Inputs */
+  .input-base {
+    @apply w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 transition-colors duration-150;
+  }
+
+  .select-base {
+    @apply w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 transition-colors duration-150;
+  }
+
+  /* Status Badges */
+  .badge-success {
+    @apply inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60;
+  }
+
+  .badge-warning {
+    @apply inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60;
+  }
+
+  .badge-danger {
+    @apply inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60;
+  }
+
+  .badge-info {
+    @apply inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60;
+  }
+
+  .badge-neutral {
+    @apply inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700;
+  }
+
+  /* Platform Badges */
+  .badge-instagram {
+    @apply inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-pink-50 text-pink-700 border border-pink-200 dark:bg-pink-950/40 dark:text-pink-300 dark:border-pink-800/60;
+  }
+
+  .badge-facebook {
+    @apply inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/60;
+  }
+
+  .badge-youtube {
+    @apply inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800/60;
+  }
+
+  /* Cards */
+  .card-surface {
+    @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs;
+  }
+
+  .card-interactive {
+    @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors duration-150;
+  }
+}
