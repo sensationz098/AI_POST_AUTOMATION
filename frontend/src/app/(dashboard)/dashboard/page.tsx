@@ -184,15 +184,6 @@ export default function AnalyticsDashboardPage() {
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-indigo-600 dark:text-indigo-400' : ''}`} />
           </button>
-
-          {/* Create Post Action */}
-          <Link
-            href="/studio"
-            className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-colors shadow-xs"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>+ Create Post</span>
-          </Link>
         </div>
       </div>
 
@@ -215,40 +206,40 @@ export default function AnalyticsDashboardPage() {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm animate-pulse space-y-3">
+              <div key={i} className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-xs animate-pulse space-y-3">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-800" />
+                  <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-800 flex-shrink-0" />
                   <div className="space-y-1.5 flex-1">
                     <div className="h-3.5 bg-slate-200 dark:bg-slate-800 rounded w-3/4" />
                     <div className="h-2.5 bg-slate-100 dark:bg-slate-800/60 rounded w-1/2" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <div className="h-8 bg-slate-100 dark:bg-slate-800/50 rounded-lg" />
-                  <div className="h-8 bg-slate-100 dark:bg-slate-800/50 rounded-lg" />
+                <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                  <div className="h-4 bg-slate-100 dark:bg-slate-800/50 rounded w-1/3" />
+                  <div className="h-4 bg-slate-100 dark:bg-slate-800/50 rounded w-1/4" />
                 </div>
               </div>
             ))}
           </div>
         ) : filteredAccounts.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center space-y-3 shadow-sm max-w-lg mx-auto">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mx-auto shadow-xs">
-              <Share2 className="w-6 h-6" />
+          <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center space-y-3 shadow-xs max-w-lg mx-auto">
+            <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mx-auto shadow-xs">
+              <Share2 className="w-5 h-5" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                 No social profiles connected
               </h3>
               <p className="text-xs text-slate-600 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
                 Connect your Facebook Pages and Instagram accounts to start tracking live reach, impressions, and publishing metrics.
               </p>
             </div>
-            <div className="pt-2">
+            <div className="pt-1">
               <Link 
                 href="/meta-connect" 
-                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-xs"
+                className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-xs"
               >
                 <span>Connect Meta Accounts</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -256,22 +247,22 @@ export default function AnalyticsDashboardPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {filteredAccounts.map((acc: any) => {
               const isFb = acc.platform === 'facebook';
               return (
                 <div 
                   key={acc.id || acc.account_id} 
-                  className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-4.5 space-y-3.5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                  className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center space-x-3 min-w-0">
                       <img
                         src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
                         alt={acc.account_name}
                         className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
                       />
-                      <div className="min-w-0">
+                      <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center space-x-1.5">
                           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
                             {acc.account_name}
@@ -294,18 +285,18 @@ export default function AnalyticsDashboardPage() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800/60">
-                    <div className="bg-slate-50 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/60">
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block">Followers</span>
-                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                  <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 dark:border-slate-800/60 text-xs">
+                    <div className="flex items-baseline space-x-1.5">
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Followers</span>
+                      <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
                         {(acc.followers_count || 0).toLocaleString()}
-                      </p>
+                      </span>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/60">
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block">Media Posts</span>
-                      <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-0.5 font-mono">
+                    <div className="flex items-baseline space-x-1.5">
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Posts</span>
+                      <span className="font-bold font-mono text-indigo-600 dark:text-indigo-400 text-sm">
                         {acc.media_count != null ? acc.media_count.toLocaleString() : 'Unavailable'}
-                      </p>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -318,9 +309,9 @@ export default function AnalyticsDashboardPage() {
       {/* ── Primary KPI Metrics Grid ──────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Total Followers / Audience */}
-        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-2.5 transition-colors">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-2.5 transition-colors">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-[13px] font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               Total Audience
             </span>
             <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-500/15 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
@@ -328,7 +319,7 @@ export default function AnalyticsDashboardPage() {
             </div>
           </div>
           <div className="space-y-0.5">
-            <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+            <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
               {totalFollowersAll.toLocaleString()}
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -338,9 +329,9 @@ export default function AnalyticsDashboardPage() {
         </div>
 
         {/* KPI 2: Posts Published via SocialAI */}
-        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-2.5 transition-colors">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-2.5 transition-colors">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-[13px] font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               Published Posts
             </span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center text-blue-600 dark:text-blue-400">
@@ -348,7 +339,7 @@ export default function AnalyticsDashboardPage() {
             </div>
           </div>
           <div className="space-y-0.5">
-            <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+            <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
               {(overview?.published_posts || overview?.total_posts || 0).toLocaleString()}
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -358,9 +349,9 @@ export default function AnalyticsDashboardPage() {
         </div>
 
         {/* KPI 3: Total Reach */}
-        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-2.5 transition-colors">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-2.5 transition-colors">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-[13px] font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               Total Reach
             </span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
@@ -368,7 +359,7 @@ export default function AnalyticsDashboardPage() {
             </div>
           </div>
           <div className="space-y-0.5">
-            <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+            <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
               {(overview?.total_reach || 0).toLocaleString()}
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -378,9 +369,9 @@ export default function AnalyticsDashboardPage() {
         </div>
 
         {/* KPI 4: Total Impressions */}
-        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-2.5 transition-colors">
+        <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-2.5 transition-colors">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-[13px] font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               Total Impressions
             </span>
             <div className="w-8 h-8 rounded-lg bg-sky-50 dark:bg-sky-500/15 flex items-center justify-center text-sky-600 dark:text-sky-400">
@@ -388,7 +379,7 @@ export default function AnalyticsDashboardPage() {
             </div>
           </div>
           <div className="space-y-0.5">
-            <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+            <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
               {(overview?.total_impressions || 0).toLocaleString()}
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -399,7 +390,7 @@ export default function AnalyticsDashboardPage() {
       </div>
 
       {/* ── Performance & Reach Trend Chart ───────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div>
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -484,7 +475,7 @@ export default function AnalyticsDashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
         <Link
           href="/studio"
-          className="group bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-800/80 transition-colors flex flex-col justify-between space-y-3"
+          className="group bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs hover:border-indigo-300 dark:hover:border-indigo-800/80 transition-colors flex flex-col justify-between space-y-3"
         >
           <div className="flex items-center justify-between">
             <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/15 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
@@ -506,7 +497,7 @@ export default function AnalyticsDashboardPage() {
 
         <Link
           href="/posts"
-          className="group bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:border-blue-300 dark:hover:border-blue-800/80 transition-colors flex flex-col justify-between space-y-3"
+          className="group bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs hover:border-blue-300 dark:hover:border-blue-800/80 transition-colors flex flex-col justify-between space-y-3"
         >
           <div className="flex items-center justify-between">
             <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center text-blue-600 dark:text-blue-400">
@@ -528,7 +519,7 @@ export default function AnalyticsDashboardPage() {
 
         <Link
           href="/comments"
-          className="group bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-800/80 transition-colors flex flex-col justify-between space-y-3"
+          className="group bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs hover:border-emerald-300 dark:hover:border-emerald-800/80 transition-colors flex flex-col justify-between space-y-3"
         >
           <div className="flex items-center justify-between">
             <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
