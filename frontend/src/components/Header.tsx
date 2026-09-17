@@ -108,9 +108,9 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-14 bg-white dark:bg-[#0B0F17] border-b border-slate-200 dark:border-slate-800/70 px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 select-none text-xs font-sans transition-colors duration-150">
+    <header className="h-14 bg-white dark:bg-[#0B0F17] border-b border-slate-200 dark:border-slate-800/70 px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 select-none font-sans transition-colors duration-150">
       {/* Left: Mobile Menu Toggle & Context Breadcrumbs */}
-      <div className="flex items-center space-x-3 min-w-0">
+      <div className="flex items-center space-x-3.5 min-w-0">
         {onMobileMenuToggle && (
           <button
             onClick={onMobileMenuToggle}
@@ -121,17 +121,17 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        <div className="flex items-center space-x-1.5 text-slate-500 dark:text-slate-400 text-xs font-medium">
-          <span className="font-semibold text-slate-800 dark:text-slate-200">SocialAI</span>
-          <span>/</span>
-          <span className="truncate max-w-[120px] sm:max-w-[180px]">
+        <div className="flex items-center space-x-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+          <span className="font-semibold text-slate-900 dark:text-slate-100">SocialAI</span>
+          <span className="text-slate-300 dark:text-slate-600">/</span>
+          <span className="truncate max-w-[140px] sm:max-w-[200px] text-slate-700 dark:text-slate-300 font-medium">
             {brandName && brandName !== 'Apex Innovations' ? brandName : 'Workspace'}
           </span>
         </div>
 
-        <div className="hidden sm:block h-3.5 w-[1px] bg-slate-200 dark:border-slate-800" />
+        <div className="hidden sm:block h-4 w-[1px] bg-slate-200 dark:bg-slate-800" />
 
-        <div className="hidden sm:inline-flex items-center space-x-1.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 px-2 py-0.5 rounded-full text-[10px] font-medium text-slate-600 dark:text-slate-300">
+        <div className="hidden sm:inline-flex items-center space-x-1.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 px-2.5 py-0.5 rounded-full text-xs font-medium text-slate-600 dark:text-slate-300">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
           <span>Active Persona</span>
         </div>
@@ -141,18 +141,18 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center space-x-2 relative" ref={popoverRef}>
         <Link
           href="/studio"
-          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-xs"
+          className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-colors shadow-xs"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>+ New Post</span>
-          <kbd className="hidden md:inline-block ml-1 px-1.5 py-0.2 rounded bg-indigo-700/60 text-[9px] text-indigo-100 font-mono">
+          <kbd className="hidden md:inline-block ml-1 px-1.5 py-0.2 rounded bg-indigo-700/60 text-[10px] text-indigo-100 font-mono">
             ⌘K
           </kbd>
         </Link>
 
         <Link
           href="/meta-connect"
-          className="hidden sm:inline-flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300 text-xs font-medium transition-colors shadow-xs"
+          className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300 text-sm font-medium transition-colors shadow-xs"
         >
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
           <span>Meta Sync</span>
@@ -198,7 +198,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/80">
               <div className="flex items-center space-x-2">
                 <Activity className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <h3 className="font-bold text-slate-900 dark:text-slate-100">Recent Activities</h3>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Recent Activities</h3>
               </div>
               <button
                 onClick={() => setIsOpen(false)}
@@ -226,10 +226,10 @@ export const Header: React.FC<HeaderProps> = ({
                     className="p-3 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors space-y-1"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800/60 uppercase">
+                      <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800/60 uppercase">
                         {item.action}
                       </span>
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center space-x-1">
+                      <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center space-x-1">
                         <Clock className="w-3 h-3 mr-0.5" />
                         {new Date(item.created_at).toLocaleTimeString([], {
                           hour: '2-digit',
@@ -237,11 +237,11 @@ export const Header: React.FC<HeaderProps> = ({
                         })}
                       </span>
                     </div>
-                    <p className="text-[11px] font-medium text-slate-800 dark:text-slate-200 leading-snug">
+                    <p className="text-xs font-medium text-slate-800 dark:text-slate-200 leading-snug">
                       {item.details || item.action}
                     </p>
                     {item.user_email && (
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
                         By: {item.user_email}
                       </p>
                     )}
@@ -252,7 +252,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Popover Footer */}
             <div className="p-2.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-center">
-              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
                 System Activity Trail Active
               </span>
             </div>
@@ -260,13 +260,13 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* User Profile Chip */}
-        <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 px-2.5 py-1.5 rounded-lg">
-          <UserCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+        <div className="flex items-center space-x-2.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 px-3 py-1.5 rounded-lg">
+          <UserCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
           <div className="flex flex-col leading-tight min-w-0">
-            <span className="font-semibold text-slate-900 dark:text-slate-100 text-[11px] truncate max-w-[100px] sm:max-w-[130px]">
+            <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs truncate max-w-[110px] sm:max-w-[140px]">
               {user?.full_name || user?.email || 'User'}
             </span>
-            <span className="text-[9px] text-slate-500 dark:text-slate-400 truncate">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
               {displayRole}
             </span>
           </div>
