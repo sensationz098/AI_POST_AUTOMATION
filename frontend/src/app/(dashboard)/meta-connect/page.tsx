@@ -523,19 +523,19 @@ export default function MetaConnectPage() {
   const ytChannels = socialAccounts.filter(a => a.platform === 'youtube');
 
   return (
-    <div className="space-y-8 max-w-4xl select-none font-sans text-xs">
+    <div className="space-y-8 max-w-4xl select-none font-sans text-xs text-slate-900 dark:text-slate-100">
       {/* SaaS Linear Header Banner */}
-      <div className="linear-panel p-6 rounded-2xl space-y-4 border border-slate-800 shadow-xl">
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl space-y-4 border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center space-x-3.5">
-            <div className="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 shadow-sm flex-shrink-0">
-              <Share2 className="w-5 h-5 text-indigo-400" />
+            <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-slate-900 border border-indigo-200 dark:border-slate-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-xs flex-shrink-0">
+              <Share2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-slate-100 tracking-tight">
+              <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
                 Connect Social Accounts
               </h1>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                 Authorize your Facebook Pages, Instagram Professional, and YouTube channels seamlessly.
               </p>
             </div>
@@ -546,12 +546,12 @@ export default function MetaConnectPage() {
               <button
                 onClick={handleDisconnectAll}
                 disabled={disconnectingId === 'all'}
-                className="px-3.5 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-200 hover:text-white font-bold text-xs transition flex items-center space-x-2 shadow-lg disabled:opacity-50"
+                className="px-3.5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 dark:bg-rose-950/80 dark:hover:bg-rose-900 dark:border-rose-800/80 dark:text-rose-200 font-bold text-xs transition flex items-center space-x-2 shadow-xs disabled:opacity-50"
               >
                 {disconnectingId === 'all' ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                  <Loader2 className="w-4 h-4 animate-spin text-rose-600 dark:text-rose-400" />
                 ) : (
-                  <Unlink className="w-4 h-4 text-rose-400" />
+                  <Unlink className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                 )}
                 <span>Disconnect All</span>
               </button>
@@ -590,8 +590,8 @@ export default function MetaConnectPage() {
         </div>
 
         {/* Security Assurance Disclaimer */}
-        <div className="flex items-center space-x-2 text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/60">
-          <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+        <div className="flex items-center space-x-2 text-[11px] text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800/60">
+          <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
           <span>
             Strict Token Security: No passwords requested. Access tokens remain server-side and are never exposed to the frontend.
           </span>
@@ -600,15 +600,15 @@ export default function MetaConnectPage() {
 
       {/* Notification Alerts */}
       {oauthSuccess && (
-        <div className="bg-emerald-950/50 border border-emerald-800/80 rounded-xl p-4 text-xs text-emerald-200 flex items-center space-x-3">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+        <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/80 rounded-xl p-4 text-xs text-emerald-800 dark:text-emerald-200 flex items-center space-x-3">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
           <span className="font-medium">{oauthSuccess}</span>
         </div>
       )}
 
       {oauthError && (
-        <div className="bg-rose-950/50 border border-rose-800/80 rounded-xl p-4 text-xs text-rose-200 flex items-center space-x-3">
-          <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+        <div className="bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/80 rounded-xl p-4 text-xs text-rose-800 dark:text-rose-200 flex items-center space-x-3">
+          <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 flex-shrink-0" />
           <span className="font-medium">{oauthError}</span>
         </div>
       )}
@@ -616,14 +616,14 @@ export default function MetaConnectPage() {
       {/* Connected Social Destinations Breakdown */}
       <div className="space-y-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-100 flex items-center space-x-2">
-            <Share2 className="w-4 h-4 text-indigo-400" />
+          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-2">
+            <Share2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span>Connected Social Accounts ({socialAccounts.length})</span>
           </h2>
 
           <button
             onClick={() => setShowManualMode(!showManualMode)}
-            className="text-[10px] font-mono text-slate-400 hover:text-indigo-300 flex items-center space-x-1"
+            className="text-[10px] font-mono text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 flex items-center space-x-1"
           >
             <Key className="w-3 h-3" />
             <span>{showManualMode ? 'Hide Developer Direct Entry' : 'Developer Direct Entry'}</span>
@@ -631,56 +631,56 @@ export default function MetaConnectPage() {
         </div>
 
         {isLoadingAccounts ? (
-          <div className="linear-panel p-8 rounded-xl text-center space-y-2 border border-slate-800">
-            <Loader2 className="w-5 h-5 animate-spin text-indigo-400 mx-auto" />
-            <p className="text-xs text-slate-400">Loading connected Meta accounts...</p>
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-xl text-center space-y-2 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-600 dark:text-indigo-400 mx-auto" />
+            <p className="text-xs text-slate-500 dark:text-slate-400">Loading connected Meta accounts...</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-5">
             {/* Facebook Pages Card */}
-            <div className="linear-panel p-5 rounded-xl space-y-3 border border-slate-800">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
-                <span className="font-bold text-xs text-blue-300 flex items-center space-x-2">
-                  <Facebook className="w-4 h-4 text-blue-400 fill-blue-400/20" />
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-2.5">
+                <span className="font-bold text-xs text-blue-600 dark:text-blue-300 flex items-center space-x-2">
+                  <Facebook className="w-4 h-4 text-blue-600 dark:text-blue-400 fill-blue-600/20" />
                   <span>Facebook Pages ({fbPages.length})</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-400">Target for FB Posts</span>
+                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">Target for FB Posts</span>
               </div>
 
               {fbPages.length === 0 ? (
-                <div className="p-4 rounded bg-slate-900/40 border border-slate-800 text-slate-400 text-xs text-center">
-                  No Facebook Pages connected yet. Click <strong>"Connect with Meta"</strong> above to discover your pages.
+                <div className="p-4 rounded bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-xs text-center">
+                  No Facebook Pages connected yet. Click <strong>"Connect Meta"</strong> above to discover your pages.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {fbPages.map((acc) => (
-                    <div key={acc.id} className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
+                    <div key={acc.id} className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                       <div className="flex items-center space-x-3 min-w-0">
                         <img
                           src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
                           alt={acc.account_name}
-                          className="w-8 h-8 rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                          className="w-8 h-8 rounded-lg object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
                         />
                         <div className="min-w-0">
-                          <h4 className="text-xs font-semibold text-slate-100 truncate">{acc.account_name}</h4>
-                          <span className="text-[10px] font-mono text-slate-400">ID: {acc.account_id}</span>
+                          <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">{acc.account_name}</h4>
+                          <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">ID: {acc.account_id}</span>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-2 flex-shrink-0">
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono">
+                        <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60 text-[9px] font-mono font-semibold">
                           ● Connected
                         </span>
                         <button
                           onClick={() => handleDisconnectAccount(acc.id)}
                           disabled={disconnectingId === acc.id || disconnectingId === 'all'}
-                          className="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-white transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
+                          className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 dark:bg-rose-950/80 dark:hover:bg-rose-900 dark:border-rose-800/80 dark:text-rose-300 transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
                           title="Disconnect Account"
                         >
                           {disconnectingId === acc.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600 dark:text-rose-400" />
                           ) : (
-                            <Unlink className="w-3.5 h-3.5 text-rose-400" />
+                            <Unlink className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                           )}
                           <span>Disconnect</span>
                         </button>
@@ -692,49 +692,49 @@ export default function MetaConnectPage() {
             </div>
 
             {/* Instagram Professional Accounts Card */}
-            <div className="linear-panel p-5 rounded-xl space-y-3 border border-slate-800">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
-                <span className="font-bold text-xs text-indigo-300 flex items-center space-x-2">
-                  <Instagram className="w-4 h-4 text-indigo-400" />
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-2.5">
+                <span className="font-bold text-xs text-pink-600 dark:text-indigo-300 flex items-center space-x-2">
+                  <Instagram className="w-4 h-4 text-pink-600 dark:text-indigo-400" />
                   <span>Instagram Professional Accounts ({igAccounts.length})</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-400">Target for IG Reels & Feed</span>
+                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">Target for IG Reels & Feed</span>
               </div>
 
               {igAccounts.length === 0 ? (
-                <div className="p-4 rounded bg-slate-900/40 border border-slate-800 text-slate-400 text-xs text-center">
+                <div className="p-4 rounded bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-xs text-center">
                   No Instagram Professional accounts connected yet. Link an IG Business account to your Facebook Page to auto-discover it via Meta.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {igAccounts.map((acc) => (
-                    <div key={acc.id} className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
+                    <div key={acc.id} className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                       <div className="flex items-center space-x-3 min-w-0">
                         <img
                           src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
                           alt={acc.account_name}
-                          className="w-8 h-8 rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                          className="w-8 h-8 rounded-lg object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
                         />
                         <div className="min-w-0">
-                          <h4 className="text-xs font-semibold text-slate-100 truncate">{acc.account_name}</h4>
-                          <span className="text-[10px] font-mono text-slate-400">ID: {acc.account_id}</span>
+                          <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">{acc.account_name}</h4>
+                          <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">ID: {acc.account_id}</span>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-2 flex-shrink-0">
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono">
+                        <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60 text-[9px] font-mono font-semibold">
                           ● Connected
                         </span>
                         <button
                           onClick={() => handleDisconnectAccount(acc.id)}
                           disabled={disconnectingId === acc.id || disconnectingId === 'all'}
-                          className="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-white transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
+                          className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 dark:bg-rose-950/80 dark:hover:bg-rose-900 dark:border-rose-800/80 dark:text-rose-300 transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
                           title="Disconnect Account"
                         >
                           {disconnectingId === acc.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600 dark:text-rose-400" />
                           ) : (
-                            <Unlink className="w-3.5 h-3.5 text-rose-400" />
+                            <Unlink className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                           )}
                           <span>Disconnect</span>
                         </button>
@@ -746,51 +746,51 @@ export default function MetaConnectPage() {
             </div>
 
             {/* YouTube Connected Channels Card */}
-            <div className="linear-panel p-5 rounded-xl space-y-3 border border-slate-800">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
-                <span className="font-bold text-xs text-rose-300 flex items-center space-x-2">
-                  <Youtube className="w-4 h-4 text-red-400" />
+            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-2.5">
+                <span className="font-bold text-xs text-red-600 dark:text-rose-300 flex items-center space-x-2">
+                  <Youtube className="w-4 h-4 text-red-600 dark:text-red-400" />
                   <span>YouTube Channels ({ytChannels.length})</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-400">Target for YouTube Videos & Shorts</span>
+                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">Target for YouTube Videos & Shorts</span>
               </div>
 
               {ytChannels.length === 0 ? (
-                <div className="p-4 rounded bg-slate-900/40 border border-slate-800 text-slate-400 text-xs text-center">
+                <div className="p-4 rounded bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-xs text-center">
                   No YouTube channels connected yet. Click <strong>&quot;Connect YouTube&quot;</strong> above to authorize your YouTube channel.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {ytChannels.map((acc) => (
-                    <div key={acc.id} className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
+                    <div key={acc.id} className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                       <div className="flex items-center space-x-3 min-w-0">
                         <img
                           src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
                           alt={acc.account_name}
-                          className="w-8 h-8 rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                          className="w-8 h-8 rounded-lg object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
                         />
                         <div className="min-w-0">
-                          <h4 className="text-xs font-semibold text-slate-100 truncate">{acc.account_name}</h4>
-                          <span className="text-[10px] font-mono text-slate-400">
+                          <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">{acc.account_name}</h4>
+                          <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
                             {acc.metadata_json?.custom_url ? `${acc.metadata_json.custom_url} • ` : ''}ID: {acc.account_id}
                           </span>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-2 flex-shrink-0">
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono">
+                        <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60 text-[9px] font-mono font-semibold">
                           ● Connected
                         </span>
                         <button
                           onClick={() => handleDisconnectAccount(acc.id)}
                           disabled={disconnectingId === acc.id || disconnectingId === 'all'}
-                          className="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-white transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
+                          className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 dark:bg-rose-950/80 dark:hover:bg-rose-900 dark:border-rose-800/80 dark:text-rose-300 transition flex items-center space-x-1.5 disabled:opacity-50 text-[11px] font-semibold"
                           title="Disconnect Channel"
                         >
                           {disconnectingId === acc.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600 dark:text-rose-400" />
                           ) : (
-                            <Unlink className="w-3.5 h-3.5 text-rose-400" />
+                            <Unlink className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                           )}
                           <span>Disconnect</span>
                         </button>
@@ -805,17 +805,17 @@ export default function MetaConnectPage() {
       </div>
 
       {/* Meta Ad Accounts Discovery Section */}
-      <div className="linear-panel p-5 rounded-xl space-y-4 border border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-xl space-y-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-950/60 border border-indigo-800/60 flex items-center justify-center text-indigo-400">
-              <Megaphone className="w-4 h-4 text-indigo-400" />
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <Megaphone className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             </div>
             <div>
-              <h2 className="text-xs font-bold text-slate-100 uppercase tracking-wider">
+              <h2 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
                 Meta Ad Accounts ({adAccounts.length})
               </h2>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-slate-600 dark:text-slate-400">
                 Discovered accessible Meta Ad Accounts via ads_read permission.
               </p>
             </div>
@@ -824,7 +824,7 @@ export default function MetaConnectPage() {
           <button
             onClick={handleSyncAdAccounts}
             disabled={isSyncingAdAccounts || isLoadingAdAccounts}
-            className="px-3.5 py-2 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-white font-semibold text-xs transition flex items-center space-x-2 shadow-md disabled:opacity-50 flex-shrink-0"
+            className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition flex items-center space-x-2 shadow-sm disabled:opacity-50 flex-shrink-0"
           >
             {isSyncingAdAccounts ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
@@ -836,22 +836,22 @@ export default function MetaConnectPage() {
         </div>
 
         {adAccountSuccess && (
-          <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-lg p-3 text-xs text-emerald-300 flex items-center space-x-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-lg p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
             <span>{adAccountSuccess}</span>
           </div>
         )}
 
         {adAccountError && (
-          <div className="bg-rose-950/40 border border-rose-800/60 rounded-lg p-3 text-xs text-rose-300 flex items-center justify-between gap-2">
+          <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-lg p-3 text-xs text-rose-800 dark:text-rose-300 flex items-center justify-between gap-2">
             <div className="flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0" />
               <span>{adAccountError}</span>
             </div>
             {adAccountError.toLowerCase().includes('permission') && (
               <button
                 onClick={handleConnectMetaOAuth}
-                className="px-2.5 py-1 bg-rose-900 hover:bg-rose-800 text-white rounded text-[10px] font-bold transition flex-shrink-0"
+                className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[10px] font-bold transition flex-shrink-0"
               >
                 Reconnect Meta
               </button>
@@ -861,20 +861,20 @@ export default function MetaConnectPage() {
 
         {isLoadingAdAccounts ? (
           <div className="p-6 text-center space-y-2">
-            <Loader2 className="w-5 h-5 animate-spin text-indigo-400 mx-auto" />
-            <p className="text-xs text-slate-400">Loading accessible Meta Ad Accounts...</p>
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-600 dark:text-indigo-400 mx-auto" />
+            <p className="text-xs text-slate-500 dark:text-slate-400">Loading accessible Meta Ad Accounts...</p>
           </div>
         ) : adAccounts.length === 0 ? (
-          <div className="p-5 rounded-lg bg-slate-900/40 border border-slate-800/80 text-center space-y-2">
-            <Megaphone className="w-6 h-6 text-slate-600 mx-auto" />
-            <p className="text-xs font-semibold text-slate-300">No Meta Ad Accounts Discovered</p>
-            <p className="text-[11px] text-slate-400 max-w-md mx-auto">
+          <div className="p-5 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 text-center space-y-2">
+            <Megaphone className="w-6 h-6 text-slate-400 dark:text-slate-600 mx-auto" />
+            <p className="text-xs font-semibold text-slate-800 dark:text-slate-300">No Meta Ad Accounts Discovered</p>
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 max-w-md mx-auto">
               Ensure your Meta user account has access to Ad Accounts in Meta Business Manager and that <strong>ads_read</strong> permission was granted.
             </p>
             <button
               onClick={handleSyncAdAccounts}
               disabled={isSyncingAdAccounts}
-              className="mt-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium transition"
+              className="mt-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium transition"
             >
               Sync Ad Accounts Now
             </button>
@@ -892,33 +892,33 @@ export default function MetaConnectPage() {
               const sSuccess = adSyncSuccess[acctId];
 
               return (
-                <div key={acc.id} className="bg-slate-900/60 rounded-xl border border-slate-800 overflow-hidden">
+                <div key={acc.id} className="bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
                   {/* Ad Account Header */}
-                  <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/80">
+                  <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900/80 border-b border-slate-100 dark:border-transparent">
                     <div className="space-y-1 min-w-0 pr-2">
                       <div className="flex items-center space-x-2">
-                        <h4 className="text-xs font-bold text-slate-100 truncate">{acc.name || 'Meta Ad Account'}</h4>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{acc.name || 'Meta Ad Account'}</h4>
                         <span
                           className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold flex-shrink-0 border ${
                             isActive
-                              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
-                              : 'bg-amber-950/60 text-amber-300 border-amber-800/60'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60'
+                              : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60'
                           }`}
                         >
                           ● {acc.status_label || (isActive ? 'ACTIVE' : 'DISABLED')}
                         </span>
                       </div>
-                      <div className="flex items-center space-x-3 text-[10px] text-slate-400 font-mono">
+                      <div className="flex items-center space-x-3 text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                         <span>ID: {acctId}</span>
                         {acc.currency && (
                           <span className="flex items-center space-x-1">
-                            <DollarSign className="w-3 h-3 text-slate-500" />
+                            <DollarSign className="w-3 h-3 text-slate-400 dark:text-slate-500" />
                             <span>{acc.currency}</span>
                           </span>
                         )}
                         {acc.timezone_name && (
                           <span className="flex items-center space-x-1 truncate max-w-[140px]" title={acc.timezone_name}>
-                            <Globe className="w-3 h-3 text-slate-500" />
+                            <Globe className="w-3 h-3 text-slate-400 dark:text-slate-500" />
                             <span className="truncate">{acc.timezone_name}</span>
                           </span>
                         )}
@@ -929,13 +929,13 @@ export default function MetaConnectPage() {
                       <button
                         onClick={() => handleSyncCommentsForAccount(acctId)}
                         disabled={isSyncingAdComments[acctId] || syncing || loading}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 hover:text-white border border-indigo-700/60 font-medium text-xs transition flex items-center space-x-1.5 disabled:opacity-50"
+                        className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 dark:text-indigo-300 dark:hover:text-white border border-indigo-200 dark:border-indigo-700/60 font-medium text-xs transition flex items-center space-x-1.5 disabled:opacity-50"
                         title="Fetch user comments from Meta Graph API for active backing ad posts"
                       >
                         {isSyncingAdComments[acctId] ? (
-                          <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+                          <Loader2 className="w-3 h-3 animate-spin text-indigo-600 dark:text-indigo-400" />
                         ) : (
-                          <MessageSquare className="w-3 h-3 text-indigo-400" />
+                          <MessageSquare className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
                         )}
                         <span>{isSyncingAdComments[acctId] ? 'Syncing Active Comments...' : 'Sync Active Comments'}</span>
                       </button>
@@ -943,38 +943,38 @@ export default function MetaConnectPage() {
                       <button
                         onClick={() => handleSyncAdsForAccount(acctId)}
                         disabled={syncing || loading}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 text-white font-medium text-xs transition flex items-center space-x-1.5 disabled:opacity-50"
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition flex items-center space-x-1.5 disabled:opacity-50 shadow-xs"
                       >
                         {syncing ? (
                           <Loader2 className="w-3 h-3 animate-spin text-white" />
                         ) : (
-                          <RefreshCw className="w-3 h-3 text-indigo-200" />
+                          <RefreshCw className="w-3 h-3 text-indigo-100" />
                         )}
                         <span>{syncing ? 'Syncing Ads...' : 'Sync Ads'}</span>
                       </button>
 
                       <button
                         onClick={() => toggleExpandAdAccount(acctId)}
-                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs transition flex items-center space-x-1 border border-slate-700/60"
+                        className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium text-xs transition flex items-center space-x-1 border border-slate-200 dark:border-slate-700/60"
                       >
                         <span>{isExpanded ? 'Hide Ads' : `View Ads (${ads.length})`}</span>
-                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        <ChevronDown className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                       </button>
                     </div>
                   </div>
 
                   {/* Sync Feedback messages */}
                   {adCommentSyncProgress[acctId] && (
-                    <div className="mx-4 mt-3 bg-blue-950/40 border border-blue-800/60 rounded-lg p-2.5 text-xs text-blue-300 flex items-center space-x-2 animate-pulse">
-                      <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin flex-shrink-0" />
+                    <div className="mx-4 mt-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-lg p-2.5 text-xs text-blue-800 dark:text-blue-300 flex items-center space-x-2 animate-pulse">
+                      <Loader2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-spin flex-shrink-0" />
                       <span>{adCommentSyncProgress[acctId]}</span>
                     </div>
                   )}
 
                   {adCommentSyncSuccess[acctId] && (
-                    <div className="mx-4 mt-3 bg-indigo-950/40 border border-indigo-800/60 rounded-lg p-2.5 text-xs text-indigo-300 flex items-center justify-between gap-2">
+                    <div className="mx-4 mt-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 rounded-lg p-2.5 text-xs text-indigo-800 dark:text-indigo-300 flex items-center justify-between gap-2">
                       <div className="flex items-center space-x-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                         <span>{adCommentSyncSuccess[acctId]}</span>
                       </div>
                       <Link
@@ -988,29 +988,29 @@ export default function MetaConnectPage() {
                   )}
 
                   {adCommentSyncError[acctId] && (
-                    <div className="mx-4 mt-3 bg-rose-950/40 border border-rose-800/60 rounded-lg p-2.5 text-xs text-rose-300 flex items-center space-x-2">
-                      <AlertCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                    <div className="mx-4 mt-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-lg p-2.5 text-xs text-rose-800 dark:text-rose-300 flex items-center space-x-2">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 flex-shrink-0" />
                       <span>{adCommentSyncError[acctId]}</span>
                     </div>
                   )}
 
                   {sSuccess && (
-                    <div className="mx-4 mt-3 bg-emerald-950/40 border border-emerald-800/60 rounded-lg p-2.5 text-xs text-emerald-300 flex items-center space-x-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                    <div className="mx-4 mt-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-lg p-2.5 text-xs text-emerald-800 dark:text-emerald-300 flex items-center space-x-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                       <span>{sSuccess}</span>
                     </div>
                   )}
 
                   {sError && (
-                    <div className="mx-4 mt-3 bg-rose-950/40 border border-rose-800/60 rounded-lg p-2.5 text-xs text-rose-300 flex items-center justify-between gap-2">
+                    <div className="mx-4 mt-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-lg p-2.5 text-xs text-rose-800 dark:text-rose-300 flex items-center justify-between gap-2">
                       <div className="flex items-center space-x-2">
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 flex-shrink-0" />
                         <span>{sError}</span>
                       </div>
                       {sError.toLowerCase().includes('permission') && (
                         <button
                           onClick={handleConnectMetaOAuth}
-                          className="px-2 py-0.5 bg-rose-900 hover:bg-rose-800 text-white rounded text-[10px] font-bold transition flex-shrink-0"
+                          className="px-2 py-0.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-[10px] font-bold transition flex-shrink-0"
                         >
                           Reconnect Meta
                         </button>
@@ -1020,22 +1020,22 @@ export default function MetaConnectPage() {
 
                   {/* Expanded Ads & Engagement Mappings List */}
                   {isExpanded && (
-                    <div className="p-4 border-t border-slate-800/80 bg-slate-950/50 space-y-4">
+                    <div className="p-4 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-950/50 space-y-4">
                       {loading ? (
                         <div className="p-4 text-center space-y-2">
-                          <Loader2 className="w-4 h-4 animate-spin text-indigo-400 mx-auto" />
-                          <p className="text-[11px] text-slate-400">Loading discovered ads for account...</p>
+                          <Loader2 className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400 mx-auto" />
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">Loading discovered ads for account...</p>
                         </div>
                       ) : ads.length === 0 ? (
-                        <div className="p-4 text-center space-y-1 bg-slate-900/40 rounded-lg border border-slate-800/60">
-                          <FileText className="w-5 h-5 text-slate-600 mx-auto" />
-                          <p className="text-xs font-semibold text-slate-300">No Ads Discovered</p>
-                          <p className="text-[11px] text-slate-400">Click "Sync Ads" to fetch ads and extract engagement mappings from Meta.</p>
+                        <div className="p-4 text-center space-y-1 bg-white dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-800/60">
+                          <FileText className="w-5 h-5 text-slate-400 dark:text-slate-600 mx-auto" />
+                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-300">No Ads Discovered</p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">Click "Sync Ads" to fetch ads and extract engagement mappings from Meta.</p>
                         </div>
                       ) : (
                         <div className="space-y-4">
                           {/* Search & Dynamic Status Filter Bar */}
-                          <div className="bg-slate-900/90 rounded-lg p-3 border border-slate-800/90 space-y-3">
+                          <div className="bg-white dark:bg-slate-900/90 rounded-lg p-3 border border-slate-200 dark:border-slate-800/90 space-y-3 shadow-xs">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                               {/* Search Input */}
                               <div className="relative flex-1 min-w-[220px]">
@@ -1048,7 +1048,7 @@ export default function MetaConnectPage() {
                                     setAdCurrentPage(1);
                                   }}
                                   placeholder="Search ads, campaigns or ad sets..."
-                                  className="w-full pl-9 pr-8 py-1.5 bg-slate-950/80 text-slate-200 placeholder-slate-500 rounded-md border border-slate-700/80 text-xs focus:outline-none focus:border-indigo-500 transition"
+                                  className="w-full pl-9 pr-8 py-1.5 bg-slate-50 dark:bg-slate-950/80 text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 rounded-md border border-slate-300 dark:border-slate-700/80 text-xs focus:outline-none focus:border-indigo-500 transition"
                                 />
                                 {adSearchQuery && (
                                   <button
@@ -1056,7 +1056,7 @@ export default function MetaConnectPage() {
                                       setAdSearchQuery('');
                                       setAdCurrentPage(1);
                                     }}
-                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-0.5"
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
                                   >
                                     <X className="w-3.5 h-3.5" />
                                   </button>
@@ -1073,7 +1073,7 @@ export default function MetaConnectPage() {
                                   className={`px-2.5 py-1 rounded-md text-[11px] transition ${
                                     adStatusFilter === 'ALL'
                                       ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 border border-slate-700/60 font-medium'
+                                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 font-medium'
                                   }`}
                                 >
                                   All ({statusCounts.ALL || 0})
@@ -1088,7 +1088,7 @@ export default function MetaConnectPage() {
                                     className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition ${
                                       adStatusFilter === st
                                         ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 border border-slate-700/60 font-medium'
+                                        : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700/60 font-medium'
                                     }`}
                                   >
                                     {st} ({statusCounts[st] || 0})
@@ -1098,9 +1098,9 @@ export default function MetaConnectPage() {
                             </div>
 
                             {/* Summary Bar */}
-                            <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/60 pt-2 px-0.5 gap-2">
+                            <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800/60 pt-2 px-0.5 gap-2">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-semibold text-slate-300">
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">
                                   {filteredAds.length === 0
                                     ? '0 ads found'
                                     : `Showing ${
@@ -1113,7 +1113,7 @@ export default function MetaConnectPage() {
                                       }ads`}
                                 </span>
                                 {adSearchQuery.trim() !== '' && (
-                                  <span className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded text-[10px] italic">
+                                  <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded text-[10px] italic">
                                     matching "{adSearchQuery}"
                                   </span>
                                 )}
@@ -1127,10 +1127,10 @@ export default function MetaConnectPage() {
 
                           {/* Empty Filter Results State */}
                           {filteredAds.length === 0 ? (
-                            <div className="p-6 text-center space-y-2 bg-slate-900/40 rounded-lg border border-slate-800/60">
-                              <Filter className="w-5 h-5 text-slate-500 mx-auto" />
-                              <p className="text-xs font-semibold text-slate-300">No Ads Match Filter Criteria</p>
-                              <p className="text-[11px] text-slate-400">
+                            <div className="p-6 text-center space-y-2 bg-white dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-800/60">
+                              <Filter className="w-5 h-5 text-slate-400 dark:text-slate-500 mx-auto" />
+                              <p className="text-xs font-semibold text-slate-800 dark:text-slate-300">No Ads Match Filter Criteria</p>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400">
                                 Try adjusting your search query or status filter.
                               </p>
                               <button
@@ -1139,7 +1139,7 @@ export default function MetaConnectPage() {
                                   setAdSearchQuery('');
                                   setAdCurrentPage(1);
                                 }}
-                                className="mt-1 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 text-xs rounded-md border border-slate-700 transition"
+                                className="mt-1 px-3 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-300 text-xs rounded-md border border-slate-200 dark:border-slate-700 transition"
                               >
                                 Reset Filters
                               </button>
@@ -1152,18 +1152,18 @@ export default function MetaConnectPage() {
                                 const isPartial = ad.mapping_status === 'PARTIALLY_MAPPED';
 
                                 return (
-                                  <div key={ad.id} className="bg-slate-900/90 rounded-lg p-3 border border-slate-800/90 space-y-2">
+                                  <div key={ad.id} className="bg-white dark:bg-slate-900/90 rounded-lg p-3 border border-slate-200 dark:border-slate-800/90 space-y-2 shadow-xs">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                       <div className="space-y-0.5 min-w-0">
                                         <div className="flex items-center space-x-2">
-                                          <h5 className="text-xs font-bold text-slate-100 truncate">{ad.name || 'Meta Ad'}</h5>
+                                          <h5 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{ad.name || 'Meta Ad'}</h5>
                                           {ad.effective_status && (
-                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                               {ad.effective_status}
                                             </span>
                                           )}
                                         </div>
-                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] font-mono text-slate-400">
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] font-mono text-slate-500 dark:text-slate-400">
                                           <span>Ad ID: {ad.meta_ad_id}</span>
                                           {ad.campaign_name && <span>Campaign: {ad.campaign_name}</span>}
                                           {ad.adset_name && <span>AdSet: {ad.adset_name}</span>}
@@ -1175,16 +1175,16 @@ export default function MetaConnectPage() {
                                       <span
                                         className={`px-2.5 py-1 rounded-md text-[10px] font-bold flex items-center space-x-1 border flex-shrink-0 self-start sm:self-center ${
                                           isMapped
-                                            ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/70'
+                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-800/70'
                                             : isPartial
-                                            ? 'bg-amber-950/70 text-amber-300 border-amber-800/70'
-                                            : 'bg-slate-800/80 text-slate-400 border-slate-700/60'
+                                            ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/70 dark:text-amber-300 dark:border-amber-800/70'
+                                            : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/80 dark:text-slate-400 dark:border-slate-700/60'
                                         }`}
                                       >
                                         {isMapped ? (
-                                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                                         ) : isPartial ? (
-                                          <AlertCircle className="w-3 h-3 text-amber-400" />
+                                          <AlertCircle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                                         ) : (
                                           <HelpCircle className="w-3 h-3 text-slate-400" />
                                         )}
@@ -1199,36 +1199,36 @@ export default function MetaConnectPage() {
                                     </div>
 
                                     {/* Engagement Object Details Box */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-800/60 text-[11px]">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/60 text-[11px]">
                                       {/* Facebook Engagement */}
-                                      <div className="bg-slate-950/60 p-2 rounded border border-slate-800/80 space-y-1">
-                                        <div className="flex items-center space-x-1.5 text-blue-400 font-semibold text-[10px]">
-                                          <Facebook className="w-3.5 h-3.5 text-blue-400" />
+                                      <div className="bg-slate-50 dark:bg-slate-950/60 p-2 rounded border border-slate-200 dark:border-slate-800/80 space-y-1">
+                                        <div className="flex items-center space-x-1.5 text-blue-600 dark:text-blue-400 font-semibold text-[10px]">
+                                          <Facebook className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                                           <span>Facebook Engagement Object</span>
                                         </div>
                                         {ad.facebook_post_id ? (
-                                          <div className="space-y-0.5 font-mono text-[10px] text-slate-300">
-                                            <div className="truncate"><span className="text-slate-500">Post ID:</span> {ad.facebook_post_id}</div>
-                                            {ad.facebook_page_id && <div className="truncate"><span className="text-slate-500">Page ID:</span> {ad.facebook_page_id}</div>}
+                                          <div className="space-y-0.5 font-mono text-[10px] text-slate-700 dark:text-slate-300">
+                                            <div className="truncate"><span className="text-slate-400 dark:text-slate-500">Post ID:</span> {ad.facebook_post_id}</div>
+                                            {ad.facebook_page_id && <div className="truncate"><span className="text-slate-400 dark:text-slate-500">Page ID:</span> {ad.facebook_page_id}</div>}
                                           </div>
                                         ) : (
-                                          <p className="text-[10px] text-slate-500 italic">No Facebook Post linked</p>
+                                          <p className="text-[10px] text-slate-400 dark:text-slate-500 italic">No Facebook Post linked</p>
                                         )}
                                       </div>
 
                                       {/* Instagram Engagement */}
-                                      <div className="bg-slate-950/60 p-2 rounded border border-slate-800/80 space-y-1">
-                                        <div className="flex items-center space-x-1.5 text-pink-400 font-semibold text-[10px]">
-                                          <Instagram className="w-3.5 h-3.5 text-pink-400" />
+                                      <div className="bg-slate-50 dark:bg-slate-950/60 p-2 rounded border border-slate-200 dark:border-slate-800/80 space-y-1">
+                                        <div className="flex items-center space-x-1.5 text-pink-600 dark:text-pink-400 font-semibold text-[10px]">
+                                          <Instagram className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400" />
                                           <span>Instagram Engagement Object</span>
                                         </div>
                                         {ad.instagram_media_id ? (
-                                          <div className="space-y-0.5 font-mono text-[10px] text-slate-300">
-                                            <div className="truncate"><span className="text-slate-500">Media ID:</span> {ad.instagram_media_id}</div>
-                                            {ad.instagram_account_id && <div className="truncate"><span className="text-slate-500">IG Account ID:</span> {ad.instagram_account_id}</div>}
+                                          <div className="space-y-0.5 font-mono text-[10px] text-slate-700 dark:text-slate-300">
+                                            <div className="truncate"><span className="text-slate-400 dark:text-slate-500">Media ID:</span> {ad.instagram_media_id}</div>
+                                            {ad.instagram_account_id && <div className="truncate"><span className="text-slate-400 dark:text-slate-500">IG Account ID:</span> {ad.instagram_account_id}</div>}
                                           </div>
                                         ) : (
-                                          <p className="text-[10px] text-slate-500 italic">No Instagram Media linked</p>
+                                          <p className="text-[10px] text-slate-400 dark:text-slate-500 italic">No Instagram Media linked</p>
                                         )}
                                       </div>
                                     </div>
@@ -1238,25 +1238,25 @@ export default function MetaConnectPage() {
 
                               {/* Pagination Navigation Footer */}
                               {totalPages > 1 && (
-                                <div className="flex items-center justify-between pt-3 border-t border-slate-800/80 text-xs">
+                                <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800/80 text-xs">
                                   <button
                                     disabled={validCurrentPage <= 1}
                                     onClick={() => setAdCurrentPage((prev) => Math.max(1, prev - 1))}
-                                    className="flex items-center space-x-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-slate-900 text-slate-300 rounded-md border border-slate-800 transition font-medium text-[11px]"
+                                    className="flex items-center space-x-1 px-3 py-1.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 text-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-800 transition font-medium text-[11px]"
                                   >
                                     <ChevronLeft className="w-3.5 h-3.5" />
                                     <span>Previous</span>
                                   </button>
 
-                                  <span className="text-[11px] font-medium text-slate-400 font-mono">
-                                    Page <strong className="text-slate-200">{validCurrentPage}</strong> of{' '}
-                                    <strong className="text-slate-200">{totalPages}</strong>
+                                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 font-mono">
+                                    Page <strong className="text-slate-900 dark:text-slate-200">{validCurrentPage}</strong> of{' '}
+                                    <strong className="text-slate-900 dark:text-slate-200">{totalPages}</strong>
                                   </span>
 
                                   <button
                                     disabled={validCurrentPage >= totalPages}
                                     onClick={() => setAdCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                                    className="flex items-center space-x-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-slate-900 text-slate-300 rounded-md border border-slate-800 transition font-medium text-[11px]"
+                                    className="flex items-center space-x-1 px-3 py-1.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 text-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-800 transition font-medium text-[11px]"
                                   >
                                     <span>Next</span>
                                     <ChevronRight className="w-3.5 h-3.5" />
@@ -1278,19 +1278,19 @@ export default function MetaConnectPage() {
 
       {/* Developer Direct Entry Modal Form */}
       {showManualMode && (
-        <form onSubmit={handleSaveManual} className="linear-panel p-6 rounded-2xl space-y-4 border border-indigo-500/30">
+        <form onSubmit={handleSaveManual} className="bg-white dark:bg-slate-900 p-6 rounded-2xl space-y-4 border border-indigo-200 dark:border-indigo-500/30 shadow-sm">
           <div className="flex items-center space-x-2">
-            <Key className="w-4 h-4 text-indigo-400" />
-            <h3 className="text-xs font-bold text-slate-100">Developer Direct Entry (Manual Token Mode)</h3>
+            <Key className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">Developer Direct Entry (Manual Token Mode)</h3>
           </div>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-600 dark:text-slate-400">
             For local testing or Graph API Explorer tokens. Enter custom Page ID, Access Token, and Instagram ID manually.
           </p>
 
           <div className="space-y-3">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                Access Token (User or Page Token) <span className="text-rose-400">*</span>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Access Token (User or Page Token) <span className="text-rose-500 dark:text-rose-400">*</span>
               </label>
               <textarea
                 rows={2}
@@ -1298,55 +1298,55 @@ export default function MetaConnectPage() {
                 value={manualToken}
                 onChange={(e) => setManualToken(e.target.value)}
                 placeholder="EAABwz1XkREYBAIJlLUXdAZBfq..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-indigo-300 font-mono focus:outline-none focus:border-indigo-500 resize-none"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg p-2.5 text-xs text-indigo-700 dark:text-indigo-300 font-mono focus:outline-none focus:border-indigo-500 resize-none"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Facebook Page ID *</label>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Facebook Page ID *</label>
                 <input
                   type="text"
                   required
                   value={manualPageId}
                   onChange={(e) => setManualPageId(e.target.value)}
                   placeholder="e.g. 109823471029481"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Facebook Page Name</label>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Facebook Page Name</label>
                 <input
                   type="text"
                   value={manualPageName}
                   onChange={(e) => setManualPageName(e.target.value)}
                   placeholder="e.g. Apex Innovations Page"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Instagram Business Account ID</label>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Instagram Business Account ID</label>
                 <input
                   type="text"
                   value={manualIgId}
                   onChange={(e) => setManualIgId(e.target.value)}
                   placeholder="e.g. 17841400928371902"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">Instagram Username</label>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Instagram Username</label>
                 <input
                   type="text"
                   value={manualIgUsername}
                   onChange={(e) => setManualIgUsername(e.target.value)}
                   placeholder="e.g. apex_innovations"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
@@ -1356,7 +1356,7 @@ export default function MetaConnectPage() {
             <button
               type="submit"
               disabled={isSavingManual}
-              className="py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition flex items-center space-x-2 disabled:opacity-50"
+              className="py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition flex items-center space-x-2 disabled:opacity-50 shadow-sm"
             >
               {isSavingManual ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
               <span>Save Developer Credentials</span>
@@ -1364,7 +1364,7 @@ export default function MetaConnectPage() {
             <button
               type="button"
               onClick={() => setShowManualMode(false)}
-              className="py-2.5 px-4 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
+              className="py-2.5 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs border border-slate-200 dark:border-slate-700 transition"
             >
               Cancel
             </button>

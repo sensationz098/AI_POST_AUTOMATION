@@ -176,22 +176,22 @@ export default function BrandProfilesPage() {
   };
 
   return (
-    <div className="space-y-5 select-none font-sans text-xs">
+    <div className="space-y-5 select-none font-sans text-xs text-slate-900 dark:text-slate-100">
       {/* Linear Context Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200 dark:border-slate-800/60">
         <div>
-          <h1 className="text-lg font-bold text-slate-100 tracking-tight flex items-center space-x-2">
-            <Layers className="w-4 h-4 text-indigo-400" />
+          <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight flex items-center space-x-2">
+            <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span>Brand Voice & Profile Studio</span>
           </h1>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-600 dark:text-slate-400">
             Configure AI brand personas, tone of voice, target audience, and linked Meta Accounts.
           </p>
         </div>
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center space-x-1.5 px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] transition shadow-sm self-start sm:self-auto"
+          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] transition shadow-sm self-start sm:self-auto"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>+ Add Brand Profile</span>
@@ -199,7 +199,7 @@ export default function BrandProfilesPage() {
       </div>
 
       {notification && (
-        <div className="p-3 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-medium flex items-center space-x-2">
+        <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[11px] font-medium flex items-center space-x-2">
           <Check className="w-3.5 h-3.5" />
           <span>{notification}</span>
         </div>
@@ -207,8 +207,8 @@ export default function BrandProfilesPage() {
 
       {/* Brands Grid */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-12 text-slate-400 text-xs space-x-2">
-          <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+        <div className="flex items-center justify-center py-12 text-slate-500 dark:text-slate-400 text-xs space-x-2">
+          <Loader2 className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400" />
           <span>Loading Brand Profiles & Meta Accounts...</span>
         </div>
       ) : (
@@ -217,40 +217,40 @@ export default function BrandProfilesPage() {
             const hasMeta = brand.meta_account && brand.meta_account.is_connected && brand.meta_account.facebook_page_id;
 
             return (
-              <div key={brand.id} className="linear-panel p-4 rounded-lg space-y-4 border border-slate-800/80 hover:border-slate-700 transition">
+              <div key={brand.id} className="bg-white dark:bg-slate-900 p-4 rounded-2xl space-y-4 border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-sm">
                 {/* Profile Top Row */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <img
                       src={brand.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
                       alt={brand.name}
-                      className="w-10 h-10 rounded object-cover border border-slate-700"
+                      className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700"
                     />
                     <div>
-                      <h3 className="text-sm font-semibold text-slate-100 flex items-center space-x-1.5">
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center space-x-1.5">
                         <span>{brand.name}</span>
                         {hasMeta && (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                         )}
                       </h3>
-                      <span className="text-[10px] text-indigo-400 font-mono">{brand.industry || 'Social AI Profile'}</span>
+                      <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono font-semibold">{brand.industry || 'Social AI Profile'}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-1.5">
                     {hasMeta ? (
-                      <span className="px-2 py-0.5 rounded bg-blue-950/60 text-blue-300 text-[9px] font-mono border border-blue-800/60">
+                      <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/60 text-[9px] font-mono font-semibold">
                         Meta Sync Active
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded bg-slate-900/60 text-slate-400 text-[9px] font-mono border border-slate-800">
+                      <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-900/60 dark:text-slate-400 dark:border-slate-800 text-[9px] font-mono font-semibold">
                         Local Profile
                       </span>
                     )}
 
                     <button
                       onClick={() => handleDeleteBrand(brand.id)}
-                      className="p-1 rounded bg-slate-900/60 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 transition"
+                      className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-800 transition"
                       title="Delete Brand"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -260,14 +260,14 @@ export default function BrandProfilesPage() {
 
                 {/* LINKED META ACCOUNT CARD */}
                 {hasMeta ? (
-                  <div className="bg-slate-900/40 border border-slate-800/60 rounded p-3 space-y-2">
+                  <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/60 rounded-xl p-3 space-y-2">
                     <div className="flex items-center justify-between text-[10px]">
-                      <span className="font-mono text-slate-400 uppercase tracking-wider">
+                      <span className="font-mono text-slate-600 dark:text-slate-400 uppercase tracking-wider font-semibold">
                         Linked Meta Accounts
                       </span>
                       <a
                         href="/meta-connect"
-                        className="text-indigo-400 hover:text-indigo-300 text-[10px] font-medium flex items-center space-x-1"
+                        className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 text-[10px] font-medium flex items-center space-x-1"
                       >
                         <span>Credentials</span>
                         <ExternalLink className="w-3 h-3" />
@@ -276,29 +276,29 @@ export default function BrandProfilesPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                       {/* FB Page */}
-                      <div className="flex items-center space-x-2 bg-slate-900/90 p-2 rounded border border-slate-800">
-                        <Facebook className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                      <div className="flex items-center space-x-2 bg-white dark:bg-slate-900/90 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
+                        <Facebook className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                         <div className="min-w-0">
-                          <p className="font-semibold text-slate-100 text-xs truncate">
+                          <p className="font-semibold text-slate-900 dark:text-slate-100 text-xs truncate">
                             {brand.meta_account?.facebook_page_name || 'Connected FB Page'}
                           </p>
-                          <p className="text-[9px] text-slate-400 font-mono">
+                          <p className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">
                             ID: {brand.meta_account?.facebook_page_id}
                           </p>
                         </div>
                       </div>
 
                       {/* Instagram */}
-                      <div className="flex items-center space-x-2 bg-slate-900/90 p-2 rounded border border-slate-800">
-                        <Instagram className="w-3.5 h-3.5 text-pink-400 flex-shrink-0" />
+                      <div className="flex items-center space-x-2 bg-white dark:bg-slate-900/90 p-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xs">
+                        <Instagram className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400 flex-shrink-0" />
                         <div className="min-w-0">
-                          <p className="font-semibold text-slate-100 text-xs truncate">
+                          <p className="font-semibold text-slate-900 dark:text-slate-100 text-xs truncate">
                             {brand.meta_account?.instagram_username
                               ? `@${brand.meta_account.instagram_username}`
                               : '(no IG handle)'}
                           </p>
                           {brand.meta_account?.instagram_account_id && (
-                            <p className="text-[9px] text-slate-400 font-mono">
+                            <p className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">
                               ID: {brand.meta_account.instagram_account_id}
                             </p>
                           )}
@@ -307,14 +307,14 @@ export default function BrandProfilesPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-slate-900/20 border border-dashed border-slate-800 rounded p-3 flex items-center justify-between text-xs text-slate-400">
+                  <div className="bg-slate-50 dark:bg-slate-900/20 border border-dashed border-slate-300 dark:border-slate-800 rounded-xl p-3 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
                     <div className="flex items-center space-x-2">
-                      <Link2 className="w-3.5 h-3.5 text-slate-500" />
+                      <Link2 className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                       <span className="text-[11px]">No Meta Account linked to this profile.</span>
                     </div>
                     <a
                       href="/meta-connect"
-                      className="px-2.5 py-1 rounded bg-indigo-600/20 text-indigo-300 font-semibold text-[10px] border border-indigo-500/30 flex items-center space-x-1"
+                      className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-600/20 dark:text-indigo-300 font-semibold text-[10px] border border-indigo-200 dark:border-indigo-500/30 flex items-center space-x-1 transition"
                     >
                       <span>+ Link Meta</span>
                     </a>
@@ -322,29 +322,29 @@ export default function BrandProfilesPage() {
                 )}
 
                 {/* Brand Voice Details */}
-                <div className="space-y-3 text-xs text-slate-300 bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
+                <div className="space-y-3 text-xs text-slate-700 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-950/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80">
                   <div>
-                    <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1">Tone of Voice</span>
-                    <p className="font-semibold text-white">{brand.tone_of_voice}</p>
+                    <span className="text-slate-600 dark:text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1">Tone of Voice</span>
+                    <p className="font-semibold text-slate-900 dark:text-white">{brand.tone_of_voice}</p>
                   </div>
 
                   <div>
-                    <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1">Target Audience</span>
-                    <p className="font-medium text-slate-300">{brand.target_audience}</p>
+                    <span className="text-slate-600 dark:text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1">Target Audience</span>
+                    <p className="font-medium text-slate-700 dark:text-slate-300">{brand.target_audience}</p>
                   </div>
 
                   <div>
-                    <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1">CTA Style</span>
-                    <p className="font-semibold text-purple-300">{brand.cta_style}</p>
+                    <span className="text-slate-600 dark:text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1">CTA Style</span>
+                    <p className="font-semibold text-purple-700 dark:text-purple-300">{brand.cta_style}</p>
                   </div>
 
                   <div>
-                    <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1.5">Brand Colors</span>
+                    <span className="text-slate-600 dark:text-slate-400 font-bold block text-[10px] uppercase tracking-wider mb-1.5">Brand Colors</span>
                     <div className="flex items-center space-x-2">
                       {brand.brand_colors?.map((color, idx) => (
-                        <div key={idx} className="flex items-center space-x-1.5 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-xl">
-                          <div className="w-3.5 h-3.5 rounded-full border border-slate-700 shadow-sm" style={{ backgroundColor: color }} />
-                          <span className="font-mono text-[10px] text-slate-300 font-semibold">{color}</span>
+                        <div key={idx} className="flex items-center space-x-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2.5 py-1 rounded-xl shadow-xs">
+                          <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-700 shadow-sm" style={{ backgroundColor: color }} />
+                          <span className="font-mono text-[10px] text-slate-700 dark:text-slate-300 font-semibold">{color}</span>
                         </div>
                       ))}
                     </div>
@@ -358,17 +358,17 @@ export default function BrandProfilesPage() {
 
       {/* CREATE BRAND MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="glass-panel max-w-lg w-full p-6 rounded-2xl space-y-5 border border-slate-700 relative shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 max-w-lg w-full p-6 rounded-2xl space-y-5 border border-slate-200 dark:border-slate-700 relative shadow-2xl">
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <div className="flex items-center space-x-2">
-                <Building2 className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-sm font-bold text-white">Create New Brand Profile</h2>
+                <Building2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Create New Brand Profile</h2>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-white transition"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -378,8 +378,8 @@ export default function BrandProfilesPage() {
             <form onSubmit={handleCreateBrand} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Brand Name <span className="text-indigo-400">*</span>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Brand Name <span className="text-indigo-600 dark:text-indigo-400">*</span>
                   </label>
                   <input
                     type="text"
@@ -387,11 +387,11 @@ export default function BrandProfilesPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Acme Corp"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     Industry
                   </label>
                   <input
@@ -399,19 +399,19 @@ export default function BrandProfilesPage() {
                     value={industry}
                     onChange={(e) => setIndustry(e.target.value)}
                     placeholder="e.g. E-Commerce, SaaS, Fitness"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Tone of Voice
                 </label>
                 <select
                   value={toneOfVoice}
                   onChange={(e) => setToneOfVoice(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                 >
                   <option>Professional, Energetic & Visionary</option>
                   <option>Friendly, Casual & Educational</option>
@@ -422,7 +422,7 @@ export default function BrandProfilesPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Target Audience
                 </label>
                 <input
@@ -430,12 +430,12 @@ export default function BrandProfilesPage() {
                   value={targetAudience}
                   onChange={(e) => setTargetAudience(e.target.value)}
                   placeholder="e.g. Young professionals aged 22-35 interested in tech"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   CTA Style
                 </label>
                 <input
@@ -443,13 +443,13 @@ export default function BrandProfilesPage() {
                   value={ctaStyle}
                   onChange={(e) => setCtaStyle(e.target.value)}
                   placeholder="e.g. Urgency-driven & Value focused"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     Primary Brand Color
                   </label>
                   <div className="flex items-center space-x-2">
@@ -457,19 +457,19 @@ export default function BrandProfilesPage() {
                       type="color"
                       value={primaryColor}
                       onChange={(e) => setPrimaryColor(e.target.value)}
-                      className="w-8 h-8 rounded-lg border border-slate-700 bg-transparent cursor-pointer"
+                      className="w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-transparent cursor-pointer"
                     />
                     <input
                       type="text"
                       value={primaryColor}
                       onChange={(e) => setPrimaryColor(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-300 font-mono"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-800 dark:text-slate-300 font-mono"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     Secondary Brand Color
                   </label>
                   <div className="flex items-center space-x-2">
@@ -477,20 +477,20 @@ export default function BrandProfilesPage() {
                       type="color"
                       value={secondaryColor}
                       onChange={(e) => setSecondaryColor(e.target.value)}
-                      className="w-8 h-8 rounded-lg border border-slate-700 bg-transparent cursor-pointer"
+                      className="w-8 h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-transparent cursor-pointer"
                     />
                     <input
                       type="text"
                       value={secondaryColor}
                       onChange={(e) => setSecondaryColor(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-300 font-mono"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-800 dark:text-slate-300 font-mono"
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Logo / Avatar Image URL (Optional)
                 </label>
                 <input
@@ -498,15 +498,15 @@ export default function BrandProfilesPage() {
                   value={logoUrl}
                   onChange={(e) => setLogoUrl(e.target.value)}
                   placeholder="https://example.com/logo.png"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
-              <div className="flex justify-end space-x-3 pt-3 border-t border-slate-800">
+              <div className="flex justify-end space-x-3 pt-3 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-200 dark:border-slate-700"
                 >
                   Cancel
                 </button>

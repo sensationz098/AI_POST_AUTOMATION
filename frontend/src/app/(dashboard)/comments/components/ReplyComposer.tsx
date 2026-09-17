@@ -52,34 +52,34 @@ export default function ReplyComposer({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2 pt-2 border-t border-slate-800/80">
+    <form onSubmit={handleSubmit} className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800/80">
       {/* Authoritative Sender Indicator */}
-      <div className="flex items-center justify-between text-[11px] text-slate-400 pb-0.5 px-1">
+      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pb-0.5 px-1">
         <div className="flex items-center space-x-1.5 min-w-0">
           <span className="text-slate-500 font-medium flex-shrink-0">Replying as:</span>
-          <div className="flex items-center space-x-1.5 font-semibold text-slate-200 truncate">
+          <div className="flex items-center space-x-1.5 font-semibold text-slate-800 dark:text-slate-200 truncate">
             {isInstagram ? (
-              <span className="text-pink-400 truncate">
+              <span className="text-pink-600 dark:text-pink-400 truncate">
                 @{displayName.replace(/^@/, '')}
               </span>
             ) : (
-              <span className="text-blue-400 truncate">
+              <span className="text-blue-600 dark:text-blue-400 truncate">
                 {displayName}
               </span>
             )}
-            <span className="text-slate-500 font-normal">·</span>
-            <span className={`text-[10px] font-bold uppercase tracking-wider ${isInstagram ? 'text-pink-400' : 'text-blue-400'}`}>
+            <span className="text-slate-400 dark:text-slate-500 font-normal">·</span>
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${isInstagram ? 'text-pink-600 dark:text-pink-400' : 'text-blue-600 dark:text-blue-400'}`}>
               {isInstagram ? 'Instagram' : 'Facebook'}
             </span>
           </div>
         </div>
-        <span className="text-[10px] text-slate-500 hidden sm:inline-block font-mono">
+        <span className="text-[10px] text-slate-400 dark:text-slate-500 hidden sm:inline-block font-mono">
           Authoritative Owner
         </span>
       </div>
       {error && (
-        <div className="p-2 rounded-lg bg-rose-950/40 border border-rose-800/60 text-xs text-rose-300 flex items-center space-x-1.5">
-          <AlertCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+        <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 text-xs text-rose-700 dark:text-rose-300 flex items-center space-x-1.5">
+          <AlertCircle className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
@@ -91,7 +91,7 @@ export default function ReplyComposer({
           placeholder="Write an official brand reply..."
           rows={2}
           disabled={isSubmitting}
-          className="w-full bg-slate-950 border border-indigo-800/80 focus:border-indigo-500 rounded-xl p-3 text-xs text-slate-100 placeholder-slate-500 outline-none transition resize-none disabled:opacity-50 shadow-inner"
+          className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-indigo-800/80 focus:border-indigo-500 rounded-xl p-3 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition resize-none disabled:opacity-50 shadow-xs"
         />
       </div>
 
@@ -100,7 +100,7 @@ export default function ReplyComposer({
           type="button"
           onClick={onCancel}
           disabled={isSubmitting}
-          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+          className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium transition"
         >
           Cancel
         </button>

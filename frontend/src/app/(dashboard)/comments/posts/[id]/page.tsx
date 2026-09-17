@@ -170,23 +170,23 @@ export default function PostCommentsPage() {
   const resolvedAccountAvatar = post?.account_avatar || accountFromComment?.logo_url;
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 text-slate-100 font-sans">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 text-slate-900 dark:text-slate-100 font-sans">
       {/* Top Header & Breadcrumb Navigation */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Link
             href={`/comments/posts${socialAccountId ? `?social_account_id=${socialAccountId}` : ''}`}
-            className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 transition"
+            className="p-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition shadow-sm"
             title="Back to Organic Posts"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-slate-100 flex items-center space-x-2">
-              <FileText className="w-5 h-5 text-blue-400" />
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-2">
+              <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <span>Organic Post Conversations</span>
             </h1>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600 dark:text-slate-400">
               Inspect live platform preview and native conversation threads for this post.
             </p>
           </div>
@@ -195,31 +195,31 @@ export default function PostCommentsPage() {
         <button
           onClick={() => fetchPostComments(true)}
           disabled={loading || syncing}
-          className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-semibold transition flex items-center space-x-1.5 disabled:opacity-50"
+          className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition flex items-center space-x-1.5 disabled:opacity-50 shadow-sm"
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${syncing || loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 text-blue-600 dark:text-blue-400 ${syncing || loading ? 'animate-spin' : ''}`} />
           <span>{syncing ? 'Syncing...' : 'Sync & Refresh'}</span>
         </button>
       </div>
 
       {notice && (
-        <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-xs flex items-center space-x-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+        <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300 text-xs flex items-center space-x-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
           <span>{notice}</span>
         </div>
       )}
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/80 text-rose-300 text-sm flex items-center space-x-3">
-          <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 text-rose-800 dark:text-rose-300 text-sm flex items-center space-x-3">
+          <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {loading ? (
-        <div className="py-20 text-center bg-slate-900/40 rounded-2xl border border-slate-800/80 space-y-3">
-          <Loader2 className="w-8 h-8 text-blue-400 animate-spin mx-auto" />
-          <p className="text-xs text-slate-400">Loading published post preview & conversation threads...</p>
+        <div className="py-20 text-center bg-white dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-800/80 space-y-3 shadow-sm">
+          <Loader2 className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin mx-auto" />
+          <p className="text-xs text-slate-500 dark:text-slate-400">Loading published post preview & conversation threads...</p>
         </div>
       ) : !post ? (
         <ContextualEmptyState type="posts" title="Post Not Found" description="The requested organic post could not be loaded." />
@@ -231,14 +231,14 @@ export default function PostCommentsPage() {
               {/* Platform & Source Card Header */}
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center space-x-2 min-w-0">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex-shrink-0">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex-shrink-0">
                     Published Post
                   </span>
                   <span
                     className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase flex-shrink-0 ${
                       isIg
-                        ? 'bg-pink-950/90 text-pink-300 border border-pink-800/80'
-                        : 'bg-blue-950/90 text-blue-300 border border-blue-800/80'
+                        ? 'bg-pink-50 text-pink-700 border border-pink-200 dark:bg-pink-950/90 dark:text-pink-300 dark:border-pink-800/80'
+                        : 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/90 dark:text-blue-300 dark:border-blue-800/80'
                     }`}
                   >
                     {post.platform || 'Facebook'}
@@ -249,7 +249,7 @@ export default function PostCommentsPage() {
                     href={post.permalink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center space-x-1 flex-shrink-0"
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center space-x-1 flex-shrink-0"
                   >
                     <span>Open on {isIg ? 'Instagram' : 'Facebook'}</span>
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -273,25 +273,25 @@ export default function PostCommentsPage() {
               />
 
               {/* Post Metadata Summary */}
-              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-xs text-slate-400 space-y-2 shadow-sm">
+              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 text-xs text-slate-600 dark:text-slate-400 space-y-2 shadow-sm">
                 {resolvedAccountName && (
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 font-medium">Account:</span>
-                    <span className="font-semibold text-slate-200 text-[11px] truncate max-w-[200px]">
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-[11px] truncate max-w-[200px]">
                       {resolvedAccountName}
                     </span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500 font-medium">Post ID:</span>
-                  <span className="font-mono text-slate-300 text-[11px] truncate max-w-[200px]">
+                  <span className="font-mono text-slate-700 dark:text-slate-300 text-[11px] truncate max-w-[200px]">
                     {post.external_post_id}
                   </span>
                 </div>
                 {post.published_at && (
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 font-medium">Published:</span>
-                    <span className="text-slate-300">{new Date(post.published_at).toLocaleString()}</span>
+                    <span className="text-slate-700 dark:text-slate-300">{new Date(post.published_at).toLocaleString()}</span>
                   </div>
                 )}
               </div>
@@ -310,15 +310,15 @@ export default function PostCommentsPage() {
             />
 
             {/* Filter & Sort Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800/90 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900/80 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800/90 shadow-sm">
               <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
-                <span className="text-xs font-bold text-slate-400 uppercase mr-1">Filter:</span>
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase mr-1">Filter:</span>
                 <button
                   onClick={() => setReplyStatusFilter('all')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
                     replyStatusFilter === 'all'
-                      ? 'bg-blue-950 text-blue-200 border border-blue-800 shadow-sm'
-                      : 'bg-slate-950/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800'
+                      : 'bg-slate-50 dark:bg-slate-950/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   All Threads ({topLevelCount})
@@ -327,8 +327,8 @@ export default function PostCommentsPage() {
                   onClick={() => setReplyStatusFilter('unreplied')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
                     replyStatusFilter === 'unreplied'
-                      ? 'bg-amber-950 text-amber-200 border border-amber-800 shadow-sm'
-                      : 'bg-slate-950/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200 shadow-sm dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800'
+                      : 'bg-slate-50 dark:bg-slate-950/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   Unreplied
@@ -337,22 +337,22 @@ export default function PostCommentsPage() {
                   onClick={() => setReplyStatusFilter('replied')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
                     replyStatusFilter === 'replied'
-                      ? 'bg-emerald-950 text-emerald-200 border border-emerald-800 shadow-sm'
-                      : 'bg-slate-950/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800'
+                      : 'bg-slate-50 dark:bg-slate-950/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   Replied
                 </button>
               </div>
 
-              <div className="flex items-center space-x-2 border-t sm:border-t-0 sm:border-l border-slate-800/80 pt-2 sm:pt-0 sm:pl-3">
-                <span className="text-xs font-bold text-slate-400 uppercase mr-1">Sort:</span>
+              <div className="flex items-center space-x-2 border-t sm:border-t-0 sm:border-l border-slate-200 dark:border-slate-800/80 pt-2 sm:pt-0 sm:pl-3">
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase mr-1">Sort:</span>
                 <button
                   onClick={() => setSortOrder('desc')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
                     sortOrder === 'desc'
-                      ? 'bg-blue-950 text-blue-200 border border-blue-800 shadow-sm'
-                      : 'bg-slate-950/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800'
+                      : 'bg-slate-50 dark:bg-slate-950/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   Newest First
@@ -361,8 +361,8 @@ export default function PostCommentsPage() {
                   onClick={() => setSortOrder('asc')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
                     sortOrder === 'asc'
-                      ? 'bg-blue-950 text-blue-200 border border-blue-800 shadow-sm'
-                      : 'bg-slate-950/80 text-slate-400 border border-slate-800 hover:text-slate-200'
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800'
+                      : 'bg-slate-50 dark:bg-slate-950/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
                   Oldest First
@@ -398,7 +398,7 @@ export default function PostCommentsPage() {
                     <button
                       onClick={handleLoadMore}
                       disabled={loadingMore}
-                      className="px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-blue-300 hover:text-blue-200 text-xs font-bold transition flex items-center justify-center space-x-2 mx-auto disabled:opacity-50 shadow-md"
+                      className="px-6 py-3 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200 text-xs font-bold transition flex items-center justify-center space-x-2 mx-auto disabled:opacity-50 shadow-sm"
                     >
                       {loadingMore ? (
                         <>

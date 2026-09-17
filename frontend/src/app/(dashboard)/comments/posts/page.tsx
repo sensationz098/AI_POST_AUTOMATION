@@ -182,15 +182,15 @@ export default function OrganicCommentsPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 text-slate-100 font-sans">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 text-slate-900 dark:text-slate-100 font-sans">
       {/* Top Bar Header & Page Title */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800/80 pb-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-100 tracking-tight flex items-center space-x-2.5">
-            <MessageSquare className="w-6 h-6 text-blue-400" />
+          <h1 className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight flex items-center space-x-2.5">
+            <MessageSquare className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             <span>Organic Post Comments</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
             Manage and respond to conversations on your published Facebook and Instagram posts.
           </p>
         </div>
@@ -200,9 +200,9 @@ export default function OrganicCommentsPage() {
             fetchOverview();
             fetchPosts();
           }}
-          className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-bold transition flex items-center space-x-2 self-start md:self-auto"
+          className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center space-x-2 self-start md:self-auto shadow-sm"
         >
-          <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+          <RefreshCw className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
           <span>Refresh Feed</span>
         </button>
       </div>
@@ -252,16 +252,16 @@ export default function OrganicCommentsPage() {
       {/* 3. Dedicated Organic Filter Bar */}
       <div className="space-y-3">
         {/* Search & Platform Row */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-900/70 p-3 rounded-2xl border border-slate-800/90 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-slate-900/70 p-3 rounded-2xl border border-slate-200 dark:border-slate-800/90 shadow-sm">
           <div className="relative flex-1">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-3 top-2.5 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && fetchPosts()}
               placeholder="Search post caption or content..."
-              className="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 text-xs rounded-xl pl-8 pr-3 py-2 text-slate-100 placeholder-slate-500 outline-none transition"
+              className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 focus:border-blue-500 text-xs rounded-xl pl-8 pr-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition"
             />
           </div>
 
@@ -269,7 +269,7 @@ export default function OrganicCommentsPage() {
             <select
               value={platformFilter}
               onChange={(e) => setPlatformFilter(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-xl px-3 py-2 font-semibold outline-none focus:border-blue-500 transition cursor-pointer"
+              className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-xs rounded-xl px-3 py-2 font-semibold outline-none focus:border-blue-500 transition cursor-pointer"
             >
               <option value="ALL">All Platforms</option>
               <option value="FACEBOOK">Facebook</option>
@@ -290,7 +290,7 @@ export default function OrganicCommentsPage() {
           <div className="flex flex-wrap items-center gap-3">
             {/* Thread Status Filter */}
             <div className="flex items-center space-x-2">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center space-x-1">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mr-1 flex items-center space-x-1">
                 <Filter className="w-3 h-3 text-slate-500" />
                 <span>Thread Status:</span>
               </span>
@@ -299,8 +299,8 @@ export default function OrganicCommentsPage() {
                 onClick={() => setReplyStatusFilter('all')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   replyStatusFilter === 'all'
-                    ? 'bg-blue-950 text-blue-200 border border-blue-700/80 shadow-sm'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm dark:bg-blue-950 dark:text-blue-200 dark:border-blue-700/80'
+                    : 'bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800/80'
                 }`}
               >
                 All Threads
@@ -310,11 +310,11 @@ export default function OrganicCommentsPage() {
                 onClick={() => setReplyStatusFilter('unreplied')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 ${
                   replyStatusFilter === 'unreplied'
-                    ? 'bg-amber-950 text-amber-200 border border-amber-700/80 shadow-sm'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200 shadow-sm dark:bg-amber-950 dark:text-amber-200 dark:border-amber-700/80'
+                    : 'bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800/80'
                 }`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                 <span>Unreplied</span>
               </button>
 
@@ -322,18 +322,18 @@ export default function OrganicCommentsPage() {
                 onClick={() => setReplyStatusFilter('replied')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 ${
                   replyStatusFilter === 'replied'
-                    ? 'bg-emerald-950 text-emerald-200 border border-emerald-700/80 shadow-sm'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-700/80'
+                    : 'bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800/80'
                 }`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 <span>Replied</span>
               </button>
             </div>
 
             {/* Sort Order Controls */}
-            <div className="flex items-center space-x-2 border-l border-slate-800/80 pl-3">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center space-x-1">
+            <div className="flex items-center space-x-2 border-l border-slate-200 dark:border-slate-800/80 pl-3">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mr-1 flex items-center space-x-1">
                 <ArrowUpDown className="w-3 h-3 text-slate-500" />
                 <span>Sort:</span>
               </span>
@@ -342,8 +342,8 @@ export default function OrganicCommentsPage() {
                 onClick={() => setSortOrder('desc')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   sortOrder === 'desc'
-                    ? 'bg-blue-950 text-blue-200 border border-blue-700/80 shadow-sm'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm dark:bg-blue-950 dark:text-blue-200 dark:border-blue-700/80'
+                    : 'bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800/80'
                 }`}
               >
                 Newest First
@@ -353,8 +353,8 @@ export default function OrganicCommentsPage() {
                 onClick={() => setSortOrder('asc')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   sortOrder === 'asc'
-                    ? 'bg-blue-950 text-blue-200 border border-blue-700/80 shadow-sm'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800/80'
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm dark:bg-blue-950 dark:text-blue-200 dark:border-blue-700/80'
+                    : 'bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800/80'
                 }`}
               >
                 Oldest First
@@ -362,8 +362,8 @@ export default function OrganicCommentsPage() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-500 bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800/60 opacity-75 whitespace-nowrap self-start sm:self-auto">
-            <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+          <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800/60 whitespace-nowrap self-start sm:self-auto">
+            <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
             <span>AI Moderation Ready</span>
           </div>
         </div>
@@ -371,15 +371,15 @@ export default function OrganicCommentsPage() {
 
       {/* 4. Organic Posts Grid */}
       <div className="space-y-4 pt-2">
-        <div className="flex items-center justify-between text-xs text-slate-400 font-medium px-1 pb-1 border-b border-slate-800/60">
-          <span className="flex items-center space-x-2 text-blue-300 font-bold">
+        <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-medium px-1 pb-1 border-b border-slate-200 dark:border-slate-800/60">
+          <span className="flex items-center space-x-2 text-blue-600 dark:text-blue-300 font-bold">
             <span>Organic Posts ({accountScopedPosts.length})</span>
-            <span className="text-slate-600">•</span>
-            <span className="text-slate-400 font-normal">
+            <span className="text-slate-400 dark:text-slate-600">•</span>
+            <span className="text-slate-600 dark:text-slate-400 font-normal">
               {organicMetrics.top_level_comment_count} Organic Conversations
             </span>
           </span>
-          <span className="text-[11px] text-slate-500 font-mono">Strictly Non-Ad Organic Content</span>
+          <span className="text-[11px] text-slate-500 dark:text-slate-500 font-mono">Strictly Non-Ad Organic Content</span>
         </div>
 
         {loadingPosts ? (

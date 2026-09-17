@@ -242,7 +242,7 @@ export default function YouTubeVideosPage() {
     const s = status.toLowerCase();
     if (s === 'public') {
       return (
-        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-800/80 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
+        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800/80 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
           <Globe className="w-2.5 h-2.5" />
           <span>Public</span>
         </span>
@@ -250,14 +250,14 @@ export default function YouTubeVideosPage() {
     }
     if (s === 'unlisted') {
       return (
-        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-800/80 text-amber-300 text-[10px] font-bold uppercase tracking-wider">
+        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/80 border border-amber-200 dark:border-amber-800/80 text-amber-700 dark:text-amber-300 text-[10px] font-bold uppercase tracking-wider">
           <EyeOff className="w-2.5 h-2.5" />
           <span>Unlisted</span>
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-950/80 border border-indigo-800/80 text-indigo-300 text-[10px] font-bold uppercase tracking-wider">
+      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold uppercase tracking-wider">
         <Lock className="w-2.5 h-2.5" />
         <span>Private</span>
       </span>
@@ -283,16 +283,16 @@ export default function YouTubeVideosPage() {
       <Toaster position="top-right" />
 
       {/* Top Header Card */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-sm backdrop-blur-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-sm backdrop-blur-sm">
         <div className="flex items-center space-x-3.5">
-          <div className="w-10 h-10 rounded-xl bg-red-600/10 text-red-400 border border-red-500/20 flex items-center justify-center shadow-inner">
+          <div className="w-10 h-10 rounded-xl bg-red-600/10 text-red-500 dark:text-red-400 border border-red-500/20 flex items-center justify-center shadow-inner">
             <Youtube className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="text-lg font-bold text-white tracking-tight">YouTube Videos</h1>
+              <h1 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">YouTube Videos</h1>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Browse, manage, and edit videos from your connected YouTube channels.
             </p>
           </div>
@@ -305,34 +305,34 @@ export default function YouTubeVideosPage() {
               <button
                 type="button"
                 onClick={() => setIsAccountDropdownOpen((prev) => !prev)}
-                className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-slate-950 hover:bg-slate-800/80 border border-slate-700/80 hover:border-slate-600 text-xs text-slate-200 font-medium transition shadow-sm"
+                className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 text-xs text-slate-800 dark:text-slate-200 font-medium transition shadow-sm"
                 title="Switch YouTube Account"
                 aria-haspopup="true"
                 aria-expanded={isAccountDropdownOpen}
               >
-                <div className="w-5 h-5 rounded-full bg-red-600/20 text-red-400 flex items-center justify-center overflow-hidden flex-shrink-0">
+                <div className="w-5 h-5 rounded-full bg-red-600/10 dark:bg-red-600/20 text-red-500 dark:text-red-400 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {selectedAccount?.logo_url ? (
                     <img src={selectedAccount.logo_url} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <Youtube className="w-3 h-3" />
                   )}
                 </div>
-                <span className="text-slate-400 font-normal">YouTube Account:</span>
-                <span className="font-semibold text-white max-w-[140px] sm:max-w-[200px] truncate">
+                <span className="text-slate-500 dark:text-slate-400 font-normal">YouTube Account:</span>
+                <span className="font-semibold text-slate-900 dark:text-white max-w-[140px] sm:max-w-[200px] truncate">
                   {selectedAccount?.account_name || channelTitle || 'Select Account'}
                 </span>
                 <ChevronDown
                   className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-                    isAccountDropdownOpen ? 'rotate-180 text-red-400' : ''
+                    isAccountDropdownOpen ? 'rotate-180 text-red-500 dark:text-red-400' : ''
                   }`}
                 />
               </button>
 
               {isAccountDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl shadow-black/80 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md">
-                  <div className="px-3.5 py-1.5 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl shadow-slate-900/10 dark:shadow-black/80 py-2 z-50 animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md">
+                  <div className="px-3.5 py-1.5 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
                     <span>Connected Channels</span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">
+                    <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono text-[10px]">
                       {accounts.length}
                     </span>
                   </div>
@@ -346,26 +346,26 @@ export default function YouTubeVideosPage() {
                           onClick={() => handleAccountChange(acc.id)}
                           className={`w-full flex items-center justify-between px-3.5 py-2.5 text-left text-xs transition ${
                             isSelected
-                              ? 'bg-red-950/40 text-white font-semibold border-l-2 border-red-500'
-                              : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                              ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-white font-semibold border-l-2 border-red-500'
+                              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
                           }`}
                         >
                           <div className="flex items-center space-x-3 min-w-0 pr-2">
-                            <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0">
                               {acc.logo_url ? (
                                 <img src={acc.logo_url} alt="" className="w-full h-full object-cover" />
                               ) : (
-                                <Youtube className="w-4 h-4 text-red-400" />
+                                <Youtube className="w-4 h-4 text-red-500 dark:text-red-400" />
                               )}
                             </div>
                             <div className="min-w-0">
                               <div className="truncate text-xs font-semibold">{acc.account_name || 'YouTube Channel'}</div>
                               {acc.account_id && (
-                                <div className="text-[10px] text-slate-500 font-mono truncate">{acc.account_id}</div>
+                                <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono truncate">{acc.account_id}</div>
                               )}
                             </div>
                           </div>
-                          {isSelected && <Check className="w-4 h-4 text-red-400 flex-shrink-0" />}
+                          {isSelected && <Check className="w-4 h-4 text-red-500 dark:text-red-400 flex-shrink-0" />}
                         </button>
                       );
                     })}
@@ -374,16 +374,16 @@ export default function YouTubeVideosPage() {
               )}
             </div>
           ) : accounts.length === 1 ? (
-            <div className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 shadow-sm">
-              <div className="w-5 h-5 rounded-full bg-red-600/20 text-red-400 flex items-center justify-center overflow-hidden flex-shrink-0">
+            <div className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 shadow-sm">
+              <div className="w-5 h-5 rounded-full bg-red-600/10 dark:bg-red-600/20 text-red-500 dark:text-red-400 flex items-center justify-center overflow-hidden flex-shrink-0">
                 {selectedAccount?.logo_url ? (
                   <img src={selectedAccount.logo_url} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <Youtube className="w-3 h-3" />
                 )}
               </div>
-              <span className="text-slate-400 font-normal">YouTube Account:</span>
-              <span className="font-semibold text-white max-w-[180px] truncate">
+              <span className="text-slate-500 dark:text-slate-400 font-normal">YouTube Account:</span>
+              <span className="font-semibold text-slate-900 dark:text-white max-w-[180px] truncate">
                 {selectedAccount?.account_name || channelTitle || 'Connected Channel'}
               </span>
             </div>
@@ -393,10 +393,10 @@ export default function YouTubeVideosPage() {
             type="button"
             onClick={handleRefresh}
             disabled={isLoading || isRefreshing || accounts.length === 0}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center space-x-1.5 border border-slate-700 disabled:opacity-50"
+            className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center space-x-1.5 border border-slate-300 dark:border-slate-700 disabled:opacity-50"
             title="Refresh videos from YouTube"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-red-400' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-red-500 dark:text-red-400' : ''}`} />
             <span>Refresh</span>
           </button>
 
@@ -413,27 +413,27 @@ export default function YouTubeVideosPage() {
       {/* Search & Stats Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 transform -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 transform -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search videos by title..."
-            className="w-full bg-slate-900/80 border border-slate-800 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 transition"
+            className="w-full bg-white dark:bg-slate-900/80 border border-slate-300 dark:border-slate-800 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-red-500 transition shadow-sm"
           />
         </div>
 
-        <div className="flex items-center space-x-3 text-xs text-slate-400">
+        <div className="flex items-center space-x-3 text-xs text-slate-500 dark:text-slate-400">
           {totalResults !== null && (
             <span className="flex items-center space-x-1 font-mono">
-              <Film className="w-3.5 h-3.5 text-slate-500" />
+              <Film className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
               <span>
                 {totalResults} {totalResults === 1 ? 'total video' : 'total videos'}
               </span>
             </span>
           )}
           {searchQuery && (
-            <span className="text-slate-400 text-[11px]">
+            <span className="text-slate-500 dark:text-slate-400 text-[11px]">
               Showing {filteredVideos.length} of {videos.length} on this page
             </span>
           )}
@@ -442,15 +442,15 @@ export default function YouTubeVideosPage() {
 
       {/* Error Alert */}
       {errorMsg && (
-        <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/80 text-rose-300 text-xs flex items-start space-x-3">
-          <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
+        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 text-rose-800 dark:text-rose-300 text-xs flex items-start space-x-3">
+          <AlertCircle className="w-5 h-5 text-rose-500 dark:text-rose-400 flex-shrink-0 mt-0.5" />
           <div className="space-y-1.5 flex-1">
             <p className="font-bold">Error loading YouTube videos</p>
-            <p className="text-slate-300">{errorMsg}</p>
+            <p className="text-slate-600 dark:text-slate-300">{errorMsg}</p>
             <button
               type="button"
               onClick={handleRefresh}
-              className="mt-1 px-3 py-1 bg-rose-900/60 hover:bg-rose-800 text-rose-200 rounded-lg text-xs font-semibold flex items-center space-x-1 w-fit"
+              className="mt-1 px-3 py-1 bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/60 dark:hover:bg-rose-800 text-rose-800 dark:text-rose-200 rounded-lg text-xs font-semibold flex items-center space-x-1 w-fit"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Retry</span>
@@ -466,17 +466,17 @@ export default function YouTubeVideosPage() {
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
-              className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden animate-pulse flex flex-col"
+              className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden animate-pulse flex flex-col"
             >
-              <div className="aspect-video bg-slate-800/70" />
+              <div className="aspect-video bg-slate-200 dark:bg-slate-800/70" />
               <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
                 <div className="space-y-2">
-                  <div className="h-4 bg-slate-800 rounded w-5/6" />
-                  <div className="h-3 bg-slate-800/60 rounded w-2/3" />
+                  <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-5/6" />
+                  <div className="h-3 bg-slate-200/80 dark:bg-slate-800/60 rounded w-2/3" />
                 </div>
                 <div className="flex items-center justify-between pt-2">
-                  <div className="h-6 bg-slate-800/80 rounded w-16" />
-                  <div className="h-6 bg-slate-800/80 rounded w-20" />
+                  <div className="h-6 bg-slate-200 dark:bg-slate-800/80 rounded w-16" />
+                  <div className="h-6 bg-slate-200 dark:bg-slate-800/80 rounded w-20" />
                 </div>
               </div>
             </div>
@@ -484,13 +484,13 @@ export default function YouTubeVideosPage() {
         </div>
       ) : accounts.length === 0 && !isAccountsLoading ? (
         /* Zero Connected Accounts Empty State */
-        <div className="py-16 text-center rounded-2xl bg-slate-900/40 border border-slate-800/60 p-8 space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-red-600/10 text-red-400 border border-red-500/20 flex items-center justify-center mx-auto shadow-inner">
+        <div className="py-16 text-center rounded-2xl bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/60 p-8 space-y-4 shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-red-600/10 text-red-500 dark:text-red-400 border border-red-500/20 flex items-center justify-center mx-auto shadow-inner">
             <Youtube className="w-7 h-7" />
           </div>
           <div className="space-y-1 max-w-sm mx-auto">
-            <h3 className="text-sm font-bold text-white">No YouTube Account Connected</h3>
-            <p className="text-xs text-slate-400">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">No YouTube Account Connected</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Connect your YouTube channel in Meta & Social Connections to view, manage, and edit your videos.
             </p>
           </div>
@@ -504,15 +504,15 @@ export default function YouTubeVideosPage() {
         </div>
       ) : !errorMsg && filteredVideos.length === 0 ? (
         /* Empty State */
-        <div className="py-16 text-center rounded-2xl bg-slate-900/40 border border-slate-800/60 p-8 space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-red-600/10 text-red-400 border border-red-500/20 flex items-center justify-center mx-auto shadow-inner">
+        <div className="py-16 text-center rounded-2xl bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/60 p-8 space-y-4 shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-red-600/10 text-red-500 dark:text-red-400 border border-red-500/20 flex items-center justify-center mx-auto shadow-inner">
             <Film className="w-7 h-7" />
           </div>
           <div className="space-y-1 max-w-sm mx-auto">
-            <h3 className="text-sm font-bold text-white">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
               {searchQuery ? 'No matching videos found' : 'No videos found on channel'}
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               {searchQuery
                 ? `No videos on this page matched "${searchQuery}". Try clearing your search.`
                 : 'Upload your first YouTube video using the Studio composer to manage it here.'}
@@ -522,7 +522,7 @@ export default function YouTubeVideosPage() {
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
+              className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition border border-slate-300 dark:border-slate-700"
             >
               Clear Search
             </button>
@@ -542,7 +542,7 @@ export default function YouTubeVideosPage() {
           {filteredVideos.map((video) => (
             <div
               key={video.video_id}
-              className="bg-slate-900/70 hover:bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-2xl overflow-hidden transition duration-200 flex flex-col group shadow-sm hover:shadow-lg hover:shadow-red-950/20"
+              className="bg-white dark:bg-slate-900/70 hover:bg-slate-50/50 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700/80 rounded-2xl overflow-hidden transition duration-200 flex flex-col group shadow-sm hover:shadow-md"
             >
               {/* Thumbnail Container */}
               <div className="relative aspect-video bg-black overflow-hidden flex items-center justify-center">
@@ -554,7 +554,7 @@ export default function YouTubeVideosPage() {
                     loading="lazy"
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center text-slate-600 space-y-1">
+                  <div className="flex flex-col items-center justify-center text-slate-500 space-y-1">
                     <Film className="w-8 h-8" />
                     <span className="text-[10px]">No Thumbnail</span>
                   </div>
@@ -575,44 +575,44 @@ export default function YouTubeVideosPage() {
               <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                 <div className="space-y-1.5">
                   <h3
-                    className="text-xs font-bold text-white line-clamp-2 leading-snug group-hover:text-red-300 transition"
+                    className="text-xs font-bold text-slate-900 dark:text-white line-clamp-2 leading-snug group-hover:text-red-600 dark:group-hover:text-red-300 transition"
                     title={video.title}
                   >
                     {video.title || 'Untitled Video'}
                   </h3>
 
-                  <div className="flex items-center space-x-2 text-[11px] text-slate-400">
-                    <Calendar className="w-3 h-3 text-slate-500" />
+                  <div className="flex items-center space-x-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    <Calendar className="w-3 h-3 text-slate-400 dark:text-slate-500" />
                     <span>{formatDate(video.published_at)}</span>
                   </div>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-1.5">
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-1.5">
                   <button
                     type="button"
                     onClick={() => handleOpenEdit(video.video_id)}
-                    className="flex-1 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center justify-center space-x-1 border border-slate-700 hover:border-slate-600"
+                    className="flex-1 py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center justify-center space-x-1 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
                     title="Edit Video Details"
                   >
-                    <Sliders className="w-3 h-3 text-red-400" />
+                    <Sliders className="w-3 h-3 text-red-500 dark:text-red-400" />
                     <span>Edit</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleOpenDelete(video)}
-                    className="py-1.5 px-2 rounded-lg bg-slate-800/60 hover:bg-rose-950/50 text-slate-400 hover:text-rose-300 text-xs font-semibold transition flex items-center justify-center space-x-1 border border-slate-700/60 hover:border-rose-800/60"
+                    className="py-1.5 px-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 text-xs font-semibold transition flex items-center justify-center space-x-1 border border-slate-200 dark:border-slate-700/60 hover:border-rose-200 dark:hover:border-rose-800/60"
                     title="Delete Video from YouTube"
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                    <Trash2 className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
                   </button>
 
                   <a
                     href={video.video_url || `https://www.youtube.com/watch?v=${video.video_id}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="py-1.5 px-2 rounded-lg bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-semibold transition flex items-center justify-center space-x-1 border border-slate-700/60"
+                    className="py-1.5 px-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-xs font-semibold transition flex items-center justify-center space-x-1 border border-slate-200 dark:border-slate-700/60"
                     title="Watch on YouTube"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -626,18 +626,18 @@ export default function YouTubeVideosPage() {
 
       {/* Pagination Footer */}
       {(tokenStack.length > 0 || nextPageToken) && (
-        <div className="flex items-center justify-between pt-4 border-t border-slate-800/80">
+        <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800/80">
           <button
             type="button"
             onClick={handlePrevPage}
             disabled={tokenStack.length === 0 || isLoading}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center space-x-1.5 border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center space-x-1.5 border border-slate-300 dark:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
           >
             <ChevronLeft className="w-4 h-4" />
             <span>Previous Page</span>
           </button>
 
-          <span className="text-xs text-slate-400 font-mono">
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
             Page {tokenStack.length + 1}
           </span>
 
@@ -645,7 +645,7 @@ export default function YouTubeVideosPage() {
             type="button"
             onClick={handleNextPage}
             disabled={!nextPageToken || isLoading}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center space-x-1.5 border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center space-x-1.5 border border-slate-300 dark:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
           >
             <span>Next Page</span>
             <ChevronRight className="w-4 h-4" />

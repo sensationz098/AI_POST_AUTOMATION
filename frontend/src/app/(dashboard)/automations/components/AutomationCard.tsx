@@ -78,7 +78,7 @@ export default function AutomationCard({
   };
 
   return (
-    <div className="bg-slate-900/80 border border-slate-800/90 rounded-2xl p-5 shadow-md hover:border-slate-700/80 transition flex flex-col justify-between space-y-4">
+    <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800/90 rounded-2xl p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700/80 transition flex flex-col justify-between space-y-4">
       {/* 1. Header: Name, Platform & Status Badge */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center space-x-3 min-w-0">
@@ -91,10 +91,10 @@ export default function AutomationCard({
           </div>
 
           <div className="min-w-0">
-            <h3 className="font-bold text-sm text-slate-100 truncate">{automation.name}</h3>
-            <p className="text-[11px] text-slate-400 truncate">
+            <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">{automation.name}</h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
               {account?.account_name || (isFb ? 'Facebook Page' : 'Instagram Account')} ·{' '}
-              <span className="font-mono text-slate-500">ID: {automation.social_account_id}</span>
+              <span className="font-mono text-slate-400 dark:text-slate-500">ID: {automation.social_account_id}</span>
             </p>
           </div>
         </div>
@@ -102,19 +102,19 @@ export default function AutomationCard({
         {/* Status Badge */}
         <div className="flex-shrink-0">
           {isActive && (
-            <span className="px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80 text-[10px] font-bold flex items-center space-x-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 text-[10px] font-bold flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span>ACTIVE</span>
             </span>
           )}
           {isPaused && (
-            <span className="px-2.5 py-1 rounded-full bg-amber-950/80 text-amber-300 border border-amber-800/80 text-[10px] font-bold flex items-center space-x-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+            <span className="px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 text-[10px] font-bold flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
               <span>PAUSED</span>
             </span>
           )}
           {isDraft && (
-            <span className="px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-bold">
+            <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 text-[10px] font-bold">
               DRAFT
             </span>
           )}
@@ -122,21 +122,21 @@ export default function AutomationCard({
       </div>
 
       {/* 2. Target Post Info */}
-      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center space-x-3">
-        <div className="w-9 h-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 flex-shrink-0">
+      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 flex items-center space-x-3">
+        <div className="w-9 h-9 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 flex-shrink-0">
           <ImageIcon className="w-4 h-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+          <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider block">
             Target Post
           </span>
-          <p className="text-xs text-slate-300 truncate font-mono">
+          <p className="text-xs text-slate-800 dark:text-slate-300 truncate font-mono">
             {automation.external_post_id ? (
               <span>
-                <span className="text-slate-400 font-normal">{isFb ? 'FB Post: ' : 'IG Media: '}</span>
-                <span className="text-indigo-300 font-semibold">{automation.external_post_id}</span>
+                <span className="text-slate-500 dark:text-slate-400 font-normal">{isFb ? 'FB Post: ' : 'IG Media: '}</span>
+                <span className="text-indigo-600 dark:text-indigo-300 font-semibold">{automation.external_post_id}</span>
                 {automation.internal_post_id ? (
-                  <span className="text-[10px] text-slate-500 ml-1.5 font-normal">
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-1.5 font-normal">
                     (Local #{automation.internal_post_id})
                   </span>
                 ) : null}
@@ -154,33 +154,33 @@ export default function AutomationCard({
       <div className="space-y-2 text-xs">
         {/* Trigger Summary */}
         <div className="space-y-1">
-          <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center space-x-1">
-            <Zap className="w-3 h-3 text-indigo-400" />
+          <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider flex items-center space-x-1">
+            <Zap className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />
             <span>Trigger</span>
           </span>
-          <div className="text-slate-300 text-xs">
+          <div className="text-slate-700 dark:text-slate-300 text-xs">
             {isKeyword ? (
               <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-slate-400">Keyword:</span>
+                <span className="text-slate-500 dark:text-slate-400">Keyword:</span>
                 {keywords.map((kw, i) => (
                   <span
                     key={i}
-                    className="px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[11px] font-mono font-semibold"
+                    className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-[11px] font-mono font-semibold"
                   >
                     {kw}
                   </span>
                 ))}
               </div>
             ) : (
-              <span className="text-slate-300">Any incoming comment</span>
+              <span className="text-slate-700 dark:text-slate-300">Any incoming comment</span>
             )}
           </div>
         </div>
 
         {/* Actions Summary */}
         <div className="space-y-1 pt-1">
-          <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center space-x-1">
-            <MessageSquare className="w-3 h-3 text-emerald-400" />
+          <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider flex items-center space-x-1">
+            <MessageSquare className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />
             <span>Actions Configured</span>
           </span>
           <div className="space-y-1 text-[11px]">
@@ -188,13 +188,13 @@ export default function AutomationCard({
               <span
                 className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[9px] font-bold ${
                   pubReply?.enabled
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-slate-800 text-slate-600'
+                    ? 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600'
                 }`}
               >
                 {pubReply?.enabled ? '✓' : '✕'}
               </span>
-              <span className={pubReply?.enabled ? 'text-slate-200' : 'text-slate-500'}>
+              <span className={pubReply?.enabled ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-400 dark:text-slate-500'}>
                 Public reply {pubReply?.enabled ? `(${pubReply.variations?.length || 0} variations)` : 'disabled'}
               </span>
             </div>
@@ -203,13 +203,13 @@ export default function AutomationCard({
               <span
                 className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[9px] font-bold ${
                   privMsg?.enabled
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-slate-800 text-slate-600'
+                    ? 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600'
                 }`}
               >
                 {privMsg?.enabled ? '✓' : '✕'}
               </span>
-              <span className={privMsg?.enabled ? 'text-slate-200' : 'text-slate-500'}>
+              <span className={privMsg?.enabled ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-400 dark:text-slate-500'}>
                 Private message {privMsg?.enabled ? 'enabled' : 'disabled'}
               </span>
             </div>
@@ -218,7 +218,7 @@ export default function AutomationCard({
       </div>
 
       {/* 4. Footer Controls */}
-      <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+      <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
         {/* Activate / Pause Toggle Button */}
         <button
           type="button"
@@ -226,8 +226,8 @@ export default function AutomationCard({
           disabled={isTogglingStatus}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center space-x-1.5 ${
             isActive
-              ? 'bg-amber-950/70 hover:bg-amber-900 border border-amber-800 text-amber-300'
-              : 'bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-800 text-emerald-300'
+              ? 'bg-amber-50 dark:bg-amber-950/70 hover:bg-amber-100 dark:hover:bg-amber-900 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300'
+              : 'bg-emerald-50 dark:bg-emerald-950/70 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
           } disabled:opacity-50`}
         >
           {isTogglingStatus ? (
@@ -245,7 +245,7 @@ export default function AutomationCard({
           <button
             type="button"
             onClick={() => onEdit(automation)}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             title="Edit Automation"
           >
             <Edit2 className="w-4 h-4" />
@@ -254,7 +254,7 @@ export default function AutomationCard({
           <button
             type="button"
             onClick={() => onDelete(automation)}
-            className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
+            className="p-2 rounded-xl text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             title="Delete Automation"
           >
             <Trash2 className="w-4 h-4" />

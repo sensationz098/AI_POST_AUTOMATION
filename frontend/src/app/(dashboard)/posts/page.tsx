@@ -62,23 +62,23 @@ function ViewPostButton({ item }: { item: SchedulerItem }) {
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="px-2.5 py-1 rounded bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-800/80 text-indigo-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+          className="px-2.5 py-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
           title="View published post options"
         >
-          <ExternalLink className="w-3 h-3 text-indigo-400" />
+          <ExternalLink className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />
           <span>View Post</span>
-          <ChevronDown className="w-3 h-3 text-indigo-400" />
+          <ChevronDown className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />
         </button>
 
         {isOpen && (
-          <div className="origin-top-right absolute right-0 mt-1 w-36 rounded-md shadow-2xl bg-slate-900 border border-slate-800 ring-1 ring-black ring-opacity-5 z-30">
+          <div className="origin-top-right absolute right-0 mt-1 w-36 rounded-md shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 ring-1 ring-black/5 z-30">
             <div className="py-1" role="menu">
               <a
                 href={fbUrl!}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => setIsOpen(false)}
-                className="flex items-center px-3 py-1.5 text-[11px] text-slate-200 hover:bg-slate-800 hover:text-blue-300 transition-colors"
+                className="flex items-center px-3 py-1.5 text-[11px] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-300 transition-colors"
                 role="menuitem"
               >
                 <span className="w-2 h-2 rounded-full bg-blue-500 mr-2 flex-shrink-0"></span>
@@ -89,7 +89,7 @@ function ViewPostButton({ item }: { item: SchedulerItem }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => setIsOpen(false)}
-                className="flex items-center px-3 py-1.5 text-[11px] text-slate-200 hover:bg-slate-800 hover:text-pink-300 transition-colors"
+                className="flex items-center px-3 py-1.5 text-[11px] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-pink-600 dark:hover:text-pink-300 transition-colors"
                 role="menuitem"
               >
                 <span className="w-2 h-2 rounded-full bg-pink-500 mr-2 flex-shrink-0"></span>
@@ -104,14 +104,14 @@ function ViewPostButton({ item }: { item: SchedulerItem }) {
 
   const singleUrl = hasFb ? fbUrl! : igUrl!;
   const platformName = hasFb ? 'Facebook' : 'Instagram';
-  const platformColor = hasFb ? 'text-blue-400' : 'text-pink-400';
+  const platformColor = hasFb ? 'text-blue-500 dark:text-blue-400' : 'text-pink-500 dark:text-pink-400';
 
   return (
     <a
       href={singleUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+      className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
       title={`Open live post on ${platformName}`}
     >
       <ExternalLink className={`w-3 h-3 ${platformColor}`} />
@@ -134,10 +134,10 @@ function StoryActionButtons({
       <button
         type="button"
         onClick={onOpenPreview}
-        className="px-2.5 py-1 rounded bg-fuchsia-950/60 hover:bg-fuchsia-900 border border-fuchsia-800/60 text-fuchsia-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+        className="px-2.5 py-1 rounded bg-fuchsia-50 hover:bg-fuchsia-100 dark:bg-fuchsia-950/60 dark:hover:bg-fuchsia-900 border border-fuchsia-200 dark:border-fuchsia-800/60 text-fuchsia-700 dark:text-fuchsia-200 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
         title="View internal 9:16 story preview"
       >
-        <Eye className="w-3 h-3 text-fuchsia-400" />
+        <Eye className="w-3 h-3 text-fuchsia-500 dark:text-fuchsia-400" />
         <span>Preview</span>
       </button>
 
@@ -146,10 +146,10 @@ function StoryActionButtons({
           href={fbUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="px-2.5 py-1 rounded bg-blue-950/80 hover:bg-blue-900 border border-blue-800/80 text-blue-300 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+          className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/80 dark:hover:bg-blue-900 border border-blue-200 dark:border-blue-800/80 text-blue-700 dark:text-blue-300 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
           title="Open live story on Facebook"
         >
-          <ExternalLink className="w-3 h-3 text-blue-400" />
+          <ExternalLink className="w-3 h-3 text-blue-500 dark:text-blue-400" />
           <span>View on Facebook</span>
         </a>
       )}
@@ -159,10 +159,10 @@ function StoryActionButtons({
           href={igUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="px-2.5 py-1 rounded bg-pink-950/80 hover:bg-pink-900 border border-pink-800/80 text-pink-300 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
+          className="px-2.5 py-1 rounded bg-pink-50 hover:bg-pink-100 dark:bg-pink-950/80 dark:hover:bg-pink-900 border border-pink-200 dark:border-pink-800/80 text-pink-700 dark:text-pink-300 font-semibold text-[10px] transition flex items-center space-x-1 focus-ring"
           title="Open live story on Instagram"
         >
-          <ExternalLink className="w-3 h-3 text-pink-400" />
+          <ExternalLink className="w-3 h-3 text-pink-500 dark:text-pink-400" />
           <span>View on Instagram</span>
         </a>
       )}
@@ -434,18 +434,18 @@ export default function PostSchedulerPage() {
   return (
     <div className="space-y-5 select-none font-sans text-xs">
       {/* Context Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200 dark:border-slate-800/60">
         <div>
           <div className="flex items-center space-x-2.5">
-            <h1 className="text-lg font-bold text-slate-100 tracking-tight flex items-center space-x-2">
-              <CalendarIcon className="w-5 h-5 text-indigo-400" />
+            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight flex items-center space-x-2">
+              <CalendarIcon className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
               <span>Unified Content Scheduler</span>
             </h1>
-            <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-slate-900/60 text-slate-400 border border-slate-800">
+            <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800">
               Timezone: {userTimeZone}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5">
+          <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
             Manage, preview, and schedule feed Posts and 24-hour Stories across Facebook & Instagram with isolated account targeting.
           </p>
         </div>
@@ -470,14 +470,14 @@ export default function PostSchedulerPage() {
 
       {/* Global Success / Deletion Message Banner */}
       {deleteStatusMessage && deleteStatusMessage.type === 'success' && (
-        <div className="p-3 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-emerald-200 text-xs flex items-center justify-between">
+        <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-200 text-xs flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <CheckCircle className="w-4 h-4 text-emerald-400" />
+            <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span>{deleteStatusMessage.text}</span>
           </div>
           <button
             onClick={() => setDeleteStatusMessage(null)}
-            className="text-emerald-400 hover:text-emerald-200 transition"
+            className="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-200 transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -485,20 +485,20 @@ export default function PostSchedulerPage() {
       )}
 
       {/* Unified Filter Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 shadow-sm">
         
         {/* Type Filter: ALL vs POST vs STORY */}
         <div className="flex items-center space-x-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center space-x-1">
-            <Layers className="w-3 h-3 text-indigo-400" />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mr-1 flex items-center space-x-1">
+            <Layers className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />
             <span>Type:</span>
           </span>
           <button
             onClick={() => setFilterType('ALL')}
             className={`px-3 py-1 rounded-lg text-[11px] font-bold transition ${
               filterType === 'ALL'
-                ? 'bg-slate-800 text-white border border-slate-700 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-slate-900 text-white dark:bg-slate-800 dark:text-white border border-slate-900 dark:border-slate-700 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             All Content ({items.length})
@@ -507,30 +507,30 @@ export default function PostSchedulerPage() {
             onClick={() => setFilterType('POST')}
             className={`px-3 py-1 rounded-lg text-[11px] font-bold transition flex items-center space-x-1 ${
               filterType === 'POST'
-                ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-indigo-300'
+                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-600/30 dark:text-indigo-300 dark:border-indigo-500/40 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300'
             }`}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mr-1" />
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-1" />
             <span>Posts ({postCount})</span>
           </button>
           <button
             onClick={() => setFilterType('STORY')}
             className={`px-3 py-1 rounded-lg text-[11px] font-bold transition flex items-center space-x-1.5 ${
               filterType === 'STORY'
-                ? 'bg-fuchsia-600/30 text-fuchsia-300 border border-fuchsia-500/40 shadow-sm'
-                : 'text-slate-400 hover:text-fuchsia-300'
+                ? 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 dark:bg-fuchsia-600/30 dark:text-fuchsia-300 dark:border-fuchsia-500/40 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300'
             }`}
           >
-            <Sparkles className="w-3 h-3 text-fuchsia-400" />
+            <Sparkles className="w-3 h-3 text-fuchsia-500 dark:text-fuchsia-400" />
             <span>Stories ({storyCount})</span>
           </button>
         </div>
 
         {/* Status Filter */}
         <div className="flex items-center space-x-1.5 overflow-x-auto">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center space-x-1 flex-shrink-0">
-            <Filter className="w-3 h-3 text-slate-400" />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mr-1 flex items-center space-x-1 flex-shrink-0">
+            <Filter className="w-3 h-3 text-slate-500 dark:text-slate-400" />
             <span>Status:</span>
           </span>
           {['ALL', 'SCHEDULED', 'PUBLISHED', 'FAILED', 'DRAFT'].map((st) => (
@@ -539,8 +539,8 @@ export default function PostSchedulerPage() {
               onClick={() => setFilterStatus(st)}
               className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition flex-shrink-0 ${
                 filterStatus === st
-                  ? 'bg-slate-800 text-slate-100 border border-slate-700'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-slate-900 text-white dark:bg-slate-800 dark:text-slate-100 border border-slate-900 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               {st}
@@ -550,11 +550,11 @@ export default function PostSchedulerPage() {
       </div>
 
       {/* Enterprise Single Surface Queue Table */}
-      <div className="linear-panel rounded-xl overflow-hidden border border-slate-800/80 shadow-xl bg-slate-950/40">
+      <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800/80 shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-900/80 border-b border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              <tr className="bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                 <th className="p-3 w-44">Type & Media Preview</th>
                 <th className="p-3">Title & Content Summary</th>
                 <th className="p-3">Target Accounts & Platforms</th>
@@ -563,31 +563,31 @@ export default function PostSchedulerPage() {
                 <th className="p-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center text-slate-400">
+                  <td colSpan={6} className="p-12 text-center text-slate-500 dark:text-slate-400">
                     <div className="flex flex-col items-center justify-center space-y-2">
-                      <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+                      <Loader2 className="w-6 h-6 animate-spin text-indigo-500 dark:text-indigo-400" />
                       <span className="text-xs font-semibold">Loading content scheduler queue...</span>
                     </div>
                   </td>
                 </tr>
               ) : fetchError ? (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center text-rose-400">
+                  <td colSpan={6} className="p-12 text-center text-rose-600 dark:text-rose-400">
                     <div className="flex flex-col items-center justify-center space-y-2">
-                      <AlertTriangle className="w-6 h-6 text-rose-400" />
+                      <AlertTriangle className="w-6 h-6 text-rose-600 dark:text-rose-400" />
                       <span className="text-xs font-semibold">{fetchError}</span>
                     </div>
                   </td>
                 </tr>
               ) : filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-12 text-center text-slate-400">
+                  <td colSpan={6} className="p-12 text-center text-slate-500 dark:text-slate-400">
                     <div className="flex flex-col items-center justify-center space-y-2">
-                      <CalendarIcon className="w-8 h-8 text-slate-600" />
-                      <span className="text-sm font-semibold text-slate-300">No items in scheduler queue</span>
+                      <CalendarIcon className="w-8 h-8 text-slate-400 dark:text-slate-600" />
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">No items in scheduler queue</span>
                       <p className="text-xs text-slate-500 max-w-sm">
                         {filterType !== 'ALL' || filterStatus !== 'ALL'
                           ? `No items match the active filters (${filterType} • ${filterStatus}).`
@@ -602,7 +602,7 @@ export default function PostSchedulerPage() {
                   const isVideo = item.media_type === 'video' || (item.media_url && Boolean(item.media_url.match(/\.(mp4|mov|webm)$/i)));
 
                   return (
-                    <tr key={`${item.item_type}-${item.id}`} className="hover:bg-slate-800/30 transition-colors duration-150">
+                    <tr key={`${item.item_type}-${item.id}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors duration-150">
                       
                       {/* Column 1: Type & Visual (9:16 for Story, 1:1 for Post) */}
                       <td className="p-3">
@@ -611,7 +611,7 @@ export default function PostSchedulerPage() {
                           {isStory ? (
                             <div
                               onClick={() => setPreviewStory(item)}
-                              className="relative w-10 h-[70px] rounded-lg overflow-hidden border border-fuchsia-500/40 bg-black flex-shrink-0 cursor-pointer group shadow-sm hover:border-fuchsia-400 transition"
+                              className="relative w-10 h-[70px] rounded-lg overflow-hidden border border-fuchsia-400/60 dark:border-fuchsia-500/40 bg-black flex-shrink-0 cursor-pointer group shadow-sm hover:border-fuchsia-500 transition"
                               title="Click to view 9:16 Story Preview"
                             >
                               {item.media_url ? (
@@ -630,7 +630,7 @@ export default function PostSchedulerPage() {
                                   />
                                 )
                               ) : (
-                                <div className="w-full h-full bg-slate-900 flex items-center justify-center text-fuchsia-400">
+                                <div className="w-full h-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-fuchsia-600 dark:text-fuchsia-400">
                                   <Sparkles className="w-4 h-4" />
                                 </div>
                               )}
@@ -639,7 +639,7 @@ export default function PostSchedulerPage() {
                               </div>
                             </div>
                           ) : (
-                            <div className="relative w-11 h-11 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center flex-shrink-0">
+                            <div className="relative w-11 h-11 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 flex items-center justify-center flex-shrink-0">
                               {item.media_url ? (
                                 <img
                                   src={item.media_url}
@@ -655,30 +655,30 @@ export default function PostSchedulerPage() {
                           {/* Explicit Type Badge */}
                           <div className="flex flex-col space-y-1">
                             {isStory ? (
-                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-fuchsia-600/30 to-violet-600/30 border border-fuchsia-500/40 text-fuchsia-300 text-[10px] font-extrabold uppercase tracking-wider w-fit">
-                                <Sparkles className="w-2.5 h-2.5 text-fuchsia-400" />
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-fuchsia-50 dark:bg-gradient-to-r dark:from-fuchsia-600/30 dark:to-violet-600/30 border border-fuchsia-200 dark:border-fuchsia-500/40 text-fuchsia-700 dark:text-fuchsia-300 text-[10px] font-extrabold uppercase tracking-wider w-fit">
+                                <Sparkles className="w-2.5 h-2.5 text-fuchsia-600 dark:text-fuchsia-400" />
                                 <span>STORY</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-950/60 border border-indigo-800/60 text-indigo-300 text-[10px] font-extrabold uppercase tracking-wider w-fit">
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-extrabold uppercase tracking-wider w-fit">
                                 <span>POST</span>
                               </span>
                             )}
-                            <span className="text-[10px] font-mono text-slate-400 font-bold">#{item.id}</span>
+                            <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">#{item.id}</span>
                           </div>
                         </div>
                       </td>
 
                       {/* Column 2: Title & Summary */}
                       <td className="p-3 max-w-xs sm:max-w-sm">
-                        <h4 className="font-semibold text-slate-100 text-xs truncate flex items-center space-x-1.5">
+                        <h4 className="font-semibold text-slate-900 dark:text-slate-100 text-xs truncate flex items-center space-x-1.5">
                           <span>{item.title || (item.caption && item.caption.trim() ? item.caption.slice(0, 40) + '...' : isStory ? '24-Hour Story' : 'Untitled Post')}</span>
                         </h4>
-                        <p className="text-slate-400 text-[11px] truncate mt-0.5">
+                        <p className="text-slate-600 dark:text-slate-400 text-[11px] truncate mt-0.5">
                           {item.caption || (isStory ? `Story Media Asset (${item.media_type || 'image'})` : 'No caption')}
                         </p>
                         {(item.fb_id || item.ig_id) && (
-                          <div className="flex items-center space-x-2 mt-1 text-[9px] font-mono text-indigo-400/90">
+                          <div className="flex items-center space-x-2 mt-1 text-[9px] font-mono text-indigo-600 dark:text-indigo-400/90">
                             {item.fb_id && <span>FB: {item.fb_id}</span>}
                             {item.ig_id && <span>IG: {item.ig_id}</span>}
                           </div>
@@ -690,19 +690,19 @@ export default function PostSchedulerPage() {
                         <div className="space-y-1">
                           <div className="flex items-center space-x-1.5 flex-wrap gap-1">
                             {item.platforms.includes('facebook') && (
-                              <span className="px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800/60 text-blue-300 text-[9px] font-mono font-medium">
+                              <span className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 text-blue-700 dark:text-blue-300 text-[9px] font-mono font-medium">
                                 FB Page
                               </span>
                             )}
                             {item.platforms.includes('instagram') && (
-                              <span className="px-1.5 py-0.5 rounded bg-pink-950/60 border border-pink-800/60 text-pink-300 text-[9px] font-mono font-medium">
+                              <span className="px-1.5 py-0.5 rounded bg-pink-50 dark:bg-pink-950/60 border border-pink-200 dark:border-pink-800/60 text-pink-700 dark:text-pink-300 text-[9px] font-mono font-medium">
                                 IG Biz
                               </span>
                             )}
                           </div>
                           {isStory && item.target_account_ids && item.target_account_ids.length > 0 && (
                             <p className="text-[9px] text-slate-500 font-mono flex items-center space-x-1">
-                              <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" />
+                              <ShieldCheck className="w-2.5 h-2.5 text-emerald-500 dark:text-emerald-400" />
                               <span>{item.target_account_ids.length} targeted {item.target_account_ids.length === 1 ? 'account' : 'accounts'}</span>
                             </p>
                           )}
@@ -715,19 +715,19 @@ export default function PostSchedulerPage() {
                       </td>
 
                       {/* Column 5: Scheduled / Published */}
-                      <td className="p-3 text-slate-300 font-mono text-[11px]">
+                      <td className="p-3 text-slate-700 dark:text-slate-300 font-mono text-[11px]">
                         {item.published_at ? (
-                          <span className="text-indigo-300 flex items-center space-x-1">
-                            <CheckCircle className="w-3 h-3 text-indigo-400 inline" />
+                          <span className="text-indigo-700 dark:text-indigo-300 flex items-center space-x-1">
+                            <CheckCircle className="w-3 h-3 text-indigo-600 dark:text-indigo-400 inline" />
                             <span>{formatToLocalDateTime(item.published_at)}</span>
                           </span>
                         ) : item.scheduled_at ? (
-                          <span className="text-sky-300 flex items-center space-x-1">
-                            <Clock className="w-3 h-3 text-sky-400 inline" />
+                          <span className="text-sky-700 dark:text-sky-300 flex items-center space-x-1">
+                            <Clock className="w-3 h-3 text-sky-600 dark:text-sky-400 inline" />
                             <span>{formatToLocalDateTime(item.scheduled_at)}</span>
                           </span>
                         ) : (
-                          <span className="text-slate-500">—</span>
+                          <span className="text-slate-400 dark:text-slate-500">—</span>
                         )}
                       </td>
 
@@ -767,11 +767,11 @@ export default function PostSchedulerPage() {
                               setDeleteStatusMessage(null);
                               setConfirmDeleteItem(item);
                             }}
-                            className="px-2 py-1 rounded bg-slate-900 hover:bg-rose-950/60 border border-slate-800 hover:border-rose-800/60 text-slate-400 hover:text-rose-300 font-semibold text-[10px] transition flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-2 py-1 rounded bg-slate-100 hover:bg-rose-50 dark:bg-slate-900 dark:hover:bg-rose-950/60 border border-slate-200 hover:border-rose-200 dark:border-slate-800 dark:hover:border-rose-800/60 text-slate-600 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-300 font-semibold text-[10px] transition flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
                             title={isStory ? 'Delete / cancel story' : 'Delete post'}
                           >
                             {deletingItemId === item.id && deletingItemType === item.item_type ? (
-                              <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                              <Loader2 className="w-3 h-3 animate-spin text-rose-500 dark:text-rose-400" />
                             ) : (
                               <Trash2 className="w-3 h-3" />
                             )}
@@ -801,87 +801,87 @@ export default function PostSchedulerPage() {
 
       {/* Confirmation & Deletion Dialog Modal */}
       {confirmDeleteItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 max-w-md w-full space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 max-w-md w-full space-y-4 shadow-2xl">
             <div className="flex items-start justify-between">
-              <div className="flex items-center space-x-2 text-rose-400">
+              <div className="flex items-center space-x-2 text-rose-600 dark:text-rose-400">
                 <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                <h3 className="text-sm font-bold text-slate-100">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   {confirmDeleteItem.status === 'SCHEDULED' ? 'Cancel Scheduled' : 'Delete'} {confirmDeleteItem.item_type === 'story' ? 'Story' : 'Post'} #{confirmDeleteItem.id}
                 </h3>
               </div>
               <button
                 disabled={deletingItemId !== null}
                 onClick={() => setConfirmDeleteItem(null)}
-                className="text-slate-500 hover:text-slate-300 transition"
+                className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-2 text-xs text-slate-300">
-              <p className="font-medium text-slate-200">
+            <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+              <p className="font-medium text-slate-900 dark:text-slate-200">
                 Are you sure you want to {confirmDeleteItem.status === 'SCHEDULED' ? 'cancel and delete' : 'delete'} this {confirmDeleteItem.item_type === 'story' ? 'Story' : 'Post'}?
               </p>
 
               {confirmDeleteItem.item_type === 'story' ? (
                 confirmDeleteItem.status === 'SCHEDULED' ? (
-                  <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-800/50 text-amber-200 text-[11px] space-y-1">
+                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-200 text-[11px] space-y-1">
                     <p className="font-bold">🕒 Scheduled Story Cancellation</p>
                     <p>Deleting this record will safely cancel scheduled publication and prevent any Meta API calls.</p>
                   </div>
                 ) : confirmDeleteItem.status === 'PUBLISHED' || Boolean(confirmDeleteItem.fb_id || confirmDeleteItem.ig_id) ? (
-                  <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800/50 text-rose-200 space-y-2 text-[11px]">
-                    <p className="font-bold flex items-center space-x-1 text-rose-300">
+                  <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/50 text-rose-800 dark:text-rose-200 space-y-2 text-[11px]">
+                    <p className="font-bold flex items-center space-x-1 text-rose-700 dark:text-rose-300">
                       <span>⚠️ External Platform Story Removal</span>
                     </p>
                     <p>This will attempt to remove the Story from the connected platforms:</p>
                     
                     <div className="space-y-1 pl-1 font-mono text-[11px]">
                       {confirmDeleteItem.fb_id ? (
-                        <div className="text-emerald-400 flex items-center space-x-1.5">
+                        <div className="text-emerald-600 dark:text-emerald-400 flex items-center space-x-1.5">
                           <span>✓</span>
-                          <span className="text-slate-200">Facebook Page</span>
-                          <span className="text-[10px] text-slate-400">({confirmDeleteItem.fb_id})</span>
+                          <span className="text-slate-700 dark:text-slate-200">Facebook Page</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">({confirmDeleteItem.fb_id})</span>
                         </div>
                       ) : (confirmDeleteItem.platforms || []).includes('facebook') ? (
-                        <div className="text-rose-400 flex items-center space-x-1.5">
+                        <div className="text-rose-600 dark:text-rose-400 flex items-center space-x-1.5">
                           <span>✕</span>
-                          <span className="text-slate-400">Facebook Page (not published)</span>
+                          <span className="text-slate-500 dark:text-slate-400">Facebook Page (not published)</span>
                         </div>
                       ) : null}
 
                       {confirmDeleteItem.ig_id ? (
-                        <div className="text-emerald-400 flex items-center space-x-1.5">
+                        <div className="text-emerald-600 dark:text-emerald-400 flex items-center space-x-1.5">
                           <span>✓</span>
-                          <span className="text-slate-200">Instagram Business</span>
-                          <span className="text-[10px] text-slate-400">({confirmDeleteItem.ig_id})</span>
+                          <span className="text-slate-700 dark:text-slate-200">Instagram Business</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">({confirmDeleteItem.ig_id})</span>
                         </div>
                       ) : (confirmDeleteItem.platforms || []).includes('instagram') ? (
-                        <div className="text-rose-400 flex items-center space-x-1.5">
+                        <div className="text-rose-600 dark:text-rose-400 flex items-center space-x-1.5">
                           <span>✕</span>
-                          <span className="text-slate-400">Instagram Business (not published)</span>
+                          <span className="text-slate-500 dark:text-slate-400">Instagram Business (not published)</span>
                         </div>
                       ) : null}
                     </div>
 
                     {((!confirmDeleteItem.fb_id && (confirmDeleteItem.platforms || []).includes('facebook')) ||
                       (!confirmDeleteItem.ig_id && (confirmDeleteItem.platforms || []).includes('instagram'))) && (
-                      <p className="text-[10px] text-amber-300">
+                      <p className="text-[10px] text-amber-700 dark:text-amber-300">
                         Only successfully published platforms will be affected by deletion.
                       </p>
                     )}
                   </div>
                 ) : (
-                  <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 text-slate-300 text-[11px] space-y-1">
-                    <p className="font-bold text-slate-200">ℹ️ Story Record Removal</p>
+                  <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-[11px] space-y-1">
+                    <p className="font-bold text-slate-800 dark:text-slate-200">ℹ️ Story Record Removal</p>
                     <p>Deleting this record will remove it from your scheduler queue.</p>
                   </div>
                 )
               ) : (
                 confirmDeleteItem.status === 'PUBLISHED' ? (
-                  <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-800/50 text-rose-200 space-y-1 text-[11px]">
-                    <p className="font-bold flex items-center space-x-1 text-rose-300">
+                  <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/50 text-rose-800 dark:text-rose-200 space-y-1 text-[11px]">
+                    <p className="font-bold flex items-center space-x-1 text-rose-700 dark:text-rose-300">
                       <span>⚠️ External Platform Removal Warning</span>
                     </p>
                     <p>
@@ -889,7 +889,7 @@ export default function PostSchedulerPage() {
                     </p>
                   </div>
                 ) : confirmDeleteItem.status === 'SCHEDULED' ? (
-                  <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-800/50 text-amber-200 text-[11px]">
+                  <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-200 text-[11px]">
                     <span>🕒 Deleting this post will safely cancel its scheduled execution and remove it.</span>
                   </div>
                 ) : null
@@ -898,8 +898,8 @@ export default function PostSchedulerPage() {
 
             {/* Error message inside modal */}
             {deleteStatusMessage && deleteStatusMessage.type === 'error' && (
-              <div className="p-3 rounded-lg bg-rose-950/50 border border-rose-800/80 text-rose-200 text-[11px] space-y-1">
-                <p className="font-bold text-rose-300">{deleteStatusMessage.text}</p>
+              <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/80 text-rose-800 dark:text-rose-200 text-[11px] space-y-1">
+                <p className="font-bold text-rose-700 dark:text-rose-300">{deleteStatusMessage.text}</p>
                 {deleteStatusMessage.details && deleteStatusMessage.details.length > 0 && (
                   <ul className="list-disc pl-4 space-y-0.5 text-[10px]">
                     {deleteStatusMessage.details.map((d: any, idx: number) => (
@@ -912,12 +912,12 @@ export default function PostSchedulerPage() {
               </div>
             )}
 
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button
                 type="button"
                 disabled={deletingItemId !== null}
                 onClick={() => setConfirmDeleteItem(null)}
-                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition"
               >
                 Cancel
               </button>

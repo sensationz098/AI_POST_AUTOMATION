@@ -41,29 +41,29 @@ export default function AdCardComponent({
   }`;
 
   return (
-    <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl overflow-hidden shadow-sm transition hover:border-purple-800/60 flex flex-col justify-between space-y-3">
+    <div className="bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800/90 rounded-2xl overflow-hidden shadow-sm transition hover:border-purple-300 dark:hover:border-purple-800/60 flex flex-col justify-between space-y-3">
       {/* 1. Header: Ad Identity & Effective Status */}
       <div className="p-4 pb-0 flex items-start justify-between gap-3">
         <div className="flex items-start space-x-3 min-w-0">
-          <div className="w-9 h-9 rounded-full bg-purple-950/90 border border-purple-800/80 flex items-center justify-center text-purple-400 flex-shrink-0 shadow-sm mt-0.5">
+          <div className="w-9 h-9 rounded-full bg-purple-50 dark:bg-purple-950/90 border border-purple-200 dark:border-purple-800/80 flex items-center justify-center text-purple-600 dark:text-purple-400 flex-shrink-0 shadow-sm mt-0.5">
             <Target className="w-4 h-4" />
           </div>
 
           <div className="min-w-0 space-y-1">
             <div className="flex items-center space-x-2">
-              <h3 className="font-bold text-xs text-slate-100 truncate">{ad.name}</h3>
+              <h3 className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">{ad.name}</h3>
               <span
                 className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold flex-shrink-0 border ${
                   isActive
-                    ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                    : 'bg-amber-950 text-amber-300 border-amber-800'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
+                    : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
                 }`}
               >
                 ● {ad.effective_status || 'UNKNOWN'}
               </span>
             </div>
 
-            <div className="text-[11px] text-slate-400 space-y-0.5 font-sans">
+            <div className="text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5 font-sans">
               {ad.campaign_name && (
                 <p className="truncate">
                   <span className="text-slate-500 font-semibold">Campaign:</span> {ad.campaign_name}
@@ -85,10 +85,10 @@ export default function AdCardComponent({
             href={ad.permalink}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-2.5 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900/80 border border-blue-700/70 text-blue-200 text-[11px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
+            className="px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 dark:bg-blue-950/70 dark:hover:bg-blue-900/80 border border-slate-200 dark:border-blue-700/70 text-slate-700 dark:text-blue-200 text-[11px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
           >
             <span>View Ad</span>
-            <ExternalLink className="w-3 h-3 text-blue-300" />
+            <ExternalLink className="w-3 h-3 text-slate-500 dark:text-blue-300" />
           </a>
         )}
       </div>
@@ -97,9 +97,9 @@ export default function AdCardComponent({
       {children && <div className="px-4 pt-1">{children}</div>}
 
       {/* 3. Footer: Engagement Bar & Action Button */}
-      <div className="p-4 pt-3 border-t border-slate-800/80 flex items-center justify-between bg-slate-950/40">
-        <div className="flex items-center space-x-2 text-xs text-purple-300 font-semibold">
-          <MessageSquare className="w-4 h-4 text-purple-400" />
+      <div className="p-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/70 dark:bg-slate-950/40">
+        <div className="flex items-center space-x-2 text-xs text-slate-700 dark:text-purple-300 font-semibold">
+          <MessageSquare className="w-4 h-4 text-purple-600 dark:text-purple-400" />
           <span>{commentCountToDisplay} Comments</span>
         </div>
 
@@ -107,7 +107,7 @@ export default function AdCardComponent({
           {onViewComments ? (
             <button
               onClick={() => onViewComments(String(ad.id))}
-              className="px-3.5 py-1.5 rounded-xl bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-800/80 font-bold text-xs transition flex items-center space-x-1"
+              className="px-3.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-950/80 dark:hover:bg-purple-900 dark:text-purple-200 dark:border-purple-800/80 font-bold text-xs transition flex items-center space-x-1"
             >
               <span>Inspect Ad Conversations</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -115,7 +115,7 @@ export default function AdCardComponent({
           ) : (
             <Link
               href={drilldownHref}
-              className="px-3.5 py-1.5 rounded-xl bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-800/80 font-bold text-xs transition flex items-center space-x-1"
+              className="px-3.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-950/80 dark:hover:bg-purple-900 dark:text-purple-200 dark:border-purple-800/80 font-bold text-xs transition flex items-center space-x-1"
             >
               <span>Inspect Ad Conversations</span>
               <ChevronRight className="w-3.5 h-3.5" />

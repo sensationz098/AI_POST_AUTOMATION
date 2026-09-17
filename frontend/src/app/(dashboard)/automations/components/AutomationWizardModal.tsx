@@ -439,49 +439,49 @@ export default function AutomationWizardModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-md animate-fadeIn">
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-950/60 dark:bg-black/80 backdrop-blur-md animate-fadeIn">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/40">
+          <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/80 dark:bg-slate-950/40">
             <div className="flex items-center space-x-3">
               <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm">
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-sm font-bold text-slate-100">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   {editingAutomation ? 'Edit Comment Automation' : 'Create Comment Automation'}
                 </h2>
-                <p className="text-[11px] text-slate-400">Step {currentStep} of 6</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Step {currentStep} of 6</p>
               </div>
             </div>
 
             <button
               type="button"
               onClick={onClose}
-              className="text-slate-400 hover:text-slate-200 p-1.5 rounded-xl hover:bg-slate-800 transition"
+              className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Stepper Progress Bar */}
-          <div className="w-full bg-slate-950 h-1.5 flex">
+          <div className="w-full bg-slate-100 dark:bg-slate-950 h-1.5 flex">
             {[1, 2, 3, 4, 5, 6].map((st) => (
               <div
                 key={st}
                 className={`flex-1 h-full transition-all duration-300 ${
-                  st <= currentStep ? 'bg-indigo-500' : 'bg-slate-800'
+                  st <= currentStep ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-slate-200 dark:bg-slate-800'
                 }`}
               />
             ))}
           </div>
 
           {/* Modal Body */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs text-slate-200">
+          <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs text-slate-700 dark:text-slate-200">
             {/* Error Banner */}
             {errorMessage && (
-              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center space-x-2.5">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+              <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-800 dark:text-rose-300 text-xs flex items-center space-x-2.5">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-500 dark:text-rose-400" />
                 <span>{errorMessage}</span>
               </div>
             )}
@@ -490,15 +490,15 @@ export default function AutomationWizardModal({
             {currentStep === 1 && (
               <div className="space-y-5">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-100">Step 1: Choose Platform & Account</h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Step 1: Choose Platform & Account</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
                     Select the social platform and connected profile where this automation will listen for comments.
                   </p>
                 </div>
 
                 {/* Platform Selection */}
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Select Platform
                   </label>
                   <div className="grid grid-cols-2 gap-3">
@@ -507,16 +507,16 @@ export default function AutomationWizardModal({
                       onClick={() => handlePlatformChange('instagram')}
                       className={`p-4 rounded-2xl border flex items-center space-x-3 transition text-left select-none ${
                         platform === 'instagram'
-                          ? 'bg-pink-950/40 border-pink-500 ring-2 ring-pink-500/30 text-white'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                          ? 'bg-pink-50 dark:bg-pink-950/40 border-pink-500 ring-2 ring-pink-500/30 text-pink-950 dark:text-white'
+                          : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-700 dark:text-slate-300'
                       }`}
                     >
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center text-white flex-shrink-0 shadow-sm">
                         <Instagram className="w-5 h-5" />
                       </div>
                       <div>
-                        <div className="font-bold text-xs text-slate-100">Instagram</div>
-                        <p className="text-[10px] text-slate-400">Post Comments & DMs</p>
+                        <div className="font-bold text-xs text-slate-900 dark:text-slate-100">Instagram</div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">Post Comments & DMs</p>
                       </div>
                     </button>
 
@@ -525,16 +525,16 @@ export default function AutomationWizardModal({
                       onClick={() => handlePlatformChange('facebook')}
                       className={`p-4 rounded-2xl border flex items-center space-x-3 transition text-left select-none ${
                         platform === 'facebook'
-                          ? 'bg-blue-950/40 border-blue-500 ring-2 ring-blue-500/30 text-white'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                          ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-500 ring-2 ring-blue-500/30 text-blue-950 dark:text-white'
+                          : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-700 dark:text-slate-300'
                       }`}
                     >
                       <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white flex-shrink-0 shadow-sm">
                         <Facebook className="w-5 h-5 fill-current" />
                       </div>
                       <div>
-                        <div className="font-bold text-xs text-slate-100">Facebook</div>
-                        <p className="text-[10px] text-slate-400">Page Comments & Messenger</p>
+                        <div className="font-bold text-xs text-slate-900 dark:text-slate-100">Facebook</div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">Page Comments & Messenger</p>
                       </div>
                     </button>
                   </div>
@@ -542,18 +542,18 @@ export default function AutomationWizardModal({
 
                 {/* Social Account Picker */}
                 <div className="space-y-2 pt-2">
-                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Connected Account
                   </label>
 
                   {platformAccounts.length === 0 ? (
-                    <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-3">
-                      <p className="text-xs text-slate-400">
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center space-y-3">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         No connected {platform === 'facebook' ? 'Facebook Pages' : 'Instagram Accounts'} found.
                       </p>
                       <Link
                         href="/meta-connect"
-                        className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition"
+                        className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition shadow-sm"
                       >
                         <span>Connect {platform === 'facebook' ? 'Facebook' : 'Instagram'}</span>
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -569,8 +569,8 @@ export default function AutomationWizardModal({
                             onClick={() => setSelectedAccountId(acc.id)}
                             className={`p-3.5 rounded-2xl border flex items-center justify-between transition cursor-pointer select-none ${
                               isSelected
-                                ? 'bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30'
-                                : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                                ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30'
+                                : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                             }`}
                           >
                             <div className="flex items-center space-x-3 min-w-0">
@@ -588,10 +588,10 @@ export default function AutomationWizardModal({
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <p className="font-bold text-xs text-slate-100 truncate">
+                                <p className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">
                                   {acc.account_name}
                                 </p>
-                                <p className="text-[10px] text-slate-400 font-mono truncate">
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate">
                                   ID: {acc.account_id}
                                 </p>
                               </div>
@@ -599,7 +599,7 @@ export default function AutomationWizardModal({
 
                             <div className="flex items-center space-x-2">
                               {isSelected && (
-                                <span className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-white">
+                                <span className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-white">
                                   <Check className="w-3.5 h-3.5 stroke-[3]" />
                                 </span>
                               )}
@@ -617,17 +617,17 @@ export default function AutomationWizardModal({
             {currentStep === 2 && (
               <div className="space-y-5">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-100">Step 2: Choose Target Post</h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Step 2: Choose Target Post</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
                     This automation will listen for incoming comments on this specific platform post.
                   </p>
                 </div>
 
                 {selectedPost ? (
-                  <div className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/50 space-y-3">
+                  <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-500/50 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex gap-3 min-w-0">
-                        <div className="w-16 h-16 rounded-xl bg-slate-950 border border-slate-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden flex-shrink-0 flex items-center justify-center">
                           {selectedPost.thumbnail_url || selectedPost.media_url ? (
                             <img
                               src={selectedPost.thumbnail_url || selectedPost.media_url}
@@ -635,23 +635,23 @@ export default function AutomationWizardModal({
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <ImageIcon className="w-6 h-6 text-slate-600" />
+                            <ImageIcon className="w-6 h-6 text-slate-400 dark:text-slate-600" />
                           )}
                         </div>
                         <div className="min-w-0 space-y-1">
-                          <span className="font-bold text-xs text-slate-100 truncate block">
+                          <span className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate block">
                             {platform === 'instagram' ? 'Instagram Media' : 'Facebook Post'}
                           </span>
-                          <p className="text-[11px] text-slate-300 line-clamp-2">
+                          <p className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-2">
                             {selectedPost.caption || 'No caption text'}
                           </p>
                           <div className="space-y-0.5 pt-0.5">
-                            <span className="text-[10px] font-mono text-indigo-400 block truncate">
+                            <span className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 block truncate">
                               {platform === 'instagram' ? 'Instagram Media ID: ' : 'Facebook Post ID: '}
-                              <span className="text-slate-100 font-bold">{selectedPost.id}</span>
+                              <span className="text-slate-900 dark:text-slate-100 font-bold">{selectedPost.id}</span>
                             </span>
                             {selectedPost.internal_post_id ? (
-                              <span className="text-[9px] font-mono text-emerald-400 block">
+                              <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400 block">
                                 Local Post: #{selectedPost.internal_post_id}
                               </span>
                             ) : null}
@@ -662,32 +662,32 @@ export default function AutomationWizardModal({
                       <button
                         type="button"
                         onClick={() => setIsPostPickerOpen(true)}
-                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex-shrink-0"
+                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition border border-slate-300 dark:border-slate-700 flex-shrink-0 shadow-sm"
                       >
                         Change Post
                       </button>
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-indigo-900/30 border border-indigo-800/40 text-[11px] text-indigo-300 flex items-center space-x-2">
-                      <ShieldCheck className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                    <div className="p-2.5 rounded-xl bg-indigo-100/60 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800/40 text-[11px] text-indigo-800 dark:text-indigo-300 flex items-center space-x-2">
+                      <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
                       <span>This automation will listen for comments on this exact platform post.</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="p-8 rounded-2xl bg-slate-950/60 border border-dashed border-slate-800 text-center space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
+                  <div className="p-8 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-dashed border-slate-300 dark:border-slate-800 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center mx-auto text-slate-400 dark:text-slate-500">
                       <ImageIcon className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-slate-200">No Post Selected</p>
-                      <p className="text-[11px] text-slate-400 max-w-sm mx-auto mt-0.5">
+                      <p className="text-xs font-bold text-slate-900 dark:text-slate-200">No Post Selected</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-0.5">
                         Select any real published post directly from your connected {platform === 'facebook' ? 'Facebook Page' : 'Instagram Account'}.
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setIsPostPickerOpen(true)}
-                      className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition shadow-md shadow-indigo-600/30"
+                      className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition shadow-md shadow-indigo-600/20"
                     >
                       Browse {platform === 'facebook' ? 'Facebook' : 'Instagram'} Posts
                     </button>
@@ -700,14 +700,14 @@ export default function AutomationWizardModal({
             {currentStep === 3 && (
               <div className="space-y-5">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-100">Step 3: Trigger Configuration</h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Step 3: Trigger Configuration</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
                     Define when this automation should be triggered by a commenter.
                   </p>
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     When should this automation run?
                   </label>
 
@@ -716,15 +716,15 @@ export default function AutomationWizardModal({
                       onClick={() => setTriggerType('KEYWORD')}
                       className={`p-4 rounded-2xl border transition cursor-pointer select-none space-y-1 ${
                         triggerType === 'KEYWORD'
-                          ? 'bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                          ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30'
+                          : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs text-slate-100">Comment contains a keyword</span>
-                        {triggerType === 'KEYWORD' && <Check className="w-4 h-4 text-indigo-400" />}
+                        <span className="font-bold text-xs text-slate-900 dark:text-slate-100">Comment contains a keyword</span>
+                        {triggerType === 'KEYWORD' && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />}
                       </div>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
                         Trigger only when the comment mentions specific target words.
                       </p>
                     </div>
@@ -733,15 +733,15 @@ export default function AutomationWizardModal({
                       onClick={() => setTriggerType('ANY_COMMENT')}
                       className={`p-4 rounded-2xl border transition cursor-pointer select-none space-y-1 ${
                         triggerType === 'ANY_COMMENT'
-                          ? 'bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                          ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-500 ring-2 ring-indigo-500/30'
+                          : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs text-slate-100">Any comment</span>
-                        {triggerType === 'ANY_COMMENT' && <Check className="w-4 h-4 text-indigo-400" />}
+                        <span className="font-bold text-xs text-slate-900 dark:text-slate-100">Any comment</span>
+                        {triggerType === 'ANY_COMMENT' && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />}
                       </div>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
                         Trigger for every comment posted on the selected post.
                       </p>
                     </div>
@@ -750,8 +750,8 @@ export default function AutomationWizardModal({
 
                 {/* Keyword Editor */}
                 {triggerType === 'KEYWORD' && (
-                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 animate-fadeIn">
-                    <label className="text-xs font-semibold text-slate-200">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3 animate-fadeIn">
+                    <label className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                       Target Keywords ({keywords.length})
                     </label>
 
@@ -760,13 +760,13 @@ export default function AutomationWizardModal({
                       {keywords.map((kw, idx) => (
                         <span
                           key={idx}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-semibold"
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-300 text-xs font-semibold"
                         >
                           <span>{kw}</span>
                           <button
                             type="button"
                             onClick={() => handleRemoveKeyword(idx)}
-                            className="hover:text-rose-400 transition"
+                            className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -787,7 +787,7 @@ export default function AutomationWizardModal({
                           }
                         }}
                         placeholder="Type keyword and press Enter (e.g. price, link)..."
-                        className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                        className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                       />
                       <button
                         type="button"
@@ -813,8 +813,8 @@ export default function AutomationWizardModal({
               <div className="space-y-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-100">Step 4: Public Reply</h3>
-                    <p className="text-slate-400 text-xs mt-0.5">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Step 4: Public Reply</h3>
+                    <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
                       Automatically post a public reply to the comment under your post.
                     </p>
                   </div>
@@ -824,11 +824,11 @@ export default function AutomationWizardModal({
                     type="button"
                     onClick={() => setPublicReplyEnabled(!publicReplyEnabled)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                      publicReplyEnabled ? 'bg-indigo-600' : 'bg-slate-800'
+                      publicReplyEnabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-800'
                     }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${
                         publicReplyEnabled ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />
@@ -836,15 +836,15 @@ export default function AutomationWizardModal({
                 </div>
 
                 {publicReplyEnabled ? (
-                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3.5 animate-fadeIn">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3.5 animate-fadeIn">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-slate-200">
+                      <label className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                         Reply Variations ({variations.length})
                       </label>
                       <button
                         type="button"
                         onClick={handleAddVariation}
-                        className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center space-x-1"
+                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-semibold flex items-center space-x-1"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Add Variation</span>
@@ -859,13 +859,13 @@ export default function AutomationWizardModal({
                             value={variation}
                             onChange={(e) => handleVariationChange(idx, e.target.value)}
                             placeholder={`Variation #${idx + 1} (e.g. Thanks for asking! Check your DM 👋)`}
-                            className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                            className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                           />
                           {variations.length > 1 && (
                             <button
                               type="button"
                               onClick={() => handleRemoveVariation(idx)}
-                              className="text-slate-500 hover:text-rose-400 p-2 rounded-lg transition"
+                              className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-2 rounded-lg transition"
                               title="Delete variation"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -875,13 +875,13 @@ export default function AutomationWizardModal({
                       ))}
                     </div>
 
-                    <p className="text-[11px] text-slate-400 flex items-center space-x-1.5 pt-1">
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center space-x-1.5 pt-1">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
                       <span>Multiple variations help keep replies from feeling repetitive.</span>
                     </p>
                   </div>
                 ) : (
-                  <div className="p-6 rounded-2xl bg-slate-950/40 border border-slate-800/60 text-center text-slate-400 text-xs">
+                  <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/60 text-center text-slate-500 dark:text-slate-400 text-xs">
                     Public reply is disabled. No public comment will be posted.
                   </div>
                 )}
@@ -893,8 +893,8 @@ export default function AutomationWizardModal({
               <div className="space-y-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-100">Step 5: Private Message</h3>
-                    <p className="text-slate-400 text-xs mt-0.5">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Step 5: Private Message</h3>
+                    <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
                       Send a private direct message to the person who commented.
                     </p>
                   </div>
@@ -904,11 +904,11 @@ export default function AutomationWizardModal({
                     type="button"
                     onClick={() => setPrivateMessageEnabled(!privateMessageEnabled)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                      privateMessageEnabled ? 'bg-indigo-600' : 'bg-slate-800'
+                      privateMessageEnabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-800'
                     }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${
                         privateMessageEnabled ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />
@@ -916,25 +916,25 @@ export default function AutomationWizardModal({
                 </div>
 
                 {privateMessageEnabled ? (
-                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 animate-fadeIn">
-                    <label className="text-xs font-semibold text-slate-200">Direct Message Content</label>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3 animate-fadeIn">
+                    <label className="text-xs font-semibold text-slate-800 dark:text-slate-200">Direct Message Content</label>
                     <textarea
                       rows={4}
                       value={privateMessage}
                       onChange={(e) => setPrivateMessage(e.target.value)}
                       placeholder="Hey! Thanks for your interest. Here's the information you asked for..."
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none leading-relaxed"
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl p-3.5 text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none leading-relaxed"
                     />
 
-                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-start space-x-2">
-                      <HelpCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300 flex items-start space-x-2">
+                      <HelpCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                       <span>
                         Message delivery will become active when the automation execution engine is enabled in Phase 3+.
                       </span>
                     </div>
                   </div>
                 ) : (
-                  <div className="p-6 rounded-2xl bg-slate-950/40 border border-slate-800/60 text-center text-slate-400 text-xs">
+                  <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/60 text-center text-slate-500 dark:text-slate-400 text-xs">
                     Private direct message is disabled.
                   </div>
                 )}
@@ -945,15 +945,15 @@ export default function AutomationWizardModal({
             {currentStep === 6 && (
               <div className="space-y-5">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-100">Step 6: Review Automation</h3>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Step 6: Review Automation</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
                     Review your automation configuration before saving.
                   </p>
                 </div>
 
                 {/* Name Input */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Automation Name
                   </label>
                   <input
@@ -961,39 +961,39 @@ export default function AutomationWizardModal({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Price Inquiry Auto-Responder"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-100 focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 {/* Review Card */}
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3.5">
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3.5">
                   {/* Platform & Account */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-                    <span className="text-slate-400">Platform & Account</span>
-                    <span className="font-semibold text-slate-200 flex items-center space-x-1.5">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800/80">
+                    <span className="text-slate-500 dark:text-slate-400">Platform & Account</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center space-x-1.5">
                       {platform === 'facebook' ? (
-                        <Facebook className="w-3.5 h-3.5 text-blue-400 fill-current" />
+                        <Facebook className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 fill-current" />
                       ) : (
-                        <Instagram className="w-3.5 h-3.5 text-pink-400" />
+                        <Instagram className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400" />
                       )}
                       <span>{selectedAccountObj?.account_name || 'Account'}</span>
                     </span>
                   </div>
 
                   {/* Target Post */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-                    <span className="text-slate-400">Target Post</span>
-                    <span className="font-semibold text-slate-200 truncate max-w-[260px] text-right">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800/80">
+                    <span className="text-slate-500 dark:text-slate-400">Target Post</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[260px] text-right">
                       {selectedPost ? (
                         <span>
                           {platform === 'instagram' ? 'IG Media ' : 'FB Post '}
-                          <span className="font-mono text-indigo-300">{selectedPost.id}</span>
+                          <span className="font-mono text-indigo-600 dark:text-indigo-300">{selectedPost.id}</span>
                           {selectedPost.internal_post_id ? (
-                            <span className="text-[10px] text-emerald-400 ml-1.5 font-normal">(Local #{selectedPost.internal_post_id})</span>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 ml-1.5 font-normal">(Local #{selectedPost.internal_post_id})</span>
                           ) : null}
                         </span>
                       ) : externalPostId ? (
-                        <span className="font-mono text-indigo-300">{externalPostId}</span>
+                        <span className="font-mono text-indigo-600 dark:text-indigo-300">{externalPostId}</span>
                       ) : (
                         'None'
                       )}
@@ -1001,9 +1001,9 @@ export default function AutomationWizardModal({
                   </div>
 
                   {/* Trigger */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-                    <span className="text-slate-400">Trigger</span>
-                    <span className="font-semibold text-slate-200">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800/80">
+                    <span className="text-slate-500 dark:text-slate-400">Trigger</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
                       {triggerType === 'ANY_COMMENT'
                         ? 'Any comment'
                         : `Keywords: ${keywords.join(', ')}`}
@@ -1011,11 +1011,11 @@ export default function AutomationWizardModal({
                   </div>
 
                   {/* Public Reply */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-                    <span className="text-slate-400">Public Reply</span>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800/80">
+                    <span className="text-slate-500 dark:text-slate-400">Public Reply</span>
                     <span
                       className={`font-semibold ${
-                        publicReplyEnabled ? 'text-emerald-400' : 'text-slate-500'
+                        publicReplyEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'
                       }`}
                     >
                       {publicReplyEnabled
@@ -1025,11 +1025,11 @@ export default function AutomationWizardModal({
                   </div>
 
                   {/* Private Message */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-                    <span className="text-slate-400">Private Message</span>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800/80">
+                    <span className="text-slate-500 dark:text-slate-400">Private Message</span>
                     <span
                       className={`font-semibold ${
-                        privateMessageEnabled ? 'text-emerald-400' : 'text-slate-500'
+                        privateMessageEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'
                       }`}
                     >
                       {privateMessageEnabled ? '✓ Enabled' : 'Disabled'}
@@ -1038,8 +1038,8 @@ export default function AutomationWizardModal({
 
                   {/* Initial Status */}
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Initial Status</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
+                    <span className="text-slate-500 dark:text-slate-400">Initial Status</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-transparent">
                       {editingAutomation ? editingAutomation.status : 'DRAFT'}
                     </span>
                   </div>
@@ -1049,12 +1049,12 @@ export default function AutomationWizardModal({
           </div>
 
           {/* Modal Footer Controls */}
-          <div className="px-6 py-4 border-t border-slate-800/80 bg-slate-950/60 flex items-center justify-between">
+          <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-950/60 flex items-center justify-between">
             <button
               type="button"
               onClick={currentStep === 1 ? onClose : handleBack}
               disabled={isSubmitting}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition flex items-center space-x-1.5 disabled:opacity-50"
+              className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs transition border border-slate-300 dark:border-slate-700 flex items-center space-x-1.5 disabled:opacity-50"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>{currentStep === 1 ? 'Cancel' : 'Back'}</span>

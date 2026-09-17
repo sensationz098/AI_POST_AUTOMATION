@@ -140,35 +140,35 @@ export default function AnalyticsDashboardPage() {
   return (
     <div className="space-y-6 select-none font-sans text-xs">
       {/* SaaS Context Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800/60">
         <div className="space-y-1">
           <div className="flex items-center space-x-2.5">
-            <h1 className="text-lg font-bold text-slate-100 tracking-tight">
+            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
               Multi-Account Social Analytics
             </h1>
-            <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+            <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/20">
               ● Active Meta API ({socialAccounts.length} Connected)
             </span>
           </div>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-600 dark:text-slate-400">
             Real-time performance, reach, impressions & engagement aggregated across all your connected Facebook Pages and Instagram accounts.
           </p>
         </div>
 
         <div className="flex items-center space-x-2 flex-shrink-0">
           {/* Account Switcher Dropdown */}
-          <div className="flex items-center space-x-2 bg-slate-900/80 border border-slate-800 px-3 py-1.5 rounded-lg">
-            <Filter className="w-3.5 h-3.5 text-indigo-400" />
+          <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-lg">
+            <Filter className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             <select
               value={selectedAccountId}
               onChange={(e) => setSelectedAccountId(e.target.value)}
-              className="bg-transparent text-xs text-indigo-300 font-semibold focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-indigo-600 dark:text-indigo-300 font-semibold focus:outline-none cursor-pointer"
             >
-              <option value="all" className="bg-slate-900 text-slate-100">
+              <option value="all" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
                 🌐 All Connected Profiles ({socialAccounts.length})
               </option>
               {socialAccounts.map((acc) => (
-                <option key={acc.id} value={acc.id} className="bg-slate-900 text-slate-100">
+                <option key={acc.id} value={acc.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
                   {acc.platform === 'facebook' ? '📘' : '📸'} {acc.account_name} ({acc.platform})
                 </option>
               ))}
@@ -177,10 +177,10 @@ export default function AnalyticsDashboardPage() {
 
           <button
             onClick={fetchAnalytics}
-            className="p-2 rounded-lg bg-slate-900/60 hover:bg-slate-800 border border-slate-800 text-slate-300 transition"
+            className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/60 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 transition"
             title="Refresh Live Metrics"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-indigo-600 dark:text-indigo-400' : ''}`} />
           </button>
 
           <a
@@ -196,18 +196,18 @@ export default function AnalyticsDashboardPage() {
       {/* Connected Accounts Overview Cards Grid */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-bold text-slate-200 flex items-center space-x-2">
-            <Share2 className="w-4 h-4 text-indigo-400" />
+          <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center space-x-2">
+            <Share2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span>Connected Social Profiles ({filteredAccounts.length})</span>
           </h2>
-          <a href="/meta-connect" className="text-[10px] text-indigo-400 hover:underline">
+          <a href="/meta-connect" className="text-[10px] text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-semibold hover:underline">
             Manage Connections →
           </a>
         </div>
 
         {filteredAccounts.length === 0 ? (
-          <div className="p-6 rounded-xl bg-slate-900/40 border border-slate-800 text-center space-y-2">
-            <p className="text-xs text-slate-400">No social accounts connected yet.</p>
+          <div className="p-6 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-center space-y-2">
+            <p className="text-xs text-slate-600 dark:text-slate-400">No social accounts connected yet.</p>
             <a href="/meta-connect" className="inline-block px-3 py-1.5 rounded bg-indigo-600 text-white font-bold text-xs">
               Connect Meta Accounts
             </a>
@@ -215,42 +215,42 @@ export default function AnalyticsDashboardPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredAccounts.map((acc: any) => (
-              <div key={acc.id || acc.account_id} className="linear-card p-3.5 rounded-xl space-y-3 border border-slate-800/80 hover:border-slate-700 transition">
+              <div key={acc.id || acc.account_id} className="linear-card p-3.5 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 transition">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2.5 min-w-0">
                     <img
                       src={acc.logo_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'}
                       alt={acc.account_name}
-                      className="w-8 h-8 rounded-lg object-cover border border-slate-700 flex-shrink-0"
+                      className="w-8 h-8 rounded-lg object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
                     />
                     <div className="min-w-0">
-                      <h4 className="text-xs font-semibold text-slate-100 truncate flex items-center space-x-1">
+                      <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate flex items-center space-x-1">
                         <span>{acc.account_name}</span>
                         {acc.platform === 'facebook' ? (
-                          <Facebook className="w-3 h-3 text-blue-400 fill-blue-400/20 flex-shrink-0" />
+                          <Facebook className="w-3 h-3 text-blue-600 dark:text-blue-400 fill-blue-400/20 flex-shrink-0" />
                         ) : (
-                          <Instagram className="w-3 h-3 text-pink-400 flex-shrink-0" />
+                          <Instagram className="w-3 h-3 text-pink-600 dark:text-pink-400 flex-shrink-0" />
                         )}
                       </h4>
-                      <span className="text-[10px] font-mono text-slate-400">ID: {acc.account_id}</span>
+                      <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">ID: {acc.account_id}</span>
                     </div>
                   </div>
 
-                  <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono flex-shrink-0">
+                  <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 text-[9px] font-mono flex-shrink-0">
                     ● Active
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/60">
-                  <div className="bg-slate-900/50 p-2 rounded border border-slate-800/60">
-                    <span className="text-[9px] text-slate-400">No. of Followers</span>
-                    <p className="text-xs font-bold text-slate-100 mt-0.5">
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                  <div className="bg-slate-50 dark:bg-slate-900/50 p-2 rounded border border-slate-200 dark:border-slate-800/60">
+                    <span className="text-[9px] text-slate-500 dark:text-slate-400">No. of Followers</span>
+                    <p className="text-xs font-bold text-slate-900 dark:text-slate-100 mt-0.5">
                       {(acc.followers_count || 0).toLocaleString()}
                     </p>
                   </div>
-                  <div className="bg-slate-900/50 p-2 rounded border border-slate-800/60">
-                    <span className="text-[9px] text-slate-400">No. of Posts</span>
-                    <p className="text-xs font-bold text-indigo-300 mt-0.5 font-mono">
+                  <div className="bg-slate-50 dark:bg-slate-900/50 p-2 rounded border border-slate-200 dark:border-slate-800/60">
+                    <span className="text-[9px] text-slate-500 dark:text-slate-400">No. of Posts</span>
+                    <p className="text-xs font-bold text-indigo-600 dark:text-indigo-300 mt-0.5 font-mono">
                       {acc.media_count != null ? acc.media_count.toLocaleString() : 'Unavailable'}
                     </p>
                   </div>
@@ -264,59 +264,59 @@ export default function AnalyticsDashboardPage() {
       {/* Primary KPI Grid Cards: Followers & Published Posts Focus */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* KPI 1: Total Followers */}
-        <div className="linear-card p-4 rounded-xl space-y-2 border border-indigo-500/30">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold text-slate-200">Total Followers</span>
-            <Users className="w-4 h-4 text-indigo-400" />
+        <div className="linear-card p-4 rounded-xl space-y-2 border border-indigo-200 dark:border-indigo-500/30">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">Total Followers</span>
+            <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-bold text-slate-100 tracking-tight">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
               {totalFollowersAll.toLocaleString()}
             </h2>
           </div>
-          <p className="text-[10px] text-slate-400">FB Page Fans + IG Followers</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">FB Page Fans + IG Followers</p>
         </div>
 
         {/* KPI 2: Posts Published via SocialAI */}
-        <div className="linear-card p-4 rounded-xl space-y-2 border border-blue-500/30">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold text-slate-200">Posts Published via SocialAI</span>
-            <Layers className="w-4 h-4 text-blue-400" />
+        <div className="linear-card p-4 rounded-xl space-y-2 border border-blue-200 dark:border-blue-500/30">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">Posts Published via SocialAI</span>
+            <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-bold text-slate-100 tracking-tight">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
               {overview?.published_posts || overview?.total_posts || 0}
             </h2>
           </div>
-          <p className="text-[10px] text-slate-400">Total posts published through SocialAI</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">Total posts published through SocialAI</p>
         </div>
 
         {/* KPI 3: Total Reach */}
         <div className="linear-card p-4 rounded-xl space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-medium">Total Reach</span>
-            <Eye className="w-4 h-4 text-indigo-400" />
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] font-medium text-slate-700 dark:text-slate-400">Total Reach</span>
+            <Eye className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-bold text-slate-100 tracking-tight">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
               {(overview?.total_reach || 0).toLocaleString()}
             </h2>
           </div>
-          <p className="text-[10px] text-slate-400">Combined audience across pages</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">Combined audience across pages</p>
         </div>
 
         {/* KPI 4: Total Impressions */}
         <div className="linear-card p-4 rounded-xl space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-medium">Total Impressions</span>
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] font-medium text-slate-700 dark:text-slate-400">Total Impressions</span>
+            <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <h2 className="text-xl font-bold text-slate-100 tracking-tight">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
               {(overview?.total_impressions || 0).toLocaleString()}
             </h2>
           </div>
-          <p className="text-[10px] text-slate-400">Total content displays on feed</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">Total content displays on feed</p>
         </div>
       </div>
 
@@ -324,17 +324,17 @@ export default function AnalyticsDashboardPage() {
       <div className="linear-card p-5 rounded-xl space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-xs font-bold text-slate-100">Performance & Reach Trend</h3>
-            <p className="text-[10px] text-slate-400">Daily breakdown of reach vs impressions across connected destinations</p>
+            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">Performance & Reach Trend</h3>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">Daily breakdown of reach vs impressions across connected destinations</p>
           </div>
           <div className="flex items-center space-x-3 text-[10px] font-mono">
             <span className="flex items-center space-x-1">
               <span className="w-2 h-2 rounded-full bg-indigo-500" />
-              <span className="text-slate-300">Reach</span>
+              <span className="text-slate-600 dark:text-slate-300">Reach</span>
             </span>
             <span className="flex items-center space-x-1">
-              <span className="w-2 h-2 rounded-full bg-blue-400" />
-              <span className="text-slate-300">Impressions</span>
+              <span className="w-2 h-2 rounded-full bg-sky-400" />
+              <span className="text-slate-600 dark:text-slate-300">Impressions</span>
             </span>
           </div>
         </div>
@@ -353,12 +353,12 @@ export default function AnalyticsDashboardPage() {
                     <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle, #e2e8f0)" vertical={false} />
                 <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '11px' }}
-                  itemStyle={{ color: '#f8fafc' }}
+                  contentStyle={{ backgroundColor: 'var(--bg-surface-elevated, #ffffff)', borderColor: 'var(--border-subtle, #e2e8f0)', borderRadius: '8px', fontSize: '11px', color: 'var(--text-primary, #0f172a)' }}
+                  itemStyle={{ color: 'var(--text-primary, #0f172a)' }}
                 />
                 <Area type="monotone" dataKey="reach" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorReach)" />
                 <Area type="monotone" dataKey="impressions" stroke="#38bdf8" strokeWidth={2} fillOpacity={1} fill="url(#colorImpressions)" />
@@ -366,8 +366,8 @@ export default function AnalyticsDashboardPage() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="p-8 rounded-xl bg-slate-900/40 border border-slate-800 text-center space-y-2">
-            <p className="text-xs text-slate-400 font-medium">No performance trend data recorded yet.</p>
+          <div className="p-8 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-center space-y-2">
+            <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">No performance trend data recorded yet.</p>
             <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
               Create and publish posts in the Studio to start recording live reach, impressions, and engagement metrics.
             </p>

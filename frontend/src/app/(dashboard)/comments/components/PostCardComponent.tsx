@@ -45,7 +45,7 @@ export default function PostCardComponent({
   }`;
 
   return (
-    <div className="bg-slate-900/70 border border-slate-800/90 rounded-2xl overflow-hidden shadow-sm transition hover:border-slate-700/80 flex flex-col justify-between space-y-3">
+    <div className="bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800/90 rounded-2xl overflow-hidden shadow-sm transition hover:border-slate-300 dark:hover:border-slate-700/80 flex flex-col justify-between space-y-3">
       {/* 1. Header: Account Profile & Platform Badge */}
       <div className="p-4 pb-0 flex items-center justify-between gap-3">
         <div className="flex items-center space-x-3 min-w-0">
@@ -59,20 +59,20 @@ export default function PostCardComponent({
 
           <div className="min-w-0">
             <div className="flex items-center space-x-2">
-              <span className="font-bold text-xs text-slate-100 truncate">
+              <span className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">
                 {post.account_name || accountName || (isFb ? 'Facebook Page' : 'Instagram Account')}
               </span>
               <span
                 className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase flex items-center space-x-1 ${
                   isFb
-                    ? 'bg-blue-950 text-blue-300 border border-blue-800'
-                    : 'bg-pink-950 text-pink-300 border border-pink-800'
+                    ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                    : 'bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800'
                 }`}
               >
                 <span>{post.platform}</span>
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 font-mono truncate mt-0.5">
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate mt-0.5">
               Post ID: {post.external_post_id}
             </p>
           </div>
@@ -84,10 +84,10 @@ export default function PostCardComponent({
             href={post.permalink}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-2.5 py-1.5 rounded-lg bg-blue-950/70 hover:bg-blue-900/80 border border-blue-700/70 text-blue-200 text-[11px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
+            className="px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 dark:bg-blue-950/70 dark:hover:bg-blue-900/80 border border-slate-200 dark:border-blue-700/70 text-slate-700 dark:text-blue-200 text-[11px] font-semibold transition flex items-center space-x-1 flex-shrink-0"
           >
             <span>View Post</span>
-            <ExternalLink className="w-3 h-3 text-blue-300" />
+            <ExternalLink className="w-3 h-3 text-slate-500 dark:text-blue-300" />
           </a>
         )}
       </div>
@@ -95,7 +95,7 @@ export default function PostCardComponent({
       {/* 2. Media Preview Banner & Caption */}
       <div className="px-4 space-y-2.5">
         {post.image_url ? (
-          <div className="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-800 max-h-64 flex items-center justify-center">
+          <div className="relative rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 max-h-64 flex items-center justify-center">
             <img
               src={post.image_url}
               alt={post.title || 'Organic Post Media'}
@@ -103,7 +103,7 @@ export default function PostCardComponent({
             />
           </div>
         ) : (
-          <div className="h-20 bg-slate-950/70 rounded-xl border border-slate-800/80 flex items-center justify-center space-x-2 text-slate-500 text-xs">
+          <div className="h-20 bg-slate-50 dark:bg-slate-950/70 rounded-xl border border-slate-200 dark:border-slate-800/80 flex items-center justify-center space-x-2 text-slate-400 dark:text-slate-500 text-xs">
             <FileText className="w-4 h-4" />
             <span>Organic Content</span>
           </div>
@@ -111,11 +111,11 @@ export default function PostCardComponent({
 
         {/* Title / Caption */}
         <div className="space-y-1">
-          <h3 className="font-bold text-xs text-slate-100 leading-snug">{post.title}</h3>
+          <h3 className="font-bold text-xs text-slate-900 dark:text-slate-100 leading-snug">{post.title}</h3>
           {post.caption && (
             <div>
               <p
-                className={`text-[11px] text-slate-300 leading-relaxed font-sans ${
+                className={`text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed font-sans ${
                   !showFullCaption && post.caption.length > 120 ? 'line-clamp-2' : ''
                 }`}
               >
@@ -124,7 +124,7 @@ export default function PostCardComponent({
               {post.caption.length > 120 && (
                 <button
                   onClick={() => setShowFullCaption(!showFullCaption)}
-                  className="text-[10px] font-bold text-blue-400 hover:underline mt-0.5"
+                  className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline mt-0.5"
                 >
                   {showFullCaption ? 'Show less' : 'Read more'}
                 </button>
@@ -138,9 +138,9 @@ export default function PostCardComponent({
       {children && <div className="px-4 pt-1">{children}</div>}
 
       {/* 4. Footer: Engagement Bar & Action Button */}
-      <div className="p-4 pt-3 border-t border-slate-800/80 flex items-center justify-between bg-slate-950/40">
-        <div className="flex items-center space-x-2 text-xs text-blue-300 font-semibold">
-          <MessageSquare className="w-4 h-4 text-blue-400" />
+      <div className="p-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/70 dark:bg-slate-950/40">
+        <div className="flex items-center space-x-2 text-xs text-slate-700 dark:text-blue-300 font-semibold">
+          <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           <span>{commentCountToDisplay} Comments</span>
         </div>
 
@@ -148,7 +148,7 @@ export default function PostCardComponent({
           {onViewComments ? (
             <button
               onClick={() => onViewComments(post.external_post_id)}
-              className="px-3.5 py-1.5 rounded-xl bg-blue-950/80 hover:bg-blue-900 text-blue-200 border border-blue-800/80 font-bold text-xs transition flex items-center space-x-1"
+              className="px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-950/80 dark:hover:bg-blue-900 dark:text-blue-200 dark:border-blue-800/80 font-bold text-xs transition flex items-center space-x-1"
             >
               <span>Inspect Conversations</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -156,7 +156,7 @@ export default function PostCardComponent({
           ) : (
             <Link
               href={drilldownHref}
-              className="px-3.5 py-1.5 rounded-xl bg-blue-950/80 hover:bg-blue-900 text-blue-200 border border-blue-800/80 font-bold text-xs transition flex items-center space-x-1"
+              className="px-3.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-950/80 dark:hover:bg-blue-900 dark:text-blue-200 dark:border-blue-800/80 font-bold text-xs transition flex items-center space-x-1"
             >
               <span>Inspect Conversations</span>
               <ChevronRight className="w-3.5 h-3.5" />

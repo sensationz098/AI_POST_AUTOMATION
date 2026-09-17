@@ -142,23 +142,23 @@ export default function AdCommentsPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6 text-slate-100 font-sans">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6 text-slate-900 dark:text-slate-100 font-sans">
       {/* Top Header & Breadcrumb */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Link
             href={`/comments/ads${socialAccountId ? `?social_account_id=${socialAccountId}` : ''}`}
-            className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 transition"
+            className="p-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition shadow-sm"
             title="Back to Meta Ads Index"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-slate-100 flex items-center space-x-2">
-              <Target className="w-5 h-5 text-purple-400" />
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-2">
+              <Target className="w-5 h-5 text-purple-600 dark:text-purple-400" />
               <span>Meta Ad Conversations</span>
             </h1>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600 dark:text-slate-400">
               Inspect conversation threads and brand responses for this Meta Ad.
             </p>
           </div>
@@ -166,31 +166,31 @@ export default function AdCommentsPage() {
 
         <button
           onClick={() => fetchAdComments(1, false, replyStatusFilter, sortOrder)}
-          className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-semibold transition flex items-center space-x-1.5"
+          className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition flex items-center space-x-1.5 shadow-sm"
         >
-          <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
+          <RefreshCw className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
           <span>Refresh</span>
         </button>
       </div>
 
       {notice && (
-        <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-xs flex items-center space-x-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+        <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300 text-xs flex items-center space-x-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
           <span>{notice}</span>
         </div>
       )}
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/80 text-rose-300 text-sm flex items-center space-x-3">
-          <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/80 text-rose-800 dark:text-rose-300 text-sm flex items-center space-x-3">
+          <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {loading ? (
-        <div className="py-16 text-center bg-slate-900/40 rounded-2xl border border-slate-800/80 space-y-3">
-          <Loader2 className="w-8 h-8 text-purple-400 animate-spin mx-auto" />
-          <p className="text-xs text-slate-400">Loading Meta Ad content & conversation threads...</p>
+        <div className="py-16 text-center bg-white dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-800/80 space-y-3 shadow-sm">
+          <Loader2 className="w-8 h-8 text-purple-600 dark:text-purple-400 animate-spin mx-auto" />
+          <p className="text-xs text-slate-500 dark:text-slate-400">Loading Meta Ad content & conversation threads...</p>
         </div>
       ) : !ad ? (
         <ContextualEmptyState type="ads" title="Ad Not Found" description="The requested Meta Ad could not be loaded." />
@@ -215,59 +215,59 @@ export default function AdCommentsPage() {
           />
 
           {/* Filter & Sort Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/90">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800/90 shadow-sm">
             <div className="flex items-center space-x-2">
-              <span className="text-xs font-bold text-slate-400 uppercase">Filter:</span>
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Filter:</span>
               <button
                 onClick={() => setReplyStatusFilter('all')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   replyStatusFilter === 'all'
-                    ? 'bg-purple-950 text-purple-200 border border-purple-800'
-                    : 'bg-slate-950 text-slate-400 border border-slate-800'
+                    ? 'bg-purple-50 text-purple-700 border border-purple-200 shadow-sm dark:bg-purple-950 dark:text-purple-200 dark:border-purple-800'
+                    : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 All Threads
               </button>
               <button
                 onClick={() => setReplyStatusFilter('unreplied')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   replyStatusFilter === 'unreplied'
-                    ? 'bg-amber-950 text-amber-200 border border-amber-800'
-                    : 'bg-slate-950 text-slate-400 border border-slate-800'
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200 shadow-sm dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800'
+                    : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 Unreplied
               </button>
               <button
                 onClick={() => setReplyStatusFilter('replied')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   replyStatusFilter === 'replied'
-                    ? 'bg-emerald-950 text-emerald-200 border border-emerald-800'
-                    : 'bg-slate-950 text-slate-400 border border-slate-800'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800'
+                    : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 Replied
               </button>
             </div>
 
-            <div className="flex items-center space-x-2 border-t sm:border-t-0 sm:border-l border-slate-800/80 pt-2 sm:pt-0 sm:pl-3">
-              <span className="text-xs font-bold text-slate-400 uppercase">Sort:</span>
+            <div className="flex items-center space-x-2 border-t sm:border-t-0 sm:border-l border-slate-200 dark:border-slate-800/80 pt-2 sm:pt-0 sm:pl-3">
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Sort:</span>
               <button
                 onClick={() => setSortOrder('desc')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   sortOrder === 'desc'
-                    ? 'bg-purple-950 text-purple-200 border border-purple-800 shadow-sm'
-                    : 'bg-slate-950 text-slate-400 border border-slate-800'
+                    ? 'bg-purple-50 text-purple-700 border border-purple-200 shadow-sm dark:bg-purple-950 dark:text-purple-200 dark:border-purple-800'
+                    : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 Newest First
               </button>
               <button
                 onClick={() => setSortOrder('asc')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   sortOrder === 'asc'
-                    ? 'bg-purple-950 text-purple-200 border border-purple-800 shadow-sm'
-                    : 'bg-slate-950 text-slate-400 border border-slate-800'
+                    ? 'bg-purple-50 text-purple-700 border border-purple-200 shadow-sm dark:bg-purple-950 dark:text-purple-200 dark:border-purple-800'
+                    : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 Oldest First
@@ -301,12 +301,12 @@ export default function AdCommentsPage() {
                   <button
                     onClick={handleLoadMore}
                     disabled={loadingMore}
-                    className="px-4 py-2 rounded-xl bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-800 text-xs font-semibold transition flex items-center space-x-2 mx-auto disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl bg-white dark:bg-purple-950/80 hover:bg-purple-50 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-200 border border-purple-200 dark:border-purple-800 text-xs font-semibold transition flex items-center space-x-2 mx-auto disabled:opacity-50 shadow-sm"
                   >
                     {loadingMore ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                      <Loader2 className="w-4 h-4 animate-spin text-purple-600 dark:text-purple-400" />
                     ) : (
-                      <ChevronDown className="w-4 h-4 text-purple-400" />
+                      <ChevronDown className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                     )}
                     <span>{loadingMore ? 'Loading older comments...' : 'Load More Comments'}</span>
                   </button>
