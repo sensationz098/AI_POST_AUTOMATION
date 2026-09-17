@@ -23,9 +23,9 @@ export default function DashboardLayout({
 
   if (isLoading || !isInitialized) {
     return (
-      <div className="min-h-screen bg-[#0B0F17] flex flex-col items-center justify-center space-y-3 font-sans text-slate-300">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-        <p className="text-xs font-semibold text-slate-400">Initializing session...</p>
+      <div className="min-h-screen bg-slate-50 dark:bg-[#0B0F17] flex flex-col items-center justify-center space-y-3 font-sans text-slate-700 dark:text-slate-300">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-500" />
+        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Initializing session...</p>
       </div>
     );
   }
@@ -35,7 +35,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-[#0B0F17] transition-colors duration-150 font-sans">
+    <div className="flex min-h-screen bg-slate-50 dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 transition-colors duration-150 font-sans">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Header userRole={user.role || 'Admin'} />
