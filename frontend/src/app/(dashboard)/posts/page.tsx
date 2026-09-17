@@ -9,7 +9,6 @@ import {
   Clock,
   AlertTriangle,
   Plus,
-  Filter,
   Trash2,
   Loader2,
   X,
@@ -22,9 +21,10 @@ import {
   Image as ImageIcon,
   Eye,
   Layers,
-  ShieldCheck,
   List,
   CalendarDays,
+  CalendarRange,
+  Clock3,
   Facebook,
   Instagram,
   Youtube
@@ -186,11 +186,14 @@ export default function PostSchedulerPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   
-  // View mode: 'calendar' (dominant full-width workspace) vs 'list' (queue table)
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  // Top-Level Mode: 'calendar' vs 'list'
+  const [mode, setMode] = useState<'calendar' | 'list'>('calendar');
 
-  // Calendar period state
-  const [currentMonthDate, setCurrentMonthDate] = useState<Date>(() => new Date());
+  // Calendar Sub-View: 'week' (primary) | 'month' | 'day'
+  const [calendarView, setCalendarView] = useState<'week' | 'month' | 'day'>('week');
+
+  // Calendar anchor date
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
 
   // Filters
   const [filterType, setFilterType] = useState<'ALL' | 'POST' | 'STORY'>('ALL');
@@ -200,6 +203,9 @@ export default function PostSchedulerPage() {
   const [previewStory, setPreviewStory] = useState<SchedulerItem | null>(null);
   const [selectedPostItem, setSelectedPostItem] = useState<SchedulerItem | null>(null);
   const [viewDayModal, setViewDayModal] = useState<{ dateStr: string; items: SchedulerItem[] } | null>(null);
+
+  // Timeline scroll container ref
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
 
   // Deletion UI State
   const [deletingItemId, setDeletingItemId] = useState<number | null>(null);
@@ -322,6 +328,13 @@ export default function PostSchedulerPage() {
   useEffect(() => {
     fetchQueue();
   }, []);
+
+  // Auto-scroll timeline to 08:00 AM on initial week/day load
+  useEffect(() => {
+    if (timelineScrollRef.current && (calendarView === 'week' || calendarView === 'day')) {
+      timelineScrollRef.current.scrollTop = 8 * 64; // 8:00 AM
+    }
+  }, [calendarView, mode]);
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -471,35 +484,90 @@ export default function PostSchedulerPage() {
     return getDateKey(d);
   };
 
-  // Calendar navigation
-  const handlePrevMonth = () => {
-    setCurrentMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  const getItemMinutesFromMidnight = (dateStr?: string) => {
+    if (!dateStr) return 0;
+    const normalized = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : `${dateStr}Z`;
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return 0;
+    return d.getHours() * 60 + d.getMinutes();
   };
 
-  const handleNextMonth = () => {
-    setCurrentMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  // Date Navigation handlers
+  const handlePrev = () => {
+    setCurrentDate((prev) => {
+      const d = new Date(prev);
+      if (calendarView === 'week') d.setDate(d.getDate() - 7);
+      else if (calendarView === 'day') d.setDate(d.getDate() - 1);
+      else d.setMonth(d.getMonth() - 1);
+      return d;
+    });
+  };
+
+  const handleNext = () => {
+    setCurrentDate((prev) => {
+      const d = new Date(prev);
+      if (calendarView === 'week') d.setDate(d.getDate() + 7);
+      else if (calendarView === 'day') d.setDate(d.getDate() + 1);
+      else d.setMonth(d.getMonth() + 1);
+      return d;
+    });
   };
 
   const handleToday = () => {
-    setCurrentMonthDate(new Date());
+    setCurrentDate(new Date());
   };
 
-  // Calendar Grid Generation
-  const { calendarGrid, monthLabel, todayKey } = useMemo(() => {
-    const year = currentMonthDate.getFullYear();
-    const month = currentMonthDate.getMonth();
+  // Week View Calculations (Monday–Sunday)
+  const { weekDays, weekLabel } = useMemo(() => {
+    const startOfWeek = new Date(currentDate);
+    const dayOfWeek = (currentDate.getDay() + 6) % 7; // Monday = 0
+    startOfWeek.setDate(currentDate.getDate() - dayOfWeek);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const days: { date: Date; dateKey: string; dayName: string; dayNumber: number; isToday: boolean }[] = [];
+    const todayStr = getDateKey(new Date());
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startOfWeek);
+      d.setDate(startOfWeek.getDate() + i);
+      const key = getDateKey(d);
+      days.push({
+        date: d,
+        dateKey: key,
+        dayName: d.toLocaleDateString(undefined, { weekday: 'short' }),
+        dayNumber: d.getDate(),
+        isToday: key === todayStr,
+      });
+    }
+
+    const endOfWeek = days[6].date;
+    const sameMonth = startOfWeek.getMonth() === endOfWeek.getMonth();
+    const sameYear = startOfWeek.getFullYear() === endOfWeek.getFullYear();
+
+    let label = '';
+    if (sameMonth && sameYear) {
+      label = `${startOfWeek.toLocaleDateString(undefined, { month: 'short' })} ${startOfWeek.getDate()} – ${endOfWeek.getDate()}, ${startOfWeek.getFullYear()}`;
+    } else if (sameYear) {
+      label = `${startOfWeek.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${endOfWeek.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${startOfWeek.getFullYear()}`;
+    } else {
+      label = `${startOfWeek.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} – ${endOfWeek.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
+
+    return { weekDays: days, weekLabel: label };
+  }, [currentDate]);
+
+  // Month View Calculations
+  const { monthGrid, monthLabel } = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
     const todayStr = getDateKey(new Date());
 
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const totalDays = lastDay.getDate();
-
-    // Monday as 0: (firstDay.getDay() + 6) % 7
     const startDayIndex = (firstDay.getDay() + 6) % 7;
-
     const prevMonthLastDay = new Date(year, month, 0).getDate();
 
-    // Build day items map from filtered items
     const itemsByDate: Record<string, SchedulerItem[]> = {};
     for (const item of filteredItems) {
       const dateKey = getItemDateKey(item.scheduled_at || item.published_at || item.created_at);
@@ -520,7 +588,7 @@ export default function PostSchedulerPage() {
 
     const grid: CalendarDayCell[] = [];
 
-    // Leading days from prev month
+    // Leading days
     for (let i = startDayIndex - 1; i >= 0; i--) {
       const prevDate = new Date(year, month - 1, prevMonthLastDay - i);
       const key = getDateKey(prevDate);
@@ -548,7 +616,7 @@ export default function PostSchedulerPage() {
       });
     }
 
-    // Trailing days from next month to complete 35 or 42 slots
+    // Trailing days
     const totalSlots = grid.length > 35 ? 42 : 35;
     const remaining = totalSlots - grid.length;
     for (let d = 1; d <= remaining; d++) {
@@ -564,24 +632,46 @@ export default function PostSchedulerPage() {
       });
     }
 
-    const formattedMonth = currentMonthDate.toLocaleDateString(undefined, {
+    const formattedMonth = currentDate.toLocaleDateString(undefined, {
       month: 'long',
       year: 'numeric',
     });
 
-    return {
-      calendarGrid: grid,
-      monthLabel: formattedMonth,
-      todayKey: todayStr,
-    };
-  }, [currentMonthDate, filteredItems]);
+    return { monthGrid: grid, monthLabel: formattedMonth };
+  }, [currentDate, filteredItems]);
+
+  // Day View Label
+  const dayLabel = useMemo(() => {
+    return currentDate.toLocaleDateString(undefined, {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }, [currentDate]);
+
+  // Active toolbar date label
+  const activeDateLabel = calendarView === 'week' ? weekLabel : calendarView === 'day' ? dayLabel : monthLabel;
+
+  // 24 Hours array for timeline grids
+  const hoursArray = useMemo(() => {
+    return Array.from({ length: 24 }).map((_, i) => {
+      const hour12 = i === 0 ? 12 : i > 12 ? i - 12 : i;
+      const ampm = i < 12 ? 'AM' : 'PM';
+      return {
+        hour24: i,
+        label: `${hour12}:00 ${ampm}`,
+        shortLabel: `${hour12} ${ampm}`,
+      };
+    });
+  }, []);
 
   const postCount = items.filter(i => i.item_type === 'post').length;
   const storyCount = items.filter(i => i.item_type === 'story').length;
 
   return (
     <div className="space-y-4 select-none font-sans text-xs">
-      {/* ── Page Header ────────────────────────────────────────────────── */}
+      {/* ── Page Header & Top Level Switcher ─────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
         <div>
           <div className="flex items-center space-x-2.5">
@@ -592,12 +682,38 @@ export default function PostSchedulerPage() {
               {userTimeZone}
             </span>
           </div>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            Plan, schedule and manage your social content.
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+            Plan, schedule and manage your social content across time and platforms.
           </p>
         </div>
 
-        <div className="flex items-center space-x-2 flex-shrink-0">
+        <div className="flex items-center space-x-2.5 flex-shrink-0">
+          {/* Top-Level Mode Switcher: Calendar vs List */}
+          <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-xs">
+            <button
+              onClick={() => setMode('calendar')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ${
+                mode === 'calendar'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>Calendar</span>
+            </button>
+            <button
+              onClick={() => setMode('list')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ${
+                mode === 'list'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>List</span>
+            </button>
+          </div>
+
           <Link
             href="/studio?tab=stories"
             className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-semibold text-xs transition shadow-xs"
@@ -631,17 +747,17 @@ export default function PostSchedulerPage() {
         </div>
       )}
 
-      {/* ── Calendar Toolbar ──────────────────────────────────────────── */}
+      {/* ── Calendar Toolbar (Always visible in Calendar & List) ───────── */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         
-        {/* Left: Navigation Controls (Prev, Today, Next + Month Label + Refresh) */}
+        {/* Left: Prev / Today / Next + Active Date Range Title + Refresh */}
         <div className="flex items-center space-x-2.5">
           <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
             <button
-              onClick={handlePrevMonth}
+              onClick={handlePrev}
               className="p-1.5 rounded-md text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition"
-              title="Previous Month"
-              aria-label="Previous Month"
+              title="Previous period"
+              aria-label="Previous period"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -652,17 +768,17 @@ export default function PostSchedulerPage() {
               Today
             </button>
             <button
-              onClick={handleNextMonth}
+              onClick={handleNext}
               className="p-1.5 rounded-md text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 transition"
-              title="Next Month"
-              aria-label="Next Month"
+              title="Next period"
+              aria-label="Next period"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
           
-          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 min-w-[150px]">
-            {monthLabel}
+          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 min-w-[180px]">
+            {activeDateLabel}
           </h2>
 
           <button
@@ -674,8 +790,47 @@ export default function PostSchedulerPage() {
           </button>
         </div>
 
-        {/* Center/Right: Filters & View Mode Switcher */}
+        {/* Center/Right: Calendar View Switcher (Week / Month / Day) + Filters */}
         <div className="flex items-center space-x-2.5 flex-wrap gap-y-2">
+          {/* Calendar Views: Week (Default) | Month | Day (active in calendar mode) */}
+          {mode === 'calendar' && (
+            <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => setCalendarView('week')}
+                className={`px-3 py-1 rounded-md text-xs font-bold transition flex items-center space-x-1 ${
+                  calendarView === 'week'
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <CalendarRange className="w-3 h-3" />
+                <span>Week</span>
+              </button>
+              <button
+                onClick={() => setCalendarView('month')}
+                className={`px-3 py-1 rounded-md text-xs font-bold transition flex items-center space-x-1 ${
+                  calendarView === 'month'
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <CalendarDays className="w-3 h-3" />
+                <span>Month</span>
+              </button>
+              <button
+                onClick={() => setCalendarView('day')}
+                className={`px-3 py-1 rounded-md text-xs font-bold transition flex items-center space-x-1 ${
+                  calendarView === 'day'
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                <Clock3 className="w-3 h-3" />
+                <span>Day</span>
+              </button>
+            </div>
+          )}
+
           {/* Type Filter */}
           <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
             <button
@@ -724,32 +879,6 @@ export default function PostSchedulerPage() {
             <option value="DRAFT">Draft</option>
             <option value="FAILED">Failed</option>
           </select>
-
-          {/* View Switcher: Calendar vs List */}
-          <div className="flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/60 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
-            <button
-              onClick={() => setViewMode('calendar')}
-              className={`px-3 py-1 rounded-md text-xs font-semibold transition flex items-center space-x-1.5 ${
-                viewMode === 'calendar'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <CalendarDays className="w-3.5 h-3.5" />
-              <span>Calendar</span>
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-3 py-1 rounded-md text-xs font-semibold transition flex items-center space-x-1.5 ${
-                viewMode === 'list'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <List className="w-3.5 h-3.5" />
-              <span>List</span>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -769,35 +898,169 @@ export default function PostSchedulerPage() {
         </div>
       )}
 
-      {/* ── PRIMARY WORKSPACE: ONLY CALENDAR VIEW ─────────────────────── */}
-      {viewMode === 'calendar' && (
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* ── MODE 1: CALENDAR WORKSPACE (NO QUEUE UNDERNEATH) ─────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {mode === 'calendar' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
-          {/* Weekday Row */}
-          <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 text-center text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider py-2.5">
-            <div>Mon</div>
-            <div>Tue</div>
-            <div>Wed</div>
-            <div>Thu</div>
-            <div>Fri</div>
-            <div>Sat</div>
-            <div>Sun</div>
-          </div>
-
-          {/* Calendar Day Grid */}
-          {isLoading ? (
-            <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 dark:divide-slate-800/60">
-              {Array.from({ length: 35 }).map((_, i) => (
-                <div key={i} className="min-h-[140px] p-2 space-y-2 animate-pulse bg-white dark:bg-slate-900">
-                  <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800" />
-                  <div className="h-10 rounded bg-slate-100 dark:bg-slate-800/60 w-full" />
-                  <div className="h-10 rounded bg-slate-100 dark:bg-slate-800/60 w-full" />
+          
+          {/* ── CALENDAR SUB-VIEW: 1. WEEK VIEW (PRIMARY TIME-GRID TIMELINE) ─ */}
+          {calendarView === 'week' && (
+            <div className="flex flex-col">
+              {/* Day Header Row */}
+              <div className="grid grid-cols-8 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 sticky top-0 z-20">
+                {/* Fixed time column header */}
+                <div className="p-3 text-center border-r border-slate-200 dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Time
                 </div>
-              ))}
+                {/* 7 Day Headers */}
+                {weekDays.map((d) => (
+                  <div
+                    key={d.dateKey}
+                    className={`p-2.5 text-center border-r border-slate-200 dark:border-slate-800 last:border-r-0 ${
+                      d.isToday ? 'bg-indigo-50/50 dark:bg-indigo-950/30' : ''
+                    }`}
+                  >
+                    <span className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 block">
+                      {d.dayName}
+                    </span>
+                    <span
+                      className={`text-sm font-bold inline-flex items-center justify-center w-6 h-6 rounded-full mt-0.5 ${
+                        d.isToday
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'text-slate-900 dark:text-slate-100'
+                      }`}
+                    >
+                      {d.dayNumber}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* 24-Hour Scrollable Time Grid */}
+              <div
+                ref={timelineScrollRef}
+                className="h-[620px] overflow-y-auto overflow-x-auto relative"
+              >
+                <div className="grid grid-cols-8 min-w-[850px] relative h-[1536px]">
+                  {/* Left Column: 24 Hour Labels */}
+                  <div className="border-r border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/20 divide-y divide-slate-100 dark:divide-slate-800/60">
+                    {hoursArray.map((h) => (
+                      <div
+                        key={h.hour24}
+                        className="h-[64px] px-2 pt-1 text-right text-[10px] font-mono text-slate-400 dark:text-slate-500"
+                      >
+                        {h.label}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 7 Day Columns with positioned content items */}
+                  {weekDays.map((d) => {
+                    const dayItems = filteredItems.filter((item) => {
+                      const itemKey = getItemDateKey(item.scheduled_at || item.published_at || item.created_at);
+                      return itemKey === d.dateKey;
+                    });
+
+                    return (
+                      <div
+                        key={d.dateKey}
+                        className={`relative border-r border-slate-200 dark:border-slate-800 last:border-r-0 ${
+                          d.isToday ? 'bg-indigo-50/20 dark:bg-indigo-950/15' : ''
+                        }`}
+                      >
+                        {/* Horizontal Hour Guideline Grid */}
+                        <div className="absolute inset-0 pointer-events-none divide-y divide-slate-100 dark:divide-slate-800/60">
+                          {hoursArray.map((h) => (
+                            <div key={h.hour24} className="h-[64px]" />
+                          ))}
+                        </div>
+
+                        {/* Positioned Content Items */}
+                        {dayItems.map((item) => {
+                          const mins = getItemMinutesFromMidnight(item.scheduled_at || item.published_at || item.created_at);
+                          const topPx = (mins / 60) * 64;
+                          const isStory = item.item_type === 'story';
+                          const isFb = item.platforms.includes('facebook');
+                          const isIg = item.platforms.includes('instagram');
+                          const isYt = (item.platforms as string[]).includes('youtube');
+                          const timeStr = formatShortTime(item.scheduled_at || item.published_at || item.created_at);
+
+                          return (
+                            <div
+                              key={`${item.item_type}-${item.id}`}
+                              onClick={() => {
+                                if (isStory) setPreviewStory(item);
+                                else setSelectedPostItem(item);
+                              }}
+                              style={{ top: `${topPx}px` }}
+                              className={`absolute left-1 right-1 z-10 p-1.5 rounded-lg border text-[11px] cursor-pointer transition-all hover:scale-[1.02] hover:z-20 shadow-xs flex flex-col space-y-1 ${
+                                isStory
+                                  ? 'bg-fuchsia-50/95 dark:bg-fuchsia-950/80 border-fuchsia-300 dark:border-fuchsia-800 text-fuchsia-950 dark:text-fuchsia-100'
+                                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100'
+                              }`}
+                              title={`${item.title || item.caption || 'Scheduled content'} (${timeStr})`}
+                            >
+                              {/* Header: Platform icon & Time */}
+                              <div className="flex items-center justify-between text-[10px]">
+                                <div className="flex items-center space-x-1">
+                                  {isFb && <Facebook className="w-3 h-3 text-blue-600 flex-shrink-0" />}
+                                  {isIg && <Instagram className="w-3 h-3 text-pink-600 flex-shrink-0" />}
+                                  {isYt && <Youtube className="w-3 h-3 text-red-600 flex-shrink-0" />}
+                                  <span className="font-bold">{timeStr}</span>
+                                </div>
+                                <span className={`w-1.5 h-1.5 rounded-full ${
+                                  item.status === 'PUBLISHED' ? 'bg-emerald-500' :
+                                  item.status === 'FAILED' ? 'bg-rose-500' :
+                                  item.status === 'DRAFT' ? 'bg-slate-400' : 'bg-sky-500'
+                                }`} />
+                              </div>
+
+                              {/* Body: Thumbnail & Snippet */}
+                              <div className="flex items-center space-x-1.5 min-w-0">
+                                {item.thumbnail_url ? (
+                                  <img
+                                    src={item.thumbnail_url}
+                                    alt=""
+                                    className="w-5 h-5 rounded object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
+                                  />
+                                ) : isStory ? (
+                                  <Sparkles className="w-3.5 h-3.5 text-fuchsia-500 flex-shrink-0" />
+                                ) : (
+                                  <ImageIcon className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                )}
+                                <span className="truncate font-semibold text-[11px] leading-tight flex-1">
+                                  {item.title || item.caption || (isStory ? 'Story Asset' : 'Feed Post')}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-7 divide-x divide-y divide-slate-200/80 dark:divide-slate-800">
-              {calendarGrid.map((cell) => {
-                return (
+          )}
+
+          {/* ── CALENDAR SUB-VIEW: 2. MONTH VIEW ───────────────────────────── */}
+          {calendarView === 'month' && (
+            <div>
+              {/* Weekday Row */}
+              <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 text-center text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider py-2.5">
+                <div>Mon</div>
+                <div>Tue</div>
+                <div>Wed</div>
+                <div>Thu</div>
+                <div>Fri</div>
+                <div>Sat</div>
+                <div>Sun</div>
+              </div>
+
+              {/* Month Day Grid */}
+              <div className="grid grid-cols-7 divide-x divide-y divide-slate-200/80 dark:divide-slate-800">
+                {monthGrid.map((cell) => (
                   <div
                     key={cell.dateKey}
                     className={`min-h-[135px] sm:min-h-[145px] p-2 flex flex-col justify-between transition-colors ${
@@ -806,7 +1069,7 @@ export default function PostSchedulerPage() {
                         : 'bg-slate-50/60 dark:bg-slate-950/40 text-slate-400 dark:text-slate-600'
                     } ${cell.isToday ? 'ring-2 ring-inset ring-indigo-500/50' : ''}`}
                   >
-                    {/* Top: Day Number + Item Count */}
+                    {/* Top: Day Number + Count */}
                     <div className="flex items-center justify-between">
                       <span
                         className={`text-xs font-semibold inline-flex items-center justify-center w-6 h-6 rounded-full ${
@@ -819,7 +1082,6 @@ export default function PostSchedulerPage() {
                       >
                         {cell.dayNumber}
                       </span>
-
                       {cell.items.length > 0 && (
                         <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-medium">
                           {cell.items.length} {cell.items.length === 1 ? 'post' : 'posts'}
@@ -850,7 +1112,6 @@ export default function PostSchedulerPage() {
                             }`}
                             title={`${item.title || item.caption || 'Scheduled content'} — Click for details`}
                           >
-                            {/* Card Header: Platform badge & Type */}
                             <div className="flex items-center justify-between text-[10px]">
                               <div className="flex items-center space-x-1">
                                 {isFb && <Facebook className="w-3 h-3 text-blue-600 flex-shrink-0" />}
@@ -860,40 +1121,24 @@ export default function PostSchedulerPage() {
                                   {isFb ? 'FB' : isIg ? 'IG' : 'Post'}
                                 </span>
                               </div>
-
-                              {isStory ? (
-                                <span className="px-1.5 py-0.2 rounded bg-fuchsia-100 dark:bg-fuchsia-900/60 text-fuchsia-700 dark:text-fuchsia-300 font-bold text-[9px] uppercase">
-                                  Story
-                                </span>
-                              ) : (
-                                <span className={`w-1.5 h-1.5 rounded-full ${
-                                  item.status === 'PUBLISHED' ? 'bg-emerald-500' :
-                                  item.status === 'FAILED' ? 'bg-rose-500' :
-                                  item.status === 'DRAFT' ? 'bg-slate-400' : 'bg-sky-500'
-                                }`} />
-                              )}
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                item.status === 'PUBLISHED' ? 'bg-emerald-500' :
+                                item.status === 'FAILED' ? 'bg-rose-500' :
+                                item.status === 'DRAFT' ? 'bg-slate-400' : 'bg-sky-500'
+                              }`} />
                             </div>
-
-                            {/* Card Body: Thumbnail & Snippet */}
                             <div className="flex items-center space-x-1.5">
                               {item.thumbnail_url ? (
-                                <img
-                                  src={item.thumbnail_url}
-                                  alt=""
-                                  className="w-5 h-5 rounded object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
-                                />
+                                <img src={item.thumbnail_url} alt="" className="w-5 h-5 rounded object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0" />
                               ) : isStory ? (
                                 <Sparkles className="w-3.5 h-3.5 text-fuchsia-500 flex-shrink-0" />
                               ) : (
                                 <ImageIcon className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                               )}
-
                               <span className="truncate font-medium text-[11px] leading-tight flex-1">
                                 {item.title || (item.caption && item.caption.trim() ? item.caption.slice(0, 30) : isStory ? 'Story Asset' : 'Untitled Post')}
                               </span>
                             </div>
-
-                            {/* Card Footer: Time & Status */}
                             <div className="flex items-center justify-between text-[9px] font-mono text-slate-500 dark:text-slate-400 pt-0.5">
                               <span>{timeStr || '—'}</span>
                               <span className="capitalize">{item.status.toLowerCase()}</span>
@@ -902,7 +1147,6 @@ export default function PostSchedulerPage() {
                         );
                       })}
 
-                      {/* "+N more" items indicator */}
                       {cell.items.length > 3 && (
                         <button
                           onClick={() => setViewDayModal({ dateStr: cell.dateKey, items: cell.items })}
@@ -913,12 +1157,117 @@ export default function PostSchedulerPage() {
                       )}
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Empty Calendar State */}
+          {/* ── CALENDAR SUB-VIEW: 3. DAY VIEW ─────────────────────────────── */}
+          {calendarView === 'day' && (
+            <div className="flex flex-col">
+              {/* Single Day Header */}
+              <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 flex items-center justify-between sticky top-0 z-20">
+                <div className="flex items-center space-x-2">
+                  <Clock3 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    {dayLabel} Timeline
+                  </span>
+                </div>
+                <span className="text-xs font-mono text-slate-500">
+                  {filteredItems.filter(i => getItemDateKey(i.scheduled_at || i.published_at || i.created_at) === getDateKey(currentDate)).length} scheduled
+                </span>
+              </div>
+
+              {/* Day 24-Hour Timeline */}
+              <div
+                ref={timelineScrollRef}
+                className="h-[620px] overflow-y-auto relative"
+              >
+                <div className="grid grid-cols-12 relative h-[1536px]">
+                  {/* Left Column: Hours (2 cols) */}
+                  <div className="col-span-2 sm:col-span-1 border-r border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/20 divide-y divide-slate-100 dark:divide-slate-800/60">
+                    {hoursArray.map((h) => (
+                      <div
+                        key={h.hour24}
+                        className="h-[64px] px-2 pt-1 text-right text-[10px] font-mono text-slate-400 dark:text-slate-500"
+                      >
+                        {h.label}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Right Column: Time Grid Workspace (10 cols) */}
+                  <div className="col-span-10 sm:col-span-11 relative">
+                    {/* Guidelines */}
+                    <div className="absolute inset-0 pointer-events-none divide-y divide-slate-100 dark:divide-slate-800/60">
+                      {hoursArray.map((h) => (
+                        <div key={h.hour24} className="h-[64px]" />
+                      ))}
+                    </div>
+
+                    {/* Content Items on this specific day */}
+                    {filteredItems
+                      .filter(i => getItemDateKey(i.scheduled_at || i.published_at || i.created_at) === getDateKey(currentDate))
+                      .map((item) => {
+                        const mins = getItemMinutesFromMidnight(item.scheduled_at || item.published_at || item.created_at);
+                        const topPx = (mins / 60) * 64;
+                        const isStory = item.item_type === 'story';
+                        const isFb = item.platforms.includes('facebook');
+                        const isIg = item.platforms.includes('instagram');
+                        const timeStr = formatShortTime(item.scheduled_at || item.published_at || item.created_at);
+
+                        return (
+                          <div
+                            key={`${item.item_type}-${item.id}`}
+                            onClick={() => {
+                              if (isStory) setPreviewStory(item);
+                              else setSelectedPostItem(item);
+                            }}
+                            style={{ top: `${topPx}px` }}
+                            className={`absolute left-3 right-3 sm:right-12 z-10 p-3 rounded-xl border cursor-pointer transition-all hover:scale-[1.01] hover:z-20 shadow-xs flex items-center justify-between space-x-3 ${
+                              isStory
+                                ? 'bg-fuchsia-50/95 dark:bg-fuchsia-950/80 border-fuchsia-300 dark:border-fuchsia-800'
+                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-3 min-w-0">
+                              {item.thumbnail_url ? (
+                                <img src={item.thumbnail_url} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 flex-shrink-0">
+                                  {isStory ? <Sparkles className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
+                                </div>
+                              )}
+                              <div className="min-w-0 space-y-0.5">
+                                <div className="flex items-center space-x-2">
+                                  <span className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate">
+                                    {item.title || item.caption || (isStory ? 'Story Asset' : 'Feed Post')}
+                                  </span>
+                                  {isFb && <Facebook className="w-3 h-3 text-blue-600" />}
+                                  {isIg && <Instagram className="w-3 h-3 text-pink-600" />}
+                                </div>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                  {item.caption || 'No caption text.'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-3 flex-shrink-0">
+                              <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                {timeStr}
+                              </span>
+                              <PostStatusBadge status={item.status} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Empty Calendar State across Week/Month/Day */}
           {!isLoading && filteredItems.length === 0 && (
             <div className="py-14 px-6 text-center space-y-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
               <div className="w-11 h-11 rounded-xl bg-slate-200/70 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 mx-auto">
@@ -946,8 +1295,10 @@ export default function PostSchedulerPage() {
         </div>
       )}
 
-      {/* ── SECONDARY WORKSPACE: ONLY LIST VIEW ─────────────────────────── */}
-      {viewMode === 'list' && (
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* ── MODE 2: LIST VIEW (DEDICATED QUEUE TABLE ONLY) ───────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {mode === 'list' && (
         <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <div className="flex items-center space-x-2">
