@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, 
+  TrendingUp,
   Sparkles, 
   Layers, 
   Calendar, 
@@ -46,6 +47,7 @@ const navGroups: NavGroup[] = [
     title: 'Overview',
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'Social Analytics', href: '/analytics', icon: TrendingUp },
     ],
   },
   {
