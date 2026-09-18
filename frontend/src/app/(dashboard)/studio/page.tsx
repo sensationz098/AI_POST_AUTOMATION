@@ -709,8 +709,48 @@ export default function AIStudioPage() {
 
   const handleSchedulePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const validTargetIds = selectedAccountIds.filter(id =>
+      postCapableAccounts.some(account => account.id === id)
+    );
+
+    if (validTargetIds.length === 0) {
+      toast.error('Please select at least one account to publish.', {
+        duration: 4000,
+        style: {
+          background: '#0f172a',
+          color: '#f8fafc',
+          border: '1px solid #ef4444',
+          borderRadius: '0.75rem',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+        },
+        iconTheme: {
+          primary: '#ef4444',
+          secondary: '#ffffff',
+        },
+      });
+      setStatusNotification('⚠️ Please select at least one account to publish.');
+      return;
+    }
+
     if (!hasMedia) {
-      alert('Please upload or provide a media file (photo or video) before scheduling.');
+      toast.error('Please upload or provide a media file (photo or video) before scheduling.', {
+        duration: 4000,
+        style: {
+          background: '#0f172a',
+          color: '#f8fafc',
+          border: '1px solid #ef4444',
+          borderRadius: '0.75rem',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+        },
+        iconTheme: {
+          primary: '#ef4444',
+          secondary: '#ffffff',
+        },
+      });
+      setStatusNotification('⚠️ Please upload or provide a media file before scheduling.');
       return;
     }
     if (!scheduledDateTime) {
@@ -1746,7 +1786,31 @@ export default function AIStudioPage() {
                   <span>Save Draft</span>
                 </button>
                 <button
-                  onClick={() => setIsScheduleModalOpen(true)}
+                  onClick={() => {
+                    const validTargetIds = selectedAccountIds.filter(id =>
+                      postCapableAccounts.some(account => account.id === id)
+                    );
+                    if (validTargetIds.length === 0) {
+                      toast.error('Please select at least one account to publish.', {
+                        duration: 4000,
+                        style: {
+                          background: '#0f172a',
+                          color: '#f8fafc',
+                          border: '1px solid #ef4444',
+                          borderRadius: '0.75rem',
+                          fontSize: '0.875rem',
+                          fontWeight: 600,
+                        },
+                        iconTheme: {
+                          primary: '#ef4444',
+                          secondary: '#ffffff',
+                        },
+                      });
+                      setStatusNotification('⚠️ Please select at least one account to publish.');
+                      return;
+                    }
+                    setIsScheduleModalOpen(true);
+                  }}
                   disabled={!hasMedia}
                   className="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold transition flex items-center justify-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
