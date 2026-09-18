@@ -734,6 +734,76 @@ class YouTubeService:
             "raw_status": status_info,
         }
 
+    def fetch_video_statistics(self, access_token: str, video_id: str) -> Dict[str, Optional[int]]:
+        """
+        Fetch video performance statistics via YouTube Data API v3 (GET videos.list with part=statistics).
+        Extracts likeCount and commentCount.
+        Does NOT map viewCount to impressions. impressions, reach, shares, and saves are strictly None.
+        Never logs access_token.
+        """
+        if not access_token or not video_id:
+            return {
+                "likes": None, "comments": None, "shares": None,
+                "saves": None, "reach": None, "impressions": None
+            }
+
+        is_mock_allowed = settings.APP_ENV.lower() != "production"
+        if access_token.startswith("mock") or access_token.startswith("sandbox") or (is_mock_allowed and access_token == "mock_token"):
+            return {
+                "likes": 120,
+                "comments": 18,
+                "shares": None,
+                "saves": None,
+                "reach": None,
+                "impressions": None,
+            }
+
+        url = f"{self.YOUTUBE_API_BASE_URL}/videos"
+        params = {
+            "part": "statistics",
+            "id": video_id,
+        }
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        }
+
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=15)
+            if response.status_code != 200:
+                logger.warning(f"[YOUTUBE_METRICS] videos.list statistics returned {response.status_code} for video {video_id}")
+                return {
+                    "likes": None, "comments": None, "shares": None,
+                    "saves": None, "reach": None, "impressions": None
+                }
+            data = response.json()
+            items = data.get("items", [])
+            if not items:
+                logger.info(f"[YOUTUBE_METRICS] Video {video_id} not found in statistics query")
+                return {
+                    "likes": None, "comments": None, "shares": None,
+                    "saves": None, "reach": None, "impressions": None
+                }
+
+            statistics = items[0].get("statistics", {})
+            likes = int(statistics["likeCount"]) if "likeCount" in statistics and statistics["likeCount"] is not None else 0
+            comments = int(statistics["commentCount"]) if "commentCount" in statistics and statistics["commentCount"] is not None else 0
+
+            return {
+                "likes": likes,
+                "comments": comments,
+                "shares": None,
+                "saves": None,
+                "reach": None,
+                "impressions": None
+            }
+        except Exception as e:
+            logger.error(f"[YOUTUBE_METRICS] Error fetching video statistics for {video_id}: {e}")
+            return {
+                "likes": None, "comments": None, "shares": None,
+                "saves": None, "reach": None, "impressions": None
+            }
+
     def update_video_metadata(
         self,
         access_token: str,

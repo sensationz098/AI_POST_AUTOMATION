@@ -2757,6 +2757,185 @@ class MetaGraphService:
             logger.warning(f"[META_POST_FETCH] Optional FB post fetch notice for {post_id}: {e}")
             return None
 
+    def fetch_instagram_post_metrics(self, ig_media_id: str, access_token: str) -> Dict[str, Optional[int]]:
+        """
+        Fetch Instagram media metrics and insights via Graph API v19.0.
+        Direct media fields: GET /{ig_media_id}?fields=id,like_count,comments_count,media_type
+        Insights: GET /{ig_media_id}/insights?metric=impressions,reach,saved,shares,total_interactions
+        Returns strict metric dictionary distinguishing 0 from None.
+        """
+        if not ig_media_id or not access_token:
+            return {
+                "likes": None, "comments": None, "shares": None,
+                "saves": None, "reach": None, "impressions": None
+            }
+
+        raw_token = decrypt_token(access_token) or access_token
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            return {
+                "likes": 42,
+                "comments": 5,
+                "shares": 3,
+                "saves": 8,
+                "reach": 350,
+                "impressions": 520,
+            }
+
+        likes = None
+        comments = None
+        shares = None
+        saves = None
+        reach = None
+        impressions = None
+
+        # 1. Fetch direct media node fields (like_count, comments_count)
+        url = f"{self.BASE_URL}/{ig_media_id}"
+        try:
+            res = requests.get(
+                url,
+                params={"fields": "id,like_count,comments_count,media_type", "access_token": raw_token},
+                timeout=10
+            )
+            if res.status_code == 200:
+                data = res.json()
+                likes = data.get("like_count")
+                comments = data.get("comments_count")
+            else:
+                logger.warning(f"[META_POST_METRICS] IG direct fields notice ({res.status_code}) for {ig_media_id}: {res.text[:150]}")
+        except Exception as e:
+            logger.error(f"[META_POST_METRICS] Exception fetching IG direct fields for {ig_media_id}: {e}")
+
+        # 2. Fetch media insights (impressions, reach, saved, shares)
+        insights_url = f"{self.BASE_URL}/{ig_media_id}/insights"
+        try:
+            res_insights = requests.get(
+                insights_url,
+                params={"metric": "impressions,reach,saved,shares,total_interactions", "access_token": raw_token},
+                timeout=10
+            )
+            if res_insights.status_code == 200:
+                idata = res_insights.json()
+                for item in idata.get("data", []):
+                    metric_name = item.get("name")
+                    values = item.get("values", [])
+                    val = values[0].get("value") if values else None
+                    if val is not None:
+                        if metric_name == "impressions":
+                            impressions = int(val)
+                        elif metric_name == "reach":
+                            reach = int(val)
+                        elif metric_name == "saved":
+                            saves = int(val)
+                        elif metric_name == "shares":
+                            shares = int(val)
+            else:
+                logger.info(f"[META_POST_METRICS] IG insights notice ({res_insights.status_code}) for {ig_media_id} (insights unavailable for media type)")
+        except Exception as e:
+            logger.warning(f"[META_POST_METRICS] IG insights request exception for {ig_media_id}: {e}")
+
+        return {
+            "likes": likes,
+            "comments": comments,
+            "shares": shares,
+            "saves": saves,
+            "reach": reach,
+            "impressions": impressions
+        }
+
+    def fetch_facebook_post_metrics(self, fb_post_id: str, access_token: str) -> Dict[str, Optional[int]]:
+        """
+        Fetch Facebook post performance metrics and insights via Graph API v19.0.
+        Direct post fields: GET /{fb_post_id}?fields=id,shares,reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0)
+        Insights: GET /{fb_post_id}/insights?metric=post_impressions,post_impressions_unique
+        Returns strict metric dictionary where Facebook saves is strictly None.
+        """
+        if not fb_post_id or not access_token:
+            return {
+                "likes": None, "comments": None, "shares": None,
+                "saves": None, "reach": None, "impressions": None
+            }
+
+        raw_token = decrypt_token(access_token) or access_token
+        is_mock_allowed = settings.META_MOCK_MODE and settings.APP_ENV.lower() != "production"
+        if raw_token.startswith("sandbox") or raw_token.startswith("mock") or (is_mock_allowed and raw_token == "mock_token"):
+            return {
+                "likes": 65,
+                "comments": 12,
+                "shares": 7,
+                "saves": None,  # FB does not support post saves
+                "reach": 480,
+                "impressions": 720,
+            }
+
+        likes = None
+        comments = None
+        shares = None
+        saves = None  # Facebook Graph API does not provide post-level saved counts
+        reach = None
+        impressions = None
+
+        # 1. Fetch direct post interactions
+        url = f"{self.BASE_URL}/{fb_post_id}"
+        try:
+            res = requests.get(
+                url,
+                params={
+                    "fields": "id,shares,reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0)",
+                    "access_token": raw_token
+                },
+                timeout=10
+            )
+            if res.status_code == 200:
+                data = res.json()
+                reactions_summary = data.get("reactions", {}).get("summary", {})
+                if "total_count" in reactions_summary:
+                    likes = int(reactions_summary["total_count"])
+                comments_summary = data.get("comments", {}).get("summary", {})
+                if "total_count" in comments_summary:
+                    comments = int(comments_summary["total_count"])
+                if "shares" in data and isinstance(data["shares"], dict) and "count" in data["shares"]:
+                    shares = int(data["shares"]["count"])
+                elif "shares" in data and isinstance(data["shares"], int):
+                    shares = data["shares"]
+            else:
+                logger.warning(f"[META_POST_METRICS] FB direct fields notice ({res.status_code}) for {fb_post_id}: {res.text[:150]}")
+        except Exception as e:
+            logger.error(f"[META_POST_METRICS] Exception fetching FB direct fields for {fb_post_id}: {e}")
+
+        # 2. Fetch post insights (post_impressions, post_impressions_unique)
+        insights_url = f"{self.BASE_URL}/{fb_post_id}/insights"
+        try:
+            res_insights = requests.get(
+                insights_url,
+                params={"metric": "post_impressions,post_impressions_unique", "access_token": raw_token},
+                timeout=10
+            )
+            if res_insights.status_code == 200:
+                idata = res_insights.json()
+                for item in idata.get("data", []):
+                    metric_name = item.get("name")
+                    values = item.get("values", [])
+                    val = values[0].get("value") if values else None
+                    if val is not None:
+                        if metric_name == "post_impressions":
+                            impressions = int(val)
+                        elif metric_name == "post_impressions_unique":
+                            reach = int(val)
+            else:
+                logger.info(f"[META_POST_METRICS] FB insights notice ({res_insights.status_code}) for {fb_post_id}")
+        except Exception as e:
+            logger.warning(f"[META_POST_METRICS] FB insights request exception for {fb_post_id}: {e}")
+
+        return {
+            "likes": likes,
+            "comments": comments,
+            "shares": shares,
+            "saves": saves,
+            "reach": reach,
+            "impressions": impressions
+        }
+
     def debug_token(self, token: str) -> Dict[str, Any]:
         """
         Inspect a Meta access token using GET /debug_token to verify validity, scope grants, and token type.

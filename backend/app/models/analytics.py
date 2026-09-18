@@ -11,14 +11,15 @@ class PostAnalytics(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     post_id = Column(Integer, ForeignKey("posts.id"), nullable=False, unique=True)
-    likes = Column(Integer, default=0)
-    comments = Column(Integer, default=0)
-    shares = Column(Integer, default=0)
-    saves = Column(Integer, default=0)
-    reach = Column(Integer, default=0)
-    impressions = Column(Integer, default=0)
-    engagement_rate = Column(Float, default=0.0)
-    follower_growth = Column(Integer, default=0)
+    likes = Column(Integer, nullable=True)
+    comments = Column(Integer, nullable=True)
+    shares = Column(Integer, nullable=True)
+    saves = Column(Integer, nullable=True)
+    reach = Column(Integer, nullable=True)
+    impressions = Column(Integer, nullable=True)
+    engagement_rate = Column(Float, nullable=True)
+    follower_growth = Column(Integer, default=0, nullable=True)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     post = relationship("Post", back_populates="analytics")
+

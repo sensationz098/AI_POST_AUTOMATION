@@ -119,18 +119,44 @@ def process_scheduled_stories_task():
 
 @celery_app.task(name="app.tasks.publish_task.sync_meta_analytics_task")
 def sync_meta_analytics_task():
-    """Celery Beat task: Sync analytics metrics and capture account-level snapshots."""
-    logger.info("Celery Task: Syncing analytics metrics and capturing account snapshots...")
+    """Celery Beat task: Sync analytics metrics (account-level snapshots and post-level analytics)."""
+    logger.info("Celery Task: Starting analytics synchronization cycle...")
     from app.services.account_snapshot_service import account_snapshot_service
+    from app.services.analytics_service import analytics_service
+
     db = SessionLocal()
+    account_snapshot_result = None
+    post_analytics_result = None
+
     try:
-        result = account_snapshot_service.capture_all_active_snapshots(db)
-        logger.info(f"Celery Task: Account snapshots complete: {result}")
-        return {"status": "synced", "snapshot_result": result}
+        # Block 1: Capture account-level metric snapshots (Phase A1)
+        try:
+            account_snapshot_result = account_snapshot_service.capture_all_active_snapshots(db)
+            logger.info(f"Celery Task: Account snapshots complete: {account_snapshot_result}")
+        except Exception as e:
+            logger.error(f"[ANALYTICS_ACCOUNT_SNAPSHOT_TASK_ERROR] Failed account snapshots: {e}")
+            account_snapshot_result = {"status": "ERROR", "error": str(e)}
+
+        # Block 2: Synchronize post-level analytics for recent published posts (Phase A2)
+        try:
+            post_analytics_result = analytics_service.sync_all_published_posts_analytics(db, limit=50)
+            logger.info(f"Celery Task: Post analytics complete: {post_analytics_result}")
+        except Exception as e:
+            logger.error(f"[ANALYTICS_POST_SYNC_TASK_ERROR] Failed post analytics synchronization: {e}")
+            post_analytics_result = {"status": "ERROR", "error": str(e)}
+
+        return {
+            "status": "synced",
+            "account_snapshots": account_snapshot_result,
+            "snapshot_result": account_snapshot_result,
+            "post_analytics": post_analytics_result
+        }
     except Exception as e:
-        logger.error(f"Celery Task Error in sync_meta_analytics_task: {e}")
+        logger.error(f"Celery Task unexpected error in sync_meta_analytics_task: {e}")
         return {"status": "ERROR", "error": str(e)}
     finally:
         db.close()
+
+
 
 
