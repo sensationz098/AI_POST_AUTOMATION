@@ -1,6 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional, List, Dict, Any
+from datetime import date, datetime
 from sqlalchemy.orm import Session
 from app.repositories.analytics_repository import analytics_repo
+from app.repositories.account_metric_snapshot_repository import account_metric_snapshot_repo
 from app.repositories.brand_repository import brand_repo
 from app.repositories.social_account_repository import social_account_repo
 from app.schemas.analytics import (
@@ -9,9 +12,19 @@ from app.schemas.analytics import (
     DailyMetricPoint,
     FacebookPageMetrics,
     InstagramAccountMetrics,
+    AccountSnapshotPoint,
+    GrowthMetrics,
+    AccountAnalyticsResponse,
+    OverviewReportResponse,
+    PlatformBreakdownItem,
+    PlatformBreakdownResponse,
+    PostPerformanceItem,
+    PostPerformanceListResponse,
 )
 from app.services.meta_service import meta_service
 from app.models.meta_account import MetaAccount
+from app.models.social_account import SocialAccount
+from app.models.account_metric_snapshot import AccountMetricSnapshot
 
 from app.core.security_encryption import decrypt_token
 from fastapi import HTTPException, status
@@ -81,6 +94,46 @@ class AnalyticsService:
                         "followers": followers or 0,
                         "is_live": not ig_raw.get("is_sandbox")
                     }
+                elif acc.platform == "youtube":
+                    latest_snap = db.query(AccountMetricSnapshot).filter(
+                        AccountMetricSnapshot.social_account_id == acc.id
+                    ).order_by(AccountMetricSnapshot.snapshot_date.desc()).first()
+                    followers = latest_snap.followers_count if latest_snap else 0
+                    return {
+                        "entry": {
+                            "id": acc.id,
+                            "account_id": acc.account_id,
+                            "account_name": acc.account_name,
+                            "platform": "youtube",
+                            "logo_url": acc.logo_url,
+                            "followers_count": followers if followers is not None else 0,
+                            "media_count": latest_snap.media_count if latest_snap else None,
+                            "media_count_source": "persisted_snapshot",
+                            "category": "YouTube Channel",
+                            "status": acc.status,
+                            "link": f"https://youtube.com/channel/{acc.account_id}"
+                        },
+                        "followers": followers or 0,
+                        "is_live": False
+                    }
+                else:
+                    return {
+                        "entry": {
+                            "id": acc.id,
+                            "account_id": acc.account_id,
+                            "account_name": acc.account_name,
+                            "platform": acc.platform,
+                            "logo_url": acc.logo_url,
+                            "followers_count": 0,
+                            "media_count": None,
+                            "media_count_source": "unavailable",
+                            "category": "Social Account",
+                            "status": acc.status,
+                            "link": ""
+                        },
+                        "followers": 0,
+                        "is_live": False
+                    }
             except Exception as e:
                 import logging
                 logging.getLogger("uvicorn.error").error(f"[ANALYTICS_ACCOUNT_ISOLATION_ERROR] platform={acc.platform} account_id={acc.account_id} error={e}")
@@ -107,10 +160,11 @@ class AnalyticsService:
                 results = [f.result() for f in futures]
 
             for res in results:
-                accounts_list.append(res["entry"])
-                total_followers_combined += res["followers"]
-                if res["is_live"]:
-                    has_live_meta = True
+                if res and "entry" in res:
+                    accounts_list.append(res["entry"])
+                    total_followers_combined += res.get("followers", 0)
+                    if res.get("is_live"):
+                        has_live_meta = True
 
         summary["total_reach"] = total_reach_combined
         summary["total_impressions"] = total_impressions_combined
@@ -325,12 +379,428 @@ class AnalyticsService:
 
         logger.info(f"[POST_ANALYTICS_BATCH_COMPLETE] Finished. Total={total}, Success={success_count}, Failed={failure_count}")
 
-
         return {
             "total_posts": total,
             "success": success_count,
             "failed": failure_count
         }
+
+    # ==============================================================================
+    # Phase 2B.5-A3: Read-Only Aggregation & Analytics Endpoints Service Methods
+    # ==============================================================================
+
+    def _validate_scope(self, db: Session, user_id: int, brand_id: Optional[int] = None, social_account_id: Optional[int] = None):
+        """Helper to enforce strict tenant/brand/account boundary checks."""
+        from app.models.brand import BrandProfile
+        if brand_id is not None:
+            brand = db.query(BrandProfile).filter(
+                BrandProfile.id == brand_id,
+                BrandProfile.user_id == user_id
+            ).first()
+            if not brand:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Brand profile not found or access denied"
+                )
+
+        if social_account_id is not None:
+            account = db.query(SocialAccount).filter(
+                SocialAccount.id == social_account_id,
+                SocialAccount.user_id == user_id
+            ).first()
+            if not account:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Social account not found or access denied"
+                )
+            if brand_id is not None and account.brand_id != brand_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Social account does not belong to the specified brand"
+                )
+
+    def get_account_historical_analytics(
+        self,
+        db: Session,
+        user_id: int,
+        brand_id: Optional[int] = None,
+        social_account_id: Optional[int] = None,
+        platform: Optional[str] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> AccountAnalyticsResponse:
+        """
+        Retrieve chronological account metric snapshots and calculate growth rates
+        with strict tenant/brand isolation. 100% read-only.
+        """
+        self._validate_scope(db, user_id, brand_id, social_account_id)
+
+        if social_account_id is not None:
+            snapshots = account_metric_snapshot_repo.get_snapshots_for_account(
+                db=db,
+                social_account_id=social_account_id,
+                start_date=start_date,
+                end_date=end_date
+            )
+        elif brand_id is not None:
+            snapshots = account_metric_snapshot_repo.get_snapshots_by_brand(
+                db=db,
+                brand_id=brand_id,
+                user_id=user_id,
+                platform=platform,
+                start_date=start_date,
+                end_date=end_date
+            )
+        else:
+            snapshots = account_metric_snapshot_repo.get_snapshots_by_user(
+                db=db,
+                user_id=user_id,
+                platform=platform,
+                start_date=start_date,
+                end_date=end_date
+            )
+
+        # Convert to response points
+        points = []
+        for s in snapshots:
+            points.append(AccountSnapshotPoint(
+                id=s.id,
+                social_account_id=s.social_account_id,
+                platform=s.social_account.platform if s.social_account else "unknown",
+                account_name=s.social_account.account_name if s.social_account else None,
+                snapshot_date=s.snapshot_date,
+                followers_count=s.followers_count,
+                following_count=s.following_count,
+                media_count=s.media_count,
+                views_count=s.views_count,
+                reach=s.reach,
+                impressions=s.impressions,
+                engagement_rate=s.engagement_rate,
+                metadata_json=s.metadata_json or {}
+            ))
+
+        # Calculate Growth Metrics
+        if not snapshots:
+            growth = GrowthMetrics()
+        elif social_account_id is not None or len({s.social_account_id for s in snapshots}) == 1:
+            first_snap = snapshots[0]
+            last_snap = snapshots[-1]
+
+            initial_followers = first_snap.followers_count
+            current_followers = last_snap.followers_count
+            follower_change = (
+                current_followers - initial_followers
+                if (initial_followers is not None and current_followers is not None)
+                else None
+            )
+
+            follower_growth_rate = None
+            if initial_followers is not None and current_followers is not None:
+                if initial_followers > 0:
+                    follower_growth_rate = round(((current_followers - initial_followers) / initial_followers) * 100, 2)
+                elif initial_followers == 0 and current_followers == 0:
+                    follower_growth_rate = 0.0
+
+            initial_media = first_snap.media_count
+            current_media = last_snap.media_count
+            media_change = (
+                current_media - initial_media
+                if (initial_media is not None and current_media is not None)
+                else None
+            )
+
+            initial_views = first_snap.views_count
+            current_views = last_snap.views_count
+            views_change = (
+                current_views - initial_views
+                if (initial_views is not None and current_views is not None)
+                else None
+            )
+
+            growth = GrowthMetrics(
+                initial_followers=initial_followers,
+                current_followers=current_followers,
+                follower_change=follower_change,
+                follower_growth_rate=follower_growth_rate,
+                initial_media_count=initial_media,
+                current_media_count=current_media,
+                media_count_change=media_change,
+                initial_views=initial_views,
+                current_views=current_views,
+                views_change=views_change,
+            )
+        else:
+            # Multi-account aggregation by earliest/latest calendar date
+            distinct_dates = sorted(list({s.snapshot_date for s in snapshots}))
+            earliest_date = distinct_dates[0]
+            latest_date = distinct_dates[-1]
+
+            first_snaps = [s for s in snapshots if s.snapshot_date == earliest_date]
+            last_snaps = [s for s in snapshots if s.snapshot_date == latest_date]
+
+            first_fol = [s.followers_count for s in first_snaps if s.followers_count is not None]
+            last_fol = [s.followers_count for s in last_snaps if s.followers_count is not None]
+            initial_followers = sum(first_fol) if first_fol else None
+            current_followers = sum(last_fol) if last_fol else None
+
+            follower_change = (
+                current_followers - initial_followers
+                if (initial_followers is not None and current_followers is not None)
+                else None
+            )
+
+            follower_growth_rate = None
+            if initial_followers is not None and current_followers is not None:
+                if initial_followers > 0:
+                    follower_growth_rate = round(((current_followers - initial_followers) / initial_followers) * 100, 2)
+                elif initial_followers == 0 and current_followers == 0:
+                    follower_growth_rate = 0.0
+
+            first_med = [s.media_count for s in first_snaps if s.media_count is not None]
+            last_med = [s.media_count for s in last_snaps if s.media_count is not None]
+            initial_media = sum(first_med) if first_med else None
+            current_media = sum(last_med) if last_med else None
+            media_change = (
+                current_media - initial_media
+                if (initial_media is not None and current_media is not None)
+                else None
+            )
+
+            first_vw = [s.views_count for s in first_snaps if s.views_count is not None]
+            last_vw = [s.views_count for s in last_snaps if s.views_count is not None]
+            initial_views = sum(first_vw) if first_vw else None
+            current_views = sum(last_vw) if last_vw else None
+            views_change = (
+                current_views - initial_views
+                if (initial_views is not None and current_views is not None)
+                else None
+            )
+
+            growth = GrowthMetrics(
+                initial_followers=initial_followers,
+                current_followers=current_followers,
+                follower_change=follower_change,
+                follower_growth_rate=follower_growth_rate,
+                initial_media_count=initial_media,
+                current_media_count=current_media,
+                media_count_change=media_change,
+                initial_views=initial_views,
+                current_views=current_views,
+                views_change=views_change,
+            )
+
+        return AccountAnalyticsResponse(
+            snapshots=points,
+            growth=growth,
+            total_records=len(points)
+        )
+
+    def get_overview_report(
+        self,
+        db: Session,
+        user_id: int,
+        brand_id: Optional[int] = None,
+        social_account_id: Optional[int] = None,
+        platform: Optional[str] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> OverviewReportResponse:
+        """
+        Aggregate overview report combining account-level total followers
+        (arithmetic sum across available platform accounts; not deduplicated)
+        and post-level engagement and volume metrics. 100% read-only.
+        """
+        self._validate_scope(db, user_id, brand_id, social_account_id)
+
+        # 1. Post-level aggregations
+        post_metrics = analytics_repo.get_aggregated_post_metrics(
+            db=db,
+            user_id=user_id,
+            brand_id=brand_id,
+            platform=platform,
+            social_account_id=social_account_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        # 2. Account-level follower arithmetic sum
+        acc_query = db.query(SocialAccount).filter(
+            SocialAccount.user_id == user_id,
+            SocialAccount.status == "CONNECTED"
+        )
+        if brand_id is not None:
+            acc_query = acc_query.filter(SocialAccount.brand_id == brand_id)
+        if social_account_id is not None:
+            acc_query = acc_query.filter(SocialAccount.id == social_account_id)
+        if platform is not None:
+            acc_query = acc_query.filter(SocialAccount.platform == platform.lower())
+
+        accounts = acc_query.all()
+
+        account_followers = []
+        for acc in accounts:
+            snap_q = db.query(AccountMetricSnapshot).filter(AccountMetricSnapshot.social_account_id == acc.id)
+            if end_date is not None:
+                snap_q = snap_q.filter(AccountMetricSnapshot.snapshot_date <= end_date)
+            latest_snap = snap_q.order_by(AccountMetricSnapshot.snapshot_date.desc()).first()
+
+            if latest_snap and latest_snap.followers_count is not None:
+                account_followers.append(latest_snap.followers_count)
+
+        total_followers = sum(account_followers) if account_followers else None
+
+        return OverviewReportResponse(
+            total_followers=total_followers,
+            total_posts=post_metrics["total_posts"],
+            published_posts=post_metrics["published_posts"],
+            scheduled_posts=post_metrics["scheduled_posts"],
+            failed_posts=post_metrics["failed_posts"],
+            total_likes=post_metrics["total_likes"],
+            total_comments=post_metrics["total_comments"],
+            total_shares=post_metrics["total_shares"],
+            total_saves=post_metrics["total_saves"],
+            total_reach=post_metrics["total_reach"],
+            total_impressions=post_metrics["total_impressions"],
+            aggregate_engagement_rate=post_metrics["aggregate_engagement_rate"],
+            start_date=start_date,
+            end_date=end_date
+        )
+
+    def get_platform_breakdown(
+        self,
+        db: Session,
+        user_id: int,
+        brand_id: Optional[int] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> PlatformBreakdownResponse:
+        """
+        Break down metrics by platform (Instagram, Facebook, YouTube) within user/brand scope. 100% read-only.
+        """
+        self._validate_scope(db, user_id, brand_id=brand_id)
+
+        platforms = ["instagram", "facebook", "youtube"]
+        items = []
+
+        for plat in platforms:
+            acc_query = db.query(SocialAccount).filter(
+                SocialAccount.user_id == user_id,
+                SocialAccount.platform == plat,
+                SocialAccount.status == "CONNECTED"
+            )
+            if brand_id is not None:
+                acc_query = acc_query.filter(SocialAccount.brand_id == brand_id)
+            accounts = acc_query.all()
+            connected_count = len(accounts)
+
+            # Followers and views from latest snapshots
+            fol_vals = []
+            views_vals = []
+            for acc in accounts:
+                snap_q = db.query(AccountMetricSnapshot).filter(AccountMetricSnapshot.social_account_id == acc.id)
+                if end_date is not None:
+                    snap_q = snap_q.filter(AccountMetricSnapshot.snapshot_date <= end_date)
+                latest_snap = snap_q.order_by(AccountMetricSnapshot.snapshot_date.desc()).first()
+
+                if latest_snap:
+                    if latest_snap.followers_count is not None:
+                        fol_vals.append(latest_snap.followers_count)
+                    if latest_snap.views_count is not None:
+                        views_vals.append(latest_snap.views_count)
+
+            total_followers = sum(fol_vals) if fol_vals else None
+            total_views = sum(views_vals) if views_vals else None
+
+            # Post metrics for this platform
+            metrics = analytics_repo.get_aggregated_post_metrics(
+                db=db,
+                user_id=user_id,
+                brand_id=brand_id,
+                platform=plat,
+                start_date=start_date,
+                end_date=end_date
+            )
+
+            items.append(PlatformBreakdownItem(
+                platform=plat,
+                connected_accounts_count=connected_count,
+                total_followers=total_followers,
+                total_posts=metrics["total_posts"],
+                total_likes=metrics["total_likes"],
+                total_comments=metrics["total_comments"],
+                total_shares=metrics["total_shares"],
+                total_saves=metrics["total_saves"],
+                total_reach=metrics["total_reach"],
+                total_impressions=metrics["total_impressions"],
+                total_views=total_views,
+                aggregate_engagement_rate=metrics["aggregate_engagement_rate"]
+            ))
+
+        return PlatformBreakdownResponse(platforms=items)
+
+    def get_posts_performance_list(
+        self,
+        db: Session,
+        user_id: int,
+        brand_id: Optional[int] = None,
+        social_account_id: Optional[int] = None,
+        platform: Optional[str] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        order_by: str = "published_at",
+        order_dir: str = "desc",
+        limit: int = 50,
+        offset: int = 0
+    ) -> PostPerformanceListResponse:
+        """
+        Retrieve paginated list of posts with performance metrics, deterministic NULL-safe sorting,
+        and tenant/brand scoping. 100% read-only.
+        """
+        self._validate_scope(db, user_id, brand_id, social_account_id)
+
+        posts, total = analytics_repo.get_posts_performance(
+            db=db,
+            user_id=user_id,
+            brand_id=brand_id,
+            platform=platform,
+            social_account_id=social_account_id,
+            start_date=start_date,
+            end_date=end_date,
+            order_by=order_by,
+            order_dir=order_dir,
+            limit=limit,
+            offset=offset
+        )
+
+        items = []
+        for p in posts:
+            items.append(PostPerformanceItem(
+                post_id=p.id,
+                title=p.title,
+                caption=p.caption,
+                status=p.status,
+                platforms=p.platforms or [],
+                media_type=p.media_type,
+                thumbnail_url=p.thumbnail_url,
+                image_url=p.image_url,
+                published_at=p.published_at,
+                created_at=p.created_at,
+                likes=p.analytics.likes if p.analytics else None,
+                comments=p.analytics.comments if p.analytics else None,
+                shares=p.analytics.shares if p.analytics else None,
+                saves=p.analytics.saves if p.analytics else None,
+                reach=p.analytics.reach if p.analytics else None,
+                impressions=p.analytics.impressions if p.analytics else None,
+                engagement_rate=p.analytics.engagement_rate if p.analytics else None,
+                analytics_updated_at=p.analytics.updated_at if p.analytics else None,
+            ))
+
+        return PostPerformanceListResponse(
+            items=items,
+            total=total,
+            limit=limit,
+            offset=offset
+        )
 
 analytics_service = AnalyticsService()
 
