@@ -18,6 +18,7 @@ from app.models.automation_execution import AutomationExecution, ExecutionStatus
 
 from app.models.story import Story, StoryStatus
 from app.models.youtube_upload import YouTubeUpload, YouTubeUploadStatus
+from app.models.account_metric_snapshot import AccountMetricSnapshot
 
 __all__ = [
     "User", 
@@ -30,6 +31,7 @@ __all__ = [
     "Story",
     "StoryStatus",
     "PostAnalytics", 
+    "AccountMetricSnapshot",
     "AuditLog",
     "SocialAccount",
     "PublishingBatch",

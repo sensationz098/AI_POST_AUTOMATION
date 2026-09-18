@@ -119,7 +119,18 @@ def process_scheduled_stories_task():
 
 @celery_app.task(name="app.tasks.publish_task.sync_meta_analytics_task")
 def sync_meta_analytics_task():
-    """Celery Beat task: Sync analytics metrics for published posts."""
-    logger.info("Celery Task: Syncing Meta analytics metrics...")
-    return {"status": "synced"}
+    """Celery Beat task: Sync analytics metrics and capture account-level snapshots."""
+    logger.info("Celery Task: Syncing analytics metrics and capturing account snapshots...")
+    from app.services.account_snapshot_service import account_snapshot_service
+    db = SessionLocal()
+    try:
+        result = account_snapshot_service.capture_all_active_snapshots(db)
+        logger.info(f"Celery Task: Account snapshots complete: {result}")
+        return {"status": "synced", "snapshot_result": result}
+    except Exception as e:
+        logger.error(f"Celery Task Error in sync_meta_analytics_task: {e}")
+        return {"status": "ERROR", "error": str(e)}
+    finally:
+        db.close()
+
 

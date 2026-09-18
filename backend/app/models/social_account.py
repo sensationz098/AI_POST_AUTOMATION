@@ -53,6 +53,12 @@ class SocialAccount(Base):
         cascade="all, delete-orphan",
         passive_deletes=True
     )
+    metric_snapshots = relationship(
+        "AccountMetricSnapshot",
+        back_populates="social_account",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
 
     @property
     def requires_reconnection_for_comment_automation(self) -> bool:
