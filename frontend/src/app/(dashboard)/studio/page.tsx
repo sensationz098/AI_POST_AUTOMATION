@@ -515,7 +515,8 @@ export default function AIStudioPage() {
   const [cta, setCta] = useState('');
   const [seoKeywords, setSeoKeywords] = useState(['ai social media', 'facebook automation', 'instagram scheduler', 'meta graph api']);
   const [imagePrompt, setImagePrompt] = useState('A sleek photorealistic digital workstation with glowing neon purple and blue holographic UI displaying social analytics, 8k render.');
-  const [imageUrl, setImageUrl] = useState('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1080&q=80');
+  const [imageUrl, setImageUrl] = useState('');
+  const hasMedia = Boolean(imageUrl && imageUrl.trim().length > 0);
 
   // UI state
   const [previewPlatform, setPreviewPlatform] = useState<'facebook' | 'instagram'>('instagram');
@@ -708,6 +709,10 @@ export default function AIStudioPage() {
 
   const handleSchedulePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasMedia) {
+      alert('Please upload or provide a media file (photo or video) before scheduling.');
+      return;
+    }
     if (!scheduledDateTime) {
       alert('Please select a valid scheduled date and time.');
       return;
@@ -746,6 +751,26 @@ export default function AIStudioPage() {
   };
 
   const handlePublishNow = async () => {
+    if (!hasMedia) {
+      toast.error('Please upload or provide a media file (photo or video) before publishing.', {
+        duration: 4000,
+        style: {
+          background: '#0f172a',
+          color: '#f8fafc',
+          border: '1px solid #ef4444',
+          borderRadius: '0.75rem',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+        },
+        iconTheme: {
+          primary: '#ef4444',
+          secondary: '#ffffff',
+        },
+      });
+      setStatusNotification('⚠️ Please upload or provide a media file before publishing.');
+      return;
+    }
+
     const validTargetIds = selectedAccountIds.filter(id =>
       postCapableAccounts.some(account => account.id === id)
     );
@@ -1635,22 +1660,38 @@ export default function AIStudioPage() {
 
             {/* Render Selected Social Card */}
             <div className="flex justify-center py-2">
-              {previewPlatform === 'instagram' ? (
-                <InstagramPostPreview
-                  brand={selectedBrand}
-                  caption={caption}
-                  hashtags={hashtags}
-                  cta={cta}
-                  imageUrl={imageUrl}
-                />
+              {hasMedia ? (
+                previewPlatform === 'instagram' ? (
+                  <InstagramPostPreview
+                    brand={selectedBrand}
+                    caption={caption}
+                    hashtags={hashtags}
+                    cta={cta}
+                    imageUrl={imageUrl}
+                  />
+                ) : (
+                  <FacebookPostPreview
+                    brand={selectedBrand}
+                    caption={caption}
+                    hashtags={hashtags}
+                    cta={cta}
+                    imageUrl={imageUrl}
+                  />
+                )
               ) : (
-                <FacebookPostPreview
-                  brand={selectedBrand}
-                  caption={caption}
-                  hashtags={hashtags}
-                  cta={cta}
-                  imageUrl={imageUrl}
-                />
+                <div className="w-full max-w-sm rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col items-center justify-center p-8 text-center space-y-3 py-16">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex items-center justify-center text-slate-400 dark:text-slate-500 shadow-xs">
+                    <ImageIcon className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      No media to preview your post
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-[220px] leading-relaxed">
+                      Upload a photo or video to see your post preview
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -1680,8 +1721,8 @@ export default function AIStudioPage() {
 
               <button
                 onClick={handlePublishNow}
-                disabled={isPublishing}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white font-bold text-sm transition shadow-lg shadow-emerald-600/25 flex items-center justify-center space-x-2 disabled:opacity-50"
+                disabled={isPublishing || !hasMedia}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white font-bold text-sm transition shadow-lg shadow-emerald-600/25 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isPublishing ? (
                   <>
@@ -1706,7 +1747,8 @@ export default function AIStudioPage() {
                 </button>
                 <button
                   onClick={() => setIsScheduleModalOpen(true)}
-                  className="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold transition flex items-center justify-center space-x-1.5"
+                  disabled={!hasMedia}
+                  className="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold transition flex items-center justify-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Calendar className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
                   <span>Schedule Post</span>
