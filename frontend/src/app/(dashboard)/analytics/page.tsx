@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AnalyticsHeader } from '@/components/analytics/AnalyticsHeader';
 import { KpiSummaryGrid } from '@/components/analytics/KpiSummaryGrid';
-import { AudienceGrowthChart } from '@/components/analytics/AudienceGrowthChart';
+import { AccountEvolutionChart } from '@/components/analytics/AccountEvolutionChart';
 import { PlatformBreakdownSection } from '@/components/analytics/PlatformBreakdownSection';
 import { PostPerformanceTable } from '@/components/analytics/PostPerformanceTable';
 import {
@@ -216,11 +216,18 @@ export default function AnalyticsPage() {
         <KpiSummaryGrid overview={overview} growth={snapshots?.growth} />
       )}
 
-      {/* ── Audience Growth Chart ───────────────────────────────────────── */}
+      {/* ── Account Evolution Section (Metricool-Inspired) ──────────────── */}
       {isLoading ? (
         <ChartSkeleton />
       ) : (
-        <AudienceGrowthChart snapshots={snapshots?.snapshots || []} isLoading={isLoading} />
+        <AccountEvolutionChart
+          snapshots={snapshots?.snapshots || []}
+          growth={snapshots?.growth}
+          overview={overview}
+          startDate={filters.startDate}
+          endDate={filters.endDate}
+          isLoading={isLoading}
+        />
       )}
 
       {/* ── Platform Breakdown Section ─────────────────────────────────── */}
