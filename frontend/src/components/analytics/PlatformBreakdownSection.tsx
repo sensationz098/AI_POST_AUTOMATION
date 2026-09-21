@@ -17,15 +17,18 @@ import {
 } from 'lucide-react';
 import { 
   PlatformBreakdownItem, 
+  LiveAnalyticsResponse,
   formatMetricNumber, 
   formatPercentage 
 } from '@/lib/analyticsApi';
 
 interface PlatformBreakdownSectionProps {
   platforms: PlatformBreakdownItem[];
+  liveAnalytics?: LiveAnalyticsResponse | null;
 }
 
-export const PlatformBreakdownSection: React.FC<PlatformBreakdownSectionProps> = ({ platforms }) => {
+export const PlatformBreakdownSection: React.FC<PlatformBreakdownSectionProps> = ({ platforms, liveAnalytics }) => {
+
   const getPlatformMeta = (name: string) => {
     switch (name.toLowerCase()) {
       case 'instagram':
@@ -103,6 +106,24 @@ export const PlatformBreakdownSection: React.FC<PlatformBreakdownSectionProps> =
           const Icon = meta.icon;
           const isYouTube = item.platform.toLowerCase() === 'youtube';
 
+          // Live platform fallback if historical snapshot has not yet accumulated
+          const liveAccs = (liveAnalytics?.accounts || []).filter(
+            (a) => a.platform.toLowerCase() === item.platform.toLowerCase()
+          );
+          const liveFollowersList = liveAccs
+            .map((a) => a.account.followers)
+            .filter((f): f is number => f !== null && f !== undefined);
+          const liveFollowers = liveFollowersList.length > 0 ? liveFollowersList.reduce((a, b) => a + b, 0) : null;
+          const displayFollowers = item.total_followers ?? liveFollowers;
+
+          const liveViewsList = liveAccs
+            .map((a) => a.account.views_count)
+            .filter((v): v is number => v !== null && v !== undefined);
+          const liveViews = liveViewsList.length > 0 ? liveViewsList.reduce((a, b) => a + b, 0) : null;
+          const displayViews = item.total_views ?? liveViews;
+
+          const connectedCount = item.connected_accounts_count > 0 ? item.connected_accounts_count : liveAccs.length;
+
           return (
             <div
               key={item.platform}
@@ -119,8 +140,8 @@ export const PlatformBreakdownSection: React.FC<PlatformBreakdownSectionProps> =
                       {meta.displayName}
                     </h4>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {item.connected_accounts_count}{' '}
-                      {item.connected_accounts_count === 1 ? 'account' : 'accounts'}
+                      {connectedCount}{' '}
+                      {connectedCount === 1 ? 'account' : 'accounts'}
                     </p>
                   </div>
                 </div>
@@ -130,7 +151,7 @@ export const PlatformBreakdownSection: React.FC<PlatformBreakdownSectionProps> =
                     Followers
                   </span>
                   <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    {formatMetricNumber(item.total_followers)}
+                    {formatMetricNumber(displayFollowers)}
                   </span>
                 </div>
               </div>
@@ -164,7 +185,7 @@ export const PlatformBreakdownSection: React.FC<PlatformBreakdownSectionProps> =
                       Video Views
                     </span>
                     <p className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
-                      {formatMetricNumber(item.total_views)}
+                      {formatMetricNumber(displayViews)}
                     </p>
                   </div>
                 ) : (
@@ -177,6 +198,7 @@ export const PlatformBreakdownSection: React.FC<PlatformBreakdownSectionProps> =
                     </p>
                   </div>
                 )}
+
 
                 {/* Impressions (Instagram/Facebook) or Reach placeholder (YouTube) */}
                 {isYouTube ? (

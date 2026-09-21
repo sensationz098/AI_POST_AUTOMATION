@@ -1,3 +1,4 @@
+
 # Environment variables
 .env
 .env.local
@@ -47,3 +48,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+# Scratch / Dev temp
+scratch/
+backend/scratch/
+
+

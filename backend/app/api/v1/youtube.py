@@ -190,10 +190,19 @@ def youtube_oauth_callback(
             logo_url=logo_url,
         )
 
+        # Phase A5-DATA-01.2: Enqueue async background analytics snapshot task
+        try:
+            from app.tasks.publish_task import sync_account_analytics_snapshot_task
+            sync_account_analytics_snapshot_task.delay(account_id=account.id)
+            logger.info(f"[YOUTUBE_OAUTH] Enqueued async analytics snapshot task for YouTube account {account.id}")
+        except Exception as task_err:
+            logger.warning(f"[YOUTUBE_OAUTH_TASK_ENQUEUE_WARNING] channel_id={channel_id} error={task_err}")
+
         logger.info(
             f"[YOUTUBE_OAUTH] Successfully connected YouTube channel '{channel_title}' "
             f"(id={channel_id}) for user {user_id}."
         )
+
 
         return RedirectResponse(
             url=f"{frontend_base}/meta-connect?youtube_connected=true&channel_id={quote(channel_id)}&channel_title={quote(channel_title)}"

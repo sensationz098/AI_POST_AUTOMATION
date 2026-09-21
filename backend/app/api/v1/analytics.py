@@ -9,12 +9,40 @@ from app.schemas.analytics import (
     OverviewReportResponse,
     PlatformBreakdownResponse,
     PostPerformanceListResponse,
+    LiveAnalyticsResponse,
 )
 from app.services.analytics_service import analytics_service
+from app.services.live_analytics_service import live_analytics_service
 from app.api.v1.deps import get_current_user
 from app.models.user import User
 
 router = APIRouter(prefix="/analytics", tags=["Analytics & Growth"])
+
+# ==============================================================================
+# Phase A5-DATA-01: Live Real-Time Platform Analytics Endpoint
+# ==============================================================================
+
+@router.get("/live", response_model=LiveAnalyticsResponse)
+def get_live_platform_analytics(
+    brand_id: Optional[int] = Query(None, description="Optional brand filter"),
+    social_account_id: Optional[int] = Query(None, description="Optional social account filter"),
+    platform: Optional[str] = Query(None, description="Optional platform filter (e.g. instagram, facebook, youtube)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Fetch CURRENT real-time platform metrics directly from connected social accounts (Meta / YouTube),
+    idempotently update today's historical snapshot row, and return normalized analytics with capabilities.
+    Does NOT require pre-existing historical snapshots.
+    """
+    return live_analytics_service.get_live_analytics(
+        db=db,
+        user_id=current_user.id,
+        brand_id=brand_id,
+        social_account_id=social_account_id,
+        platform=platform
+    )
+
 
 # ==============================================================================
 # Backward-Compatible Legacy Overview Endpoints

@@ -17,6 +17,7 @@ import {
 import { 
   OverviewReportResponse, 
   GrowthMetrics, 
+  LiveAnalyticsResponse,
   formatMetricNumber, 
   formatPercentage, 
   formatGrowth 
@@ -25,11 +26,18 @@ import {
 interface KpiSummaryGridProps {
   overview?: OverviewReportResponse | null;
   growth?: GrowthMetrics | null;
+  liveAnalytics?: LiveAnalyticsResponse | null;
 }
 
-export const KpiSummaryGrid: React.FC<KpiSummaryGridProps> = ({ overview, growth }) => {
+export const KpiSummaryGrid: React.FC<KpiSummaryGridProps> = ({ overview, growth, liveAnalytics }) => {
   const followerGrowth = formatGrowth(growth?.follower_change);
   const followerGrowthRate = formatGrowth(growth?.follower_growth_rate, true);
+
+  // Use historical overview if present, otherwise immediately use live platform analytics
+  const totalFollowers = overview?.total_followers ?? liveAnalytics?.summary?.total_followers;
+  const totalReach = overview?.total_reach ?? liveAnalytics?.summary?.total_reach;
+  const totalImpressions = overview?.total_impressions ?? liveAnalytics?.summary?.total_impressions;
+  const engagementRate = overview?.aggregate_engagement_rate ?? liveAnalytics?.summary?.aggregate_engagement_rate;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
@@ -45,13 +53,14 @@ export const KpiSummaryGrid: React.FC<KpiSummaryGridProps> = ({ overview, growth
         </div>
         <div className="space-y-0.5">
           <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-            {formatMetricNumber(overview?.total_followers)}
+            {formatMetricNumber(totalFollowers)}
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
             Across active channels*
           </p>
         </div>
       </div>
+
 
       {/* 2. Follower Growth */}
       <div className="bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800/80 rounded-xl p-4 shadow-xs space-y-2 flex flex-col justify-between">
@@ -137,7 +146,7 @@ export const KpiSummaryGrid: React.FC<KpiSummaryGridProps> = ({ overview, growth
         </div>
         <div className="space-y-0.5">
           <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-            {formatMetricNumber(overview?.total_reach)}
+            {formatMetricNumber(totalReach)}
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
             Sum of reported platform reach
@@ -157,7 +166,7 @@ export const KpiSummaryGrid: React.FC<KpiSummaryGridProps> = ({ overview, growth
         </div>
         <div className="space-y-0.5">
           <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-            {formatMetricNumber(overview?.total_impressions)}
+            {formatMetricNumber(totalImpressions)}
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
             Total content views
@@ -177,13 +186,14 @@ export const KpiSummaryGrid: React.FC<KpiSummaryGridProps> = ({ overview, growth
         </div>
         <div className="space-y-0.5">
           <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-            {formatPercentage(overview?.aggregate_engagement_rate)}
+            {formatPercentage(engagementRate)}
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
             Interactions / Reach
           </p>
         </div>
       </div>
+
     </div>
   );
 };

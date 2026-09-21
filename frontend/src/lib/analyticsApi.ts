@@ -99,6 +99,59 @@ export interface PostPerformanceListResponse {
   offset: number;
 }
 
+// ── Phase A5-DATA-01 Live Analytics Interfaces ─────────────────────────────
+
+export interface LiveAccountMetrics {
+  followers?: number | null;
+  following?: number | null;
+  media_count?: number | null;
+  views_count?: number | null;
+}
+
+export interface LiveAnalyticsMetrics {
+  reach?: number | null;
+  impressions?: number | null;
+  engagement_rate?: number | null;
+}
+
+export interface LiveAccountCapabilities {
+  followers: boolean;
+  following: boolean;
+  media_count: boolean;
+  views_count: boolean;
+  reach: boolean;
+  impressions: boolean;
+  engagement_rate: boolean;
+}
+
+export interface LiveAccountAnalyticsItem {
+  social_account_id: number;
+  platform: string;
+  account_name?: string | null;
+  account_id: string;
+  logo_url?: string | null;
+  status: string;
+  account: LiveAccountMetrics;
+  analytics: LiveAnalyticsMetrics;
+  capabilities: LiveAccountCapabilities;
+  source: string;
+  fetched_at: string;
+  error_message?: string | null;
+}
+
+export interface LiveAnalyticsSummary {
+  total_followers?: number | null;
+  total_reach?: number | null;
+  total_impressions?: number | null;
+  aggregate_engagement_rate?: number | null;
+}
+
+export interface LiveAnalyticsResponse {
+  accounts: LiveAccountAnalyticsItem[];
+  summary: LiveAnalyticsSummary;
+  fetched_at: string;
+}
+
 export type DatePreset = 'today' | '7d' | '30d' | '90d' | 'custom';
 export type PlatformFilter = 'all' | 'instagram' | 'facebook' | 'youtube';
 
@@ -123,6 +176,16 @@ export interface PostPaginationState {
 
 // ── API Caller Functions ───────────────────────────────────────────────────
 
+export async function fetchLiveAnalytics(filters: AnalyticsFilterState): Promise<LiveAnalyticsResponse> {
+  const params: Record<string, any> = {};
+  if (filters.platform && filters.platform !== 'all') params.platform = filters.platform;
+  if (filters.socialAccountId && filters.socialAccountId !== 'all') params.social_account_id = filters.socialAccountId;
+  if (filters.brandId) params.brand_id = filters.brandId;
+
+  const res = await apiClient.get<LiveAnalyticsResponse>('/analytics/live', { params });
+  return res.data;
+}
+
 export async function fetchOverviewReport(filters: AnalyticsFilterState): Promise<OverviewReportResponse> {
   const params: Record<string, any> = {};
   if (filters.startDate) params.start_date = filters.startDate;
@@ -134,6 +197,7 @@ export async function fetchOverviewReport(filters: AnalyticsFilterState): Promis
   const res = await apiClient.get<OverviewReportResponse>('/analytics/overview-report', { params });
   return res.data;
 }
+
 
 export async function fetchAccountSnapshots(filters: AnalyticsFilterState): Promise<AccountAnalyticsResponse> {
   const params: Record<string, any> = {};

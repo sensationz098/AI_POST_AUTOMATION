@@ -131,7 +131,7 @@ def meta_oauth_callback(
                     }
                 }
             }
-            social_account_repo.create_or_update(
+            fb_account = social_account_repo.create_or_update(
                 db=db,
                 user_id=user_id,
                 platform="facebook",
@@ -144,6 +144,14 @@ def meta_oauth_callback(
             )
             brand_repo.ensure_brand_profile_exists(db, user_id, p["account_name"], p["logo_url"])
             saved_fb += 1
+
+            # Phase A5-DATA-01.2: Enqueue async background analytics snapshot task
+            try:
+                from app.tasks.publish_task import sync_account_analytics_snapshot_task
+                sync_account_analytics_snapshot_task.delay(account_id=fb_account.id)
+                logger.info(f"[META_OAUTH] Enqueued async analytics snapshot task for FB account {fb_account.id}")
+            except Exception as task_err:
+                logger.warning(f"[META_OAUTH_TASK_ENQUEUE_WARNING] fb_account_id={fb_account.id} error={task_err}")
 
         for ig in ig_accounts:
             # Automatic Instagram Account Webhook Subscription for 'comments' field
@@ -168,7 +176,7 @@ def meta_oauth_callback(
                 "comment_automation_ready": False,
                 "comment_automation": existing_ca
             })
-            social_account_repo.create_or_update(
+            ig_account = social_account_repo.create_or_update(
                 db=db,
                 user_id=user_id,
                 platform="instagram",
@@ -181,6 +189,15 @@ def meta_oauth_callback(
             )
             brand_repo.ensure_brand_profile_exists(db, user_id, ig["account_name"], ig["logo_url"])
             saved_ig += 1
+
+            # Phase A5-DATA-01.2: Enqueue async background analytics snapshot task
+            try:
+                from app.tasks.publish_task import sync_account_analytics_snapshot_task
+                sync_account_analytics_snapshot_task.delay(account_id=ig_account.id)
+                logger.info(f"[META_OAUTH] Enqueued async analytics snapshot task for IG account {ig_account.id}")
+            except Exception as task_err:
+                logger.warning(f"[META_OAUTH_TASK_ENQUEUE_WARNING] ig_account_id={ig_account.id} error={task_err}")
+
 
         logger.info(f"Successfully processed Meta OAuth for user {user_id}: {saved_fb} FB pages, {saved_ig} IG accounts.")
         return RedirectResponse(url=f"{frontend_base}/meta-connect?connected=true&pages={saved_fb}&ig={saved_ig}")

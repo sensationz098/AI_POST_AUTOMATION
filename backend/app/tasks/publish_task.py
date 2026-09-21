@@ -158,5 +158,56 @@ def sync_meta_analytics_task():
         db.close()
 
 
+@celery_app.task(name="app.tasks.publish_task.sync_account_analytics_snapshot_task")
+def sync_account_analytics_snapshot_task(account_id: int):
+    """
+    Celery task: Asynchronously capture and persist daily AccountMetricSnapshot for a single SocialAccount.
+    Used post-OAuth connection to ensure OAuth callbacks redirect immediately without waiting on platform APIs.
+    """
+    from app.repositories.social_account_repository import social_account_repo
+    from app.services.account_snapshot_service import account_snapshot_service
+
+    db = SessionLocal()
+    try:
+        account = social_account_repo.get_by_id(db, account_id)
+        if not account:
+            logger.warning(f"[ASYNC_ANALYTICS_SNAPSHOT] SocialAccount ID={account_id} not found.")
+            return {"status": "NOT_FOUND", "account_id": account_id}
+
+        if account.status != "CONNECTED":
+            logger.info(
+                f"[ASYNC_ANALYTICS_SNAPSHOT] SocialAccount ID={account_id} status is '{account.status}' (not CONNECTED). Skipping snapshot."
+            )
+            return {"status": "SKIPPED", "account_id": account_id, "account_status": account.status}
+
+        today_date = datetime.now(timezone.utc).date()
+        snapshot = account_snapshot_service.capture_snapshot_for_account(
+            db=db,
+            account=account,
+            snapshot_date=today_date
+        )
+
+        if snapshot:
+            logger.info(
+                f"[ASYNC_ANALYTICS_SNAPSHOT_SUCCESS] Captured snapshot for account_id={account_id} "
+                f"platform={account.platform} date={today_date}"
+            )
+            return {"status": "SUCCESS", "account_id": account_id, "snapshot_id": snapshot.id}
+        else:
+            logger.warning(
+                f"[ASYNC_ANALYTICS_SNAPSHOT_WARNING] Snapshot capture returned None for account_id={account_id} "
+                f"platform={account.platform}"
+            )
+            return {"status": "FAILED", "account_id": account_id}
+    except Exception as e:
+        logger.error(
+            f"[ASYNC_ANALYTICS_SNAPSHOT_ERROR] Unexpected failure capturing snapshot for account_id={account_id}: {e}"
+        )
+        return {"status": "ERROR", "account_id": account_id, "error": str(e)}
+    finally:
+        db.close()
+
+
+
 
 

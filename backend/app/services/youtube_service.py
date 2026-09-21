@@ -116,6 +116,12 @@ class YouTubeService:
         """
         Use offline refresh token to obtain a fresh access token from Google.
         """
+        if not settings.YOUTUBE_CLIENT_ID or not settings.YOUTUBE_CLIENT_SECRET:
+            logger.error("[YOUTUBE_OAUTH] Cannot refresh token: YOUTUBE_CLIENT_ID or YOUTUBE_CLIENT_SECRET is missing.")
+            raise YouTubeOAuthException(
+                "YouTube OAuth client credentials are not configured on the server (missing YOUTUBE_CLIENT_ID or YOUTUBE_CLIENT_SECRET)."
+            )
+
         payload = {
             "refresh_token": refresh_token,
             "client_id": settings.YOUTUBE_CLIENT_ID,

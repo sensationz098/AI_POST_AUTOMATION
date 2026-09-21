@@ -21,10 +21,12 @@ import {
   AccountAnalyticsResponse,
   PlatformBreakdownResponse,
   PostPerformanceListResponse,
+  LiveAnalyticsResponse,
   fetchOverviewReport,
   fetchAccountSnapshots,
   fetchPlatformBreakdown,
   fetchPostsPerformance,
+  fetchLiveAnalytics,
 } from '@/lib/analyticsApi';
 import { SocialAccount } from '@/lib/types';
 import { apiClient } from '@/lib/api';
@@ -69,6 +71,7 @@ export default function AnalyticsPage() {
   const [snapshots, setSnapshots] = useState<AccountAnalyticsResponse | null>(null);
   const [platforms, setPlatforms] = useState<PlatformBreakdownResponse | null>(null);
   const [posts, setPosts] = useState<PostPerformanceListResponse | null>(null);
+  const [liveAnalytics, setLiveAnalytics] = useState<LiveAnalyticsResponse | null>(null);
 
   // ── Loading & Error States ───────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -98,11 +101,12 @@ export default function AnalyticsPage() {
     setError(null);
 
     try {
-      const [overviewRes, snapshotsRes, platformsRes, postsRes] = await Promise.allSettled([
+      const [overviewRes, snapshotsRes, platformsRes, postsRes, liveRes] = await Promise.allSettled([
         fetchOverviewReport(filters),
         fetchAccountSnapshots(filters),
         fetchPlatformBreakdown(filters),
         fetchPostsPerformance(filters, sort, pagination),
+        fetchLiveAnalytics(filters),
       ]);
 
       // Process Overview
@@ -133,12 +137,20 @@ export default function AnalyticsPage() {
         console.error('Post performance fetch failed:', postsRes.reason);
       }
 
+      // Process Live Analytics
+      if (liveRes.status === 'fulfilled') {
+        setLiveAnalytics(liveRes.value);
+      } else {
+        console.error('Live analytics fetch failed:', liveRes.reason);
+      }
+
       // Check if all failed
       if (
         overviewRes.status === 'rejected' &&
         snapshotsRes.status === 'rejected' &&
         platformsRes.status === 'rejected' &&
-        postsRes.status === 'rejected'
+        postsRes.status === 'rejected' &&
+        liveRes.status === 'rejected'
       ) {
         setError('Failed to fetch analytics data. Please check your network and retry.');
       }
@@ -148,6 +160,7 @@ export default function AnalyticsPage() {
       setIsLoading(false);
     }
   }, [filters, sort, pagination]);
+
 
   // ── Trigger Load When Filters Change ─────────────────────────────────────
   useEffect(() => {
@@ -213,7 +226,7 @@ export default function AnalyticsPage() {
       {isLoading ? (
         <KpiGridSkeleton />
       ) : (
-        <KpiSummaryGrid overview={overview} growth={snapshots?.growth} />
+        <KpiSummaryGrid overview={overview} growth={snapshots?.growth} liveAnalytics={liveAnalytics} />
       )}
 
       {/* ── Account Evolution Section (Metricool-Inspired) ──────────────── */}
@@ -234,8 +247,9 @@ export default function AnalyticsPage() {
       {isLoading ? (
         <PlatformBreakdownSkeleton />
       ) : (
-        <PlatformBreakdownSection platforms={platforms?.platforms || []} />
+        <PlatformBreakdownSection platforms={platforms?.platforms || []} liveAnalytics={liveAnalytics} />
       )}
+
 
       {/* ── Post Performance Table ──────────────────────────────────────── */}
       {isLoading || isPostsLoading ? (

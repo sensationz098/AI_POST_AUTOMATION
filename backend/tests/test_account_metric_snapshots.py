@@ -9,7 +9,7 @@ from app.models.account_metric_snapshot import AccountMetricSnapshot
 from app.repositories.account_metric_snapshot_repository import account_metric_snapshot_repo
 from app.services.account_snapshot_service import account_snapshot_service
 from app.core.security_encryption import encrypt_token
-from app.tasks.publish_task import sync_meta_analytics_task
+from app.tasks.publish_task import sync_meta_analytics_task, sync_account_analytics_snapshot_task
 
 @pytest.fixture
 def test_user_and_brand(db_session):
@@ -465,3 +465,87 @@ def test_sync_meta_analytics_celery_task(mock_capture, db_session):
     assert res["status"] == "synced"
     assert res["snapshot_result"]["success"] == 3
     mock_capture.assert_called_once()
+
+
+def test_sync_single_account_analytics_snapshot_task_success(db_session, test_user_and_brand):
+    """Test Celery task for asynchronously capturing a snapshot for a single social account."""
+    user, brand = test_user_and_brand
+    account = SocialAccount(
+        user_id=user.id,
+        brand_id=brand.id,
+        platform="instagram",
+        account_id="ig_async_1",
+        account_name="@async_brand",
+        access_token=encrypt_token("valid_token"),
+        status="CONNECTED"
+    )
+    db_session.add(account)
+    db_session.commit()
+    db_session.refresh(account)
+
+    with patch("app.tasks.publish_task.SessionLocal", return_value=db_session), \
+         patch("app.services.account_snapshot_service.account_snapshot_service.capture_snapshot_for_account") as mock_cap:
+        mock_snapshot = MagicMock()
+        mock_snapshot.id = 999
+        mock_cap.return_value = mock_snapshot
+
+        res = sync_account_analytics_snapshot_task(account.id)
+        assert res["status"] == "SUCCESS"
+        assert res["account_id"] == account.id
+        assert res["snapshot_id"] == 999
+        mock_cap.assert_called_once()
+
+
+def test_sync_single_account_analytics_snapshot_task_not_found(db_session):
+    """Test Celery task handles non-existent social account ID safely."""
+    with patch("app.tasks.publish_task.SessionLocal", return_value=db_session):
+        res = sync_account_analytics_snapshot_task(999999)
+        assert res["status"] == "NOT_FOUND"
+
+
+def test_sync_single_account_analytics_snapshot_task_non_active(db_session, test_user_and_brand):
+    """Test Celery task skips social accounts that are not in CONNECTED status."""
+    user, brand = test_user_and_brand
+    account = SocialAccount(
+        user_id=user.id,
+        brand_id=brand.id,
+        platform="facebook",
+        account_id="fb_inactive_1",
+        account_name="Inactive Page",
+        access_token=encrypt_token("token"),
+        status="TOKEN_EXPIRED"
+    )
+    db_session.add(account)
+    db_session.commit()
+    db_session.refresh(account)
+
+    with patch("app.tasks.publish_task.SessionLocal", return_value=db_session), \
+         patch("app.services.account_snapshot_service.account_snapshot_service.capture_snapshot_for_account") as mock_cap:
+        res = sync_account_analytics_snapshot_task(account.id)
+        assert res["status"] == "SKIPPED"
+        assert res["account_status"] == "TOKEN_EXPIRED"
+        mock_cap.assert_not_called()
+
+
+def test_sync_single_account_analytics_snapshot_task_handles_error(db_session, test_user_and_brand):
+    """Test Celery task gracefully catches unexpected exceptions without worker crash."""
+    user, brand = test_user_and_brand
+    account = SocialAccount(
+        user_id=user.id,
+        brand_id=brand.id,
+        platform="youtube",
+        account_id="yt_err_1",
+        account_name="Error Channel",
+        access_token=encrypt_token("token"),
+        status="CONNECTED"
+    )
+    db_session.add(account)
+    db_session.commit()
+    db_session.refresh(account)
+
+    with patch("app.tasks.publish_task.SessionLocal", return_value=db_session), \
+         patch("app.services.account_snapshot_service.account_snapshot_service.capture_snapshot_for_account", side_effect=RuntimeError("Google API Timeout")):
+        res = sync_account_analytics_snapshot_task(account.id)
+        assert res["status"] == "ERROR"
+        assert "Google API Timeout" in res["error"]
+

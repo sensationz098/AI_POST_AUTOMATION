@@ -169,3 +169,62 @@ class PostPerformanceListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+# ==============================================================================
+# Phase A5-DATA-01 Schemas: Normalized Live Platform Analytics
+# ==============================================================================
+
+class LiveAccountMetrics(BaseModel):
+    followers: Optional[int] = None
+    following: Optional[int] = None
+    media_count: Optional[int] = None
+    views_count: Optional[int] = None
+
+
+class LiveAnalyticsMetrics(BaseModel):
+    reach: Optional[int] = None
+    impressions: Optional[int] = None
+    engagement_rate: Optional[float] = None
+
+
+class LiveAccountCapabilities(BaseModel):
+    followers: bool = False
+    following: bool = False
+    media_count: bool = False
+    views_count: bool = False
+    reach: bool = False
+    impressions: bool = False
+    engagement_rate: bool = False
+
+
+class LiveAccountAnalyticsItem(BaseModel):
+    social_account_id: int
+    platform: str
+    account_name: Optional[str] = None
+    account_id: str
+    logo_url: Optional[str] = None
+    status: str = "CONNECTED"
+    account: LiveAccountMetrics
+    analytics: LiveAnalyticsMetrics
+    capabilities: LiveAccountCapabilities
+    source: str = "live_platform_api"
+    fetched_at: str
+    error_message: Optional[str] = None
+
+
+class LiveAnalyticsSummary(BaseModel):
+    total_followers: Optional[int] = Field(
+        default=None,
+        description="Arithmetic sum of live platform followers across connected accounts. Not deduplicated."
+    )
+    total_reach: Optional[int] = None
+    total_impressions: Optional[int] = None
+    aggregate_engagement_rate: Optional[float] = None
+
+
+class LiveAnalyticsResponse(BaseModel):
+    accounts: List[LiveAccountAnalyticsItem]
+    summary: LiveAnalyticsSummary
+    fetched_at: str
+
